@@ -1,0 +1,232 @@
+# Board description of the Meizu 20 Classic (m2381, SM8550), read by the
+# unixnu build driver.
+#
+# Value provenance, following the nx729j discipline:
+#   [DTB]    read from docs/hardware/stock-fdt.dts (the DT the stock ABL hands
+#            to the payload on this phone; decompiled from the live device)
+#   [DEVICE] measured on the phone (date + method in the comment)
+#   [FW]     derived from the stock firmware package / ABL reverse engineering
+#   [TODO]   not derivable yet; preflight must fail while these are open
+#
+# ABL constraints that shape this file (nura/docs/BOOT-CHAIN-RE.md §5, static
+# RE of this phone's LinuxLoader, plus 2026-10-22/23 live evidence):
+#   * the ABL gunzip window is [0x80080000, 0x85580000) ≈ 85 MiB total for
+#     kernel + ramdisk + DT gap. A fuxi-style 192 MiB ramdisk payload makes
+#     RdLoad go negative and trips the "Not Enough space" check — the payload
+#     CANNOT ride in the boot image ramdisk on this phone, unlike sheng/fuxi.
+#     Hence loader = firmware and the payload volume lives on the recovery_a
+#     ESP (the negroni precedent), read through the UEFI UFS driver.
+#   * boot header v4 (Flyme stock shape), kernel member gzipped, no appended
+#     DTB (the stock vendor_boot DTB is used and passes BoardDtMatch).
+
+[board]
+name = "m2381"
+soc = "SM8550"
+description = "Meizu 20 Classic"
+kit = "m2381"                      # package/ of this repository appears as kits/m2381 in the build tree
+
+# The target OS image: the unchanged iPhone10,3 iOS 16.7.16 restore image
+# (user decision 2026-10-23: phone image, not iPadOS; same userland version
+# negroni proved, same donor identity nuwa uses). Apple still signs exactly
+# this build for iPhone10,3, so it is both the newest and the only choice.
+# chip_id/board_id read from the local IPSW BuildManifest (d22ap Erase
+# identity): ApChipID 0x8015 (t8015), ApBoardID 0x06.
+[ipsw]
+url = "https://updates.cdn-apple.com/2025FallFCS/fullrestores/122-77006/1158E502-D76D-4226-AA06-ED5E30CD1111/iPhone10,3,iPhone10,6_16.7.16_20H392_Restore.ipsw"
+product = "iPhone10,3"
+version = "16.7.16"
+build = "20H392"
+device_class = "d22ap"
+chip_id = 0x8015
+board_id = 6
+fetch = ["KernelCache", "DeviceTree", "StaticTrustCache", "Cryptex1,SystemTrustCache"]
+
+[ipsw.sha256]
+# Whole-file sha256 of the two disk-image members inside the IPSW, computed
+# from the local copy (sha256 of the full restore zip itself is
+# ece1194f7e233e9109c5790a8d23a4564a10a254e15ec5b09978a343265568fb).
+"087-86698-044.dmg" = "80f426d5b8fca8552f95be427434f1911dbb4c2c6d28aad94f2426ddd0c92483"   # OS
+"087-86593-047.dmg" = "9cd738f3b0169055549df84ad6d8d13e50a2da39af618ce0522ca4e06df86849"   # Cryptex1,SystemOS
+
+# The raw image for the userdata partition: the OS and SystemOS disk images of
+# the IPSW behind a manifest.
+#
+# [DEVICE] 2026-10-23, measured twice via the nura OS (USB net, devsh):
+#   * sysfs: sda22 start 18,643,776 / size 972,326,040 sectors at 512 B;
+#   * the numbers below are those converted to 4096 B LBAs (LUN 0 logical
+#     block size is 4096, read from /sys/class/block/sda/queue — same trap
+#     as nx729j), consistent with the on-device GPT.
+# [FW] cross-check against the stock fastboot package (gpt_main0.bin /
+# rawprogram0.xml) is still open — see scripts/collect-m2381.py.
+[userdata]
+first_lba = 0x238f68              # 2330472, 4 KiB sectors  [DEVICE]
+last_lba = 0x7621ffa              # 123871226               [DEVICE]
+lba_bytes = 4096
+# Bring-up order follows nx729j: mount the root "OS" window first; the
+# "SystemOS" cryptex window is added back at the userland stage (stage 7).
+windows = [
+  { name = "OS", component = "OS" },
+]
+
+[kernel]
+defconfig = "m2381_bringup_defconfig"
+# Stage 1 (first console) archive list: only the builders whose inputs live
+# in the base repository, mirroring the nx729j bring-up staging. Every driver
+# that needs an evidence artefact is switched off in
+# configs/m2381_bringup_defconfig together with the artefact it needs, and
+# comes back in the next stage; the defconfig stays closed under
+# "switch on => its archive is buildable here".
+archives = [
+  "build-corecrypto-14.py",
+  "build-corecrypto-14.py --namespace",
+  "build-arm-driver.py ArmDTPlatform",
+  "build-arm-driver.py ArmCpu",
+  "build-arm-driver.py NativeAES",
+  "build-native-aes-bindings.py",
+  "build-libpthread-kernel.py",
+]
+
+[kernel.prelink]
+tool = "kits/NativePrelink/emit_prelink.py"
+kernel = "build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/mach.development.bcm2837.unstripped.noctf"
+# sha256 of the decompressed 20H392 arm64 kernelcache, computed on Linux from
+# the local IPSW (research/bin/ipsw extract --kernel, 2026-10-23). The fuxi/
+# nx729j value belongs to the 21H461 iPadOS kernelcache and does not apply.
+kernelcache_sha256 = "2ec297bac95bcba01046fd0148e97e7e5885c05a6c18827f39f534ba375c1221"
+slide = "-0x1000000"
+# The AMFI early initializer for the 20H392 kernelcache, derived on Linux
+# 2026-10-23: parse the cache with kits/NativePrelink's own helpers, take the
+# AppleMobileFileIntegrity module's __TEXT_EXEC (0xfffffff0056fb000) and match
+# the function the 21H461 value points at (TEXT_EXEC+0xaae0 there) by
+# instruction skeleton (first six words identical: sub sp, four stp pairs,
+# add sp) and call-site shape (mov w0,#N; bl). The match lands at
+# TEXT_EXEC+0x13f8. Semantic confirmation against mac_policy_register callers
+# is pending — the kernel's early-security call validates the address is
+# inside the module's executable segment and panics loudly otherwise.
+early_security_init = "com.apple.driver.AppleMobileFileIntegrity=0xfffffff0056fc3f8"
+roots = [
+  "com.apple.AppleFSCompression.AppleFSCompressionTypeZlib",
+  "com.apple.driver.AppleARMPlatform",
+  "com.apple.driver.AppleARMWatchdogTimer",
+  "com.apple.driver.AppleAudioClockLibs",
+  "com.apple.driver.AppleEffaceableStorage",
+  "com.apple.driver.AppleIISController",
+  "com.apple.driver.AppleM2ScalerCSCDriver",
+  "com.apple.driver.AppleMobileFileIntegrity",
+  "com.apple.driver.ApplePMGR",
+  "com.apple.driver.IODARTFamily",
+  "com.apple.filesystems.apfs",
+  "com.apple.iokit.CoreAnalyticsFamily",
+  "com.apple.iokit.IOAVFamily",
+  "com.apple.iokit.IOAudio2Family",
+  "com.apple.iokit.IOCECFamily",
+  "com.apple.iokit.IOCryptoAcceleratorFamily",
+  "com.apple.iokit.IOGPUFamily",
+  "com.apple.iokit.IOHDCPFamily",
+  "com.apple.iokit.IOMobileGraphicsFamily",
+  "com.apple.iokit.IOReportFamily",
+  "com.apple.iokit.IOSlowAdaptiveClockingFamily",
+  "com.apple.iokit.IOStorageFamily",
+  "com.apple.iokit.IOSurface",
+  "com.apple.kec.Libm",
+  "com.apple.kec.corecrypto",
+  "com.apple.kext.AppleMatch",
+  "com.apple.kext.CoreTrust",
+  "com.apple.security.AppleImage4",
+  "com.apple.security.sandbox",
+  "com.apple.iokit.IOHIDFamily",
+  "com.apple.iokit.IOHIDEventDriver",
+]
+
+# The UEFI firmware package for this phone is built on the shengPkg skeleton
+# (UniXNU/uefi-sheng shape) with the proven platform constants of the nura
+# Mu chain: FD at 0xA7100000+0x300000, BootShim with kernel header + Gunyah
+# watchdog disable, boot header v4, gzip, no appended DTB. See
+# docs/STATE.md §5-A3 for the base decision record. The uefi checkout is a
+# uefi-sheng clone with Platforms/Meizu/m2381Pkg and Resources/Configs/
+# m2381.toml overlaid from devices/m2381/uefi/.
+[firmware]
+config = "m2381"                   # Resources/Configs/m2381.toml in the Mu-Silicium checkout (--uefi)
+dsc = "Platforms/Meizu/m2381Pkg/m2381.dsc"
+fd = "Build/m2381Pkg/{target}_CLANGPDB/FV/SILICIUM_UEFI.fd"
+preflight = ["scripts/check-m2381.py"]
+submodules = ["Binaries", "Common/Mu", "Common/Mu_OEM_Sample", "Silicium-ACPI", "Silicon/Silicium/OpensslPkg/Library/OpensslLib/openssl"]
+patches = ["Resources/MuPatches/Gic-Spurious.patch"]
+packages = [
+  "{uefi}",
+  "{uefi}/Platforms/Meizu",
+  "{tree}/package",
+  "{tree}/drivers/DarwinBoot",
+  "{edk2}",
+  "{uefi}/Common/Mu",
+  "{uefi}/Common/Mu_OEM_Sample",
+  "{uefi}/Silicon/Qualcomm",
+  "{uefi}/Silicon/Silicium",
+  "{uefi}/Silicium-ACPI",
+  "{uefi}/Silicium-ACPI/Silicon/Qualcomm",
+]
+
+[firmware.defines]
+ENABLE_SECUREBOOT = "1"
+DEVICE_MODEL = "m2381"
+MEMORY_PROTECTION = "TRUE"
+SHIP_MODE = "FALSE"
+BUILDID_STRING = "m2381-research"
+
+# The payload volume: a FAT image with the UniXNU config, the kernel, the ADT
+# and the optional trust cache and Data seed, written to the recovery_a
+# partition (100 MiB; the volume must stay ≤ 96 MiB to fit with FAT slack).
+# DarwinBoot (in the firmware volume) reads it through the UFS driver.
+[payload]
+volume = "M2381ESP"
+size_mib = 96
+loader = "firmware"
+title = "m2381 first boot: source 4K XNU to console"
+dram_size = "0x400000000"            # [DEVICE] 16 GiB LPDDR5X
+skip_setup_tool = "scripts/seed-data-skip-setup.py"   # used by --skip-setup
+panic_screen = false
+# panic_screen stays off for first light: the panic renderer patches the
+# kernel by absolute virtual address measured on sheng's kernel, and this
+# board's _panic address is unknown until a kernel exists (same refusal nx729j
+# recorded in its bring-up board).
+# sha256 of the two trust caches inside the local 20H392 IPSW (2026-10-23).
+trust_cache_sha256 = [
+  "63e01c03b31e1532a5581a24865490673f0b5c297b0199fe0095637c6100ef4b",   # StaticTrustCache (087-86698-044.dmg.trustcache)
+  "9cc478fe3525e2683b5b9ea1eea0851eaebebdab21d206556233400e59d2e361",   # Cryptex1,SystemTrustCache (087-86593-047.dmg.trustcache)
+]
+# First light keeps the command line to what this kernel actually links,
+# mirroring the nx729j bring-up discipline: every sheng-*/offline-* argument
+# selects a code path inside an archive this defconfig does not build, and
+# payload.py refuses the volume when an argument arrives without its
+# implementation. Re-add them one at a time with the archive that implements
+# them as the stages progress.
+kernel_args = [
+  "-v",
+  "serial=3",
+  "debug=0x14e",
+  "kt_fixed_zones=120",
+  "-no_slto_panic",
+]
+
+# text_fixups for the 21H461 shared caches (fuxi/nx729j) do NOT apply to the
+# 20H392 caches this board boots; [TODO] derive the iPhone10,3/iOS 16.7.16
+# fixups (negroni precedent) at the userland stage.
+
+[payload.adt]
+tool = "scripts/make-m2381-adt.py"
+chip_id = "207"                     # [DTB] qcom,msm-id 0x207 (SM8550-AB) — same value sheng/nx729j use
+owned_memory_size = "0x130000000"
+# [TODO P3] root_match_volume_uuid of OUR userdata image (built from 20H392).
+# The fuxi/nx729j value 04769D26-… belongs to the 21H461 iPadOS image and must
+# not be copied; derive both this and CONFIG_XNU_OWNER_DATA_VOLUME_UUID from
+# the built userdata image.
+root_match_volume_uuid = "TODO-P3"
+cpu_regs = "0,0x100,0x200,0x300,0x400,0x500,0x600,0x700"   # [DTB] /cpus reg 0x00..0x700, 8 CPUs
+packed_data_ramdisk = true
+unique_chip_id = "required"          # the platform seed is not stored in any repository
+
+# No [[bootimg.dtb_node]] here, unlike sheng.
+#
+# [FW] The boot image carries no appended DTB at all (nura-proven on this
+# ABL: BootShim header + gzip kernel member only; the stock vendor_boot DTB
+# supplies the splash region and passes BoardDtMatch). Nothing to patch.
