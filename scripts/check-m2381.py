@@ -1,0 +1,87 @@
+#!/usr/bin/env python3
+"""Preflight for the m2381 port.
+
+Run by `unixnu build firmware` (see [firmware] preflight in board.toml) and safe
+to run by hand at any time:
+
+    python3 scripts/check-m2381.py
+    python3 scripts/check-m2381.py --uefi ../uefi-sheng
+
+Hard failures stop the build. Unmeasured placeholders (the [TODO] values of
+board.toml) fail here rather than flowing into a written image — the nx729j
+discipline. P2 will extend this with the UEFI memory map vs DTB reserved-region
+comparison; only the board.toml sanity half is implemented so far.
+
+Only the standard library is used, so it runs inside the build tree.
+"""
+from pathlib import Path
+import argparse
+import sys
+import tomllib
+
+ROOT = Path(__file__).resolve().parents[1]
+
+OK, WARN, FAIL = 'ok', 'warn', 'fail'
+results = []
+
+
+def record(status, name, detail):
+    results.append((status, name, detail))
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--board', type=Path, default=ROOT / 'board.toml')
+    parser.add_argument('--uefi', type=Path, default=None,
+                        help='Root of the Mu-Silicium checkout (the --uefi argument of unixnu)')
+    args = parser.parse_args()
+
+    board = tomllib.loads(args.board.read_text())
+
+    # --- identity -----------------------------------------------------------
+    ipsw = board['ipsw']
+    if (ipsw['product'], ipsw['build'], ipsw['device_class']) != ('iPhone10,3', '20H392', 'd22ap'):
+        record(FAIL, 'ipsw identity', 'm2381 targets iPhone10,3 / 20H392 / d22ap (user decision 2026-10-23)')
+    elif ipsw.get('chip_id') != 0x8015 or ipsw.get('board_id') != 6:
+        record(FAIL, 'ipsw chip/board id', f"expected 0x8015/6 (d22ap BuildManifest), got {ipsw.get('chip_id')}/{ipsw.get('board_id')}")
+    else:
+        record(OK, 'ipsw identity', f"{ipsw['product']} {ipsw['version']} {ipsw['build']} chip {ipsw['chip_id']:#x} board {ipsw['board_id']}")
+
+    # --- userdata geometry --------------------------------------------------
+    ud = board['userdata']
+    if ud['lba_bytes'] != 4096:
+        record(FAIL, 'userdata lba_bytes', 'm2381 LUN 0 is 4 KiB; anything else writes at half/double density')
+    span = ud['last_lba'] - ud['first_lba'] + 1
+    gib = span * ud['lba_bytes'] / 2**30
+    if not 400 < gib < 470:
+        record(FAIL, 'userdata span', f'{span} LBAs = {gib:.1f} GiB, outside the measured ~463.7 GiB')
+    else:
+        record(OK, 'userdata span', f'first {ud["first_lba"]:#x} last {ud["last_lba"]:#x} = {gib:.1f} GiB @ {ud["lba_bytes"]} B')
+
+    # --- payload volume fits recovery_a -------------------------------------
+    payload = board['payload']
+    if payload['volume'] != 'M2381ESP':
+        record(FAIL, 'payload volume', 'label must be M2381ESP (≤11 chars, FAT limit)')
+    if payload['size_mib'] > 96:
+        record(FAIL, 'payload size', f"{payload['size_mib']} MiB does not fit recovery_a (100 MiB partition, FAT slack)")
+    else:
+        record(OK, 'payload volume', f'{payload["volume"]} {payload["size_mib"]} MiB on recovery_a, loader {payload["loader"]}')
+
+    # --- placeholders that must be filled before an image is written --------
+    adt = board['payload']['adt']
+    uuid = adt.get('root_match_volume_uuid', '')
+    if not uuid or uuid.upper().startswith('TODO'):
+        record(FAIL, 'root_match_volume_uuid', 'still the P3 placeholder; derive it from the 20H392 userdata build before writing images')
+    else:
+        record(OK, 'root_match_volume_uuid', uuid)
+
+    width = len(max(results, key=lambda r: len(r[1]))[1])
+    for status, name, detail in results:
+        print(f'{status.upper():5s} {name.ljust(width)}  {detail}')
+    failed = [r for r in results if r[0] == FAIL]
+    print(f'\n{len(results) - len(failed)} ok, {len(failed)} fail')
+    return 1 if failed else 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

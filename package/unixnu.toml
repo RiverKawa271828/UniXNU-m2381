@@ -1,0 +1,22 @@
+version = 1
+
+# UniXNU 启动管理器的菜单配置，打进 payload 的 FAT 卷（M2381ESP）。
+#
+# 菜单项里的 payload 来自 sheng 套件（本仓库从 unixnu-fuxi 派生，而 fuxi 又
+# 从 UniXNU-sheng 系出）；在把 package/ 里的 Payloads/ 换成 m2381 自己的
+# 预检程序之前，路径必须保持 ShengPreflight.efi，否则菜单会指向一个不存在的文件。
+[boot]
+timeout = 3
+default = "preflight"
+
+[[entry]]
+id = "preflight"
+title = "m2381 boot diagnostics"
+type = "efi"
+path = "Payloads/ShengPreflight.efi"
+
+[[entry]]
+id = "exit"
+title = "Return to firmware"
+type = "action"
+action = "exit"
