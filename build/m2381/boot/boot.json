@@ -1,0 +1,12 @@
+{
+  "kernel_sha256": "308518eff6a224186af83458de80a1ee6cea598a059cc4c786149b33ca6cec7c",
+  "fd_sha256": "201a2c87828e8e186051f0e081d2b84eea21b9ce65b646293dbe15bf99ef0486",
+  "image_sha256": "40f2a1996cb84e5010796efff20e8baa06802d6b4b6ca53ad962f9da50025bf1",
+  "image_bytes": 1662976,
+  "header_version": 4,
+  "os_version": "15.0.0",
+  "os_patch_level": "2025-11",
+  "shim_bytes": 144,
+  "fd_bytes": 3145728,
+  "hardware_tested": false
+}
