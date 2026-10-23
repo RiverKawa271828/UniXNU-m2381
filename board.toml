@@ -170,7 +170,6 @@ packages = [
   "{uefi}/Silicon/Qualcomm",
   "{uefi}/Silicon/Silicium",
   "{uefi}/Silicium-ACPI",
-  "{uefi}/Silicium-ACPI/Platforms/Meizu",
   "{uefi}/Silicium-ACPI/Silicon/Qualcomm",
 ]
 

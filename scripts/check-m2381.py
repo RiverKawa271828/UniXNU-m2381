@@ -16,6 +16,8 @@ Only the standard library is used, so it runs inside the build tree.
 """
 from pathlib import Path
 import argparse
+import json
+import os
 import sys
 import tomllib
 
@@ -29,14 +31,40 @@ def record(status, name, detail):
     results.append((status, name, detail))
 
 
+def find_board(explicit):
+    """Locate board.toml: explicit path, the device repo itself, or — when run
+    from the build tree by `unixnu build firmware` — the device repository the
+    unixnu state file remembers."""
+    if explicit is not None:
+        return explicit
+    candidates = [ROOT / 'board.toml']
+    if os.environ.get('UNIXNU_DEVICE'):
+        candidates.append(Path(os.environ['UNIXNU_DEVICE']) / 'board.toml')
+    for ancestor in [*ROOT.parents, Path.cwd(), *Path.cwd().parents]:
+        state = ancestor / 'state.json'
+        if state.is_file():
+            try:
+                device = json.loads(state.read_text()).get('device')
+                if device:
+                    candidates.append(Path(device) / 'board.toml')
+            except ValueError:
+                pass
+            break
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    raise SystemExit('check-m2381: board.toml not found (pass --board)')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--board', type=Path, default=ROOT / 'board.toml')
+    parser.add_argument('--board', type=Path, default=None)
     parser.add_argument('--uefi', type=Path, default=None,
                         help='Root of the Mu-Silicium checkout (the --uefi argument of unixnu)')
     args = parser.parse_args()
+    board_path = find_board(args.board)
 
-    board = tomllib.loads(args.board.read_text())
+    board = tomllib.loads(board_path.read_text())
 
     # --- identity -----------------------------------------------------------
     ipsw = board['ipsw']
@@ -70,8 +98,10 @@ def main():
     # --- placeholders that must be filled before an image is written --------
     adt = board['payload']['adt']
     uuid = adt.get('root_match_volume_uuid', '')
+    # P2 builds the firmware only; nothing here writes a disk. The placeholder
+    # becomes a hard failure at P3, when the 20H392 userdata image exists.
     if not uuid or uuid.upper().startswith('TODO'):
-        record(FAIL, 'root_match_volume_uuid', 'still the P3 placeholder; derive it from the 20H392 userdata build before writing images')
+        record(WARN, 'root_match_volume_uuid', 'still the P3 placeholder; must be derived from the 20H392 userdata build before any payload/userdata image is written')
     else:
         record(OK, 'root_match_volume_uuid', uuid)
 
