@@ -193,6 +193,9 @@ panic_screen = false
 trust_cache_sha256 = [
   "63e01c03b31e1532a5581a24865490673f0b5c297b0199fe0095637c6100ef4b",   # StaticTrustCache (087-86698-044.dmg.trustcache)
   "9cc478fe3525e2683b5b9ea1eea0851eaebebdab21d206556233400e59d2e361",   # Cryptex1,SystemTrustCache (087-86593-047.dmg.trustcache)
+  # The flat two-module bundle made by scripts/make-m2381-trust-bundle.py from the two above
+  # (DarwinBoot/kernel need the bare container, not the IM4P files; modules unchanged).
+  "eb1475f643f45a974ebd40596f6e2b1cdf40205d2ca3c6094d774886099399c3",   # original-trust.bundle
 ]
 # First light keeps the command line to what this kernel actually links,
 # mirroring the nx729j bring-up discipline: every sheng-*/offline-* argument
