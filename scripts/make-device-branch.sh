@@ -24,8 +24,8 @@ git -C "$ROOT" worktree add --detach "$WORK" >/dev/null 2>&1
   cd "$WORK"
   git checkout --orphan "$BRANCH" >/dev/null 2>&1
   git rm -rf --quiet . 2>/dev/null || true
-  rm -rf board.toml board.bringup.toml configs scripts package kits unixnu.lock
-  cp -r "$DEV/configs" "$DEV/scripts" "$DEV/package" "$DEV/kits" "$DEV/unixnu.lock" .
+  rm -rf board.toml board.bringup.toml configs scripts drivers package kits unixnu.lock
+  cp -r "$DEV/configs" "$DEV/scripts" "$DEV/drivers" "$DEV/package" "$DEV/kits" "$DEV/unixnu.lock" . 2>/dev/null || cp -r "$DEV/configs" "$DEV/scripts" "$DEV/package" "$DEV/kits" "$DEV/unixnu.lock" .
   cp "$DEV/board.toml" "$DEV/board.bringup.toml" .
   cp "$DEV/$BOARD" board.toml
   git add -A
