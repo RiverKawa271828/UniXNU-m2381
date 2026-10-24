@@ -23,7 +23,7 @@
 name = "m2381"
 soc = "SM8550"
 description = "Meizu 20 Classic"
-kit = "m2381"                      # package/ of this repository appears as kits/m2381 in the build tree
+kit = "sheng"                      # package/ of this repository appears as kits/sheng in the build tree (fuxi same: build-sheng-platform-power.py reads kits/sheng/ShengPlatformPower.cpp)
 
 # The target OS image: the unchanged iPad7,1 (iPad Pro 12.9-inch 2nd gen)
 # iOS 17.7.11 restore image - the fuxi/nx729j donor, byte-for-byte the same

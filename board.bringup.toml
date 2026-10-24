@@ -23,7 +23,7 @@
 name = "m2381"
 soc = "SM8550"
 description = "Meizu 20 Classic"
-kit = "m2381"                      # package/ of this repository appears as kits/m2381 in the build tree
+kit = "sheng"                      # package/ of this repository appears as kits/sheng in the build tree (fuxi same: build-sheng-platform-power.py reads kits/sheng/ShengPlatformPower.cpp)
 
 # The target OS image: the unchanged iPad7,1 (iPad Pro 12.9-inch 2nd gen)
 # iOS 17.7.11 restore image - the fuxi/nx729j donor, byte-for-byte the same
@@ -90,6 +90,11 @@ archives = [
   "build-arm-driver.py ArmCpu",
   "build-arm-driver.py NativeAES",
   "build-native-aes-bindings.py",
+  # Publishes the ApplePMGRNub the donor AMFI's ConfigurationSettings waits on
+  # (30 s timeout, then panic "AMFI: No PMGR?" @ConfigurationSettings.cpp:235
+  # — first observed on hardware 2026-10-25). Board-side ShengPlatformPower,
+  # same file fuxi links; mode 2 = publish the original nub via sheng-pmgr=2.
+  "build-sheng-platform-power.py",
   "build-libpthread-kernel.py",
 ]
 
@@ -214,6 +219,9 @@ kernel_args = [
   "debug=0x14e",
   "kt_fixed_zones=120",
   "-no_slto_panic",
+  # Board-side ApplePMGRNub publication; without it the donor AMFI panics
+  # "No PMGR?" after its 30 s waitForMatchingService timeout.
+  "sheng-pmgr=2",
 ]
 
 # text_fixups for the 21H461 shared caches (nx729j's set, byte-for-byte the
