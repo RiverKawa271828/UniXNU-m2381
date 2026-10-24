@@ -28,10 +28,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / 'build/verified-root-stub'
-# On a host with the real macOS evidence the probe archive provides the
-# VerifiedRoot symbols; merging the stub as well would duplicate them.
-if (ROOT / 'build/verified-root-os/verification.json').is_file():
-    print('verified-root evidence staged: stub not merged (real probe archive is the root verifier)')
+# The kernel link force-loads the real probe archive exactly when the
+# defconfig sets XNU_VERIFIED_ROOT_PROBE=1 (exported to archives); the stub
+# covers every configuration where it does not, regardless of evidence.
+import os as _os
+if _os.environ.get('XNU_VERIFIED_ROOT_PROBE') == '1':
+    print('verified-root probe linked by the configuration: stub not merged')
     raise SystemExit(0)
 OUT.mkdir(parents=True, exist_ok=True)
 

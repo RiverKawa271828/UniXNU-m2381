@@ -83,7 +83,8 @@ CONFIG_XNU_SHENG_PMGR=y
 CONFIG_XNU_SOURCE_MOCKFS=n
 CONFIG_XNU_ARMVIRT_PLATFORM=n
 CONFIG_XNU_ZONE_PGZ_ALIGNMENT_PROBE=n
-CONFIG_XNU_VERIFIED_ROOT_PROBE=y  # owner lane: needs the macOS-produced policy staged
+# owner lane: needs the macOS-produced policy staged in .cache/firmware
+CONFIG_XNU_VERIFIED_ROOT_PROBE=y
 CONFIG_XNU_VERIFIED_ROOT_ARCHIVE="{tree}/build/verified-root-os-xnu/libVerifiedRootProbe.a"
 CONFIG_XNU_OWNER_ROOT_AUDIT=n
 CONFIG_XNU_OWNER_ROOT_TRUST=n

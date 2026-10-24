@@ -19,6 +19,9 @@ policy = ROOT / 'build/verified-root-os/verification.json'
 
 if policy.is_file():
     print('evidence staged: building the real verified-root probe archive')
+    # bsd_init.o's compile recipe references EXPORT_HDRS/libsa; this tree does
+    # not generate it (empty search dir is fine, missing one is -Werror).
+    (ROOT / 'build/xnu/ios-obj/EXPORT_HDRS/libsa').mkdir(parents=True, exist_ok=True)
     sys.exit(subprocess.run(['python3', ROOT / 'scripts/build-verified-root-probe.py',
                              '--component', 'os']).returncode)
 print('no verified-root evidence on this host: skipping the probe archive '
