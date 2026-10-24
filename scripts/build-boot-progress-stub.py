@@ -17,7 +17,8 @@ OUT.mkdir(parents=True, exist_ok=True)
 source = OUT / 'stub.c'
 source.write_text('void boot_progress_poll(void) {}\n')
 obj = OUT / 'stub.o'
-subprocess.run(['xcrun', 'clang', '-target', 'arm64-apple-ios17.0', '-ffreestanding',
+sdk = subprocess.check_output(['xcrun', '--sdk', 'iphoneos', '--show-sdk-path'], text=True).strip()
+subprocess.run(['xcrun', 'clang', '-target', 'arm64-apple-ios17.0', '-isysroot', sdk, '-ffreestanding',
                 '-Wall', '-Werror', '-c', str(source), '-o', str(obj)], check=True)
 archive = OUT / 'libBootProgressStub.a'
 archive.unlink(missing_ok=True)
