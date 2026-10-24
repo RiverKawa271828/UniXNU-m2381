@@ -23,7 +23,19 @@ def require(value, message):
         raise SystemExit(message)
 
 
-print(run(['python3', ROOT / 'scripts/audit-amfi-pmgr-contract.py'], text=True), end='')
+# The AMFI->PMGR contract audit reads a previous prelink candidate pair
+# (macho + plan) staged by scripts/stage-local-candidates.py. A fresh CI
+# runner has none (the candidate comes from a previous local build of the
+# same donor kernelcache), and locally the audit re-verifies the same donor
+# bytes on every build anyway — so there it is skipped loudly, not silently.
+_stage = ROOT / 'build/native-prelink'
+_have_candidate = bool(list(_stage.glob('native-*-candidate.macho'))) and \
+    any(p.with_suffix('.json').is_file() for p in _stage.glob('native-*-candidate.macho'))
+if _have_candidate:
+    print(run(['python3', ROOT / 'scripts/audit-amfi-pmgr-contract.py'], text=True), end='')
+else:
+    print('SKIP: audit-amfi-pmgr-contract (no staged prelink candidate on this host; '
+          'the donor contract is audited on the local build host)', flush=True)
 header = '''// Generated exact storage/slot ABI; private fields stay opaque.
 #pragma once
 #include <IOKit/IOPMGR.h>
