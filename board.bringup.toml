@@ -106,9 +106,13 @@ archives = [
   # the pre-measured prelink-storage-bindings.json instead.
   "build-storage-bindings.py",
   "build-arm-driver.py NativeUfs",
-  # Merges refusing VerifiedRoot placeholders into libNativeUfs.a (must run
-  # after the NativeUfs archive); policy count 0, raw UFS transport unaffected.
+  # Refusing placeholders merged into libNativeUfs.a (policy count 0) —
+  # skipped automatically when the real evidence is staged below.
   "build-verified-root-stub.py",
+  # Real VerifiedRoot probe archive when the macOS-produced OS policy is
+  # staged in .cache/firmware (local owner lane); skipped on hosts without
+  # evidence (CI), which stay on the stub and keep the flag off.
+  "build-verified-root-if-evidenced.py",
   # NativeUfs's weak boot_progress_poll reference still errors on this ld64;
   # no-op stub until the real BootProgress stage.
   "build-boot-progress-stub.py",

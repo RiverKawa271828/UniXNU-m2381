@@ -30,6 +30,21 @@ for source in sorted((OUT / 'ipsw').glob('*/kernelcache.release.*.decompressed')
     print(f'staged {source.name} from {source.relative_to(OUT)}')
     break
 
+# The macOS-produced verified-root OS policy (verification.json, manifest.bin,
+# trusted-key.bin) lives in the device firmware cache; the tree's build/ is
+# fresh every assembly, so stage it for scripts/build-verified-root-probe.py.
+policy = ROOT / '.cache/firmware/verified-root-os'
+if (policy / 'verification.json').is_file():
+    target = ROOT / 'build/verified-root-os'
+    target.mkdir(parents=True, exist_ok=True)
+    for name in ('verification.json', 'manifest.bin', 'trusted-key.bin',
+                 'original-samples.bin'):
+        if (policy / name).is_file():
+            shutil.copyfile(policy / name, target / name)
+    print('staged verified-root-os policy from the device firmware cache')
+else:
+    print('no verified-root-os policy in the device firmware cache (probe archive will fail if enabled)')
+
 kernel = OUT / 'm2381/kernel'
 clean = kernel / 'kernel.clean.macho'
 macho = clean if clean.is_file() else kernel / 'kernel.macho'

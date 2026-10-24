@@ -73,9 +73,12 @@ while i < len(arguments):
     elif not arg.startswith('-W'):
         command.append(arg)
     i += 1
-command += ['-Wall', '-Wextra', '-Werror', '-Wno-unused-parameter', '-Wno-c99-designator',
-            '-Wno-reorder-init-list', '-Wno-deprecated-enum-enum-conversion',
-            '-Wno-unnecessary-virtual-specifier', '-I', OUT, '-I', ROOT / '.cache/xnu-work/osfmk']
+command += ['-Wall', '-Wextra', '-Werror', '-Wno-unknown-warning-option', '-Wno-unused-parameter',
+            '-Wno-c99-designator', '-Wno-reorder-init-list', '-Wno-deprecated-enum-enum-conversion',
+            # clang>=24 needs this for OSSymbol.h; older Apple clang ignores it
+            # thanks to -Wno-unknown-warning-option above.
+            '-Wno-unnecessary-virtual-specifier',
+            '-I', OUT, '-I', ROOT / '.cache/xnu-work/osfmk']
 run(command, cwd=record['directory'])
 raw = obj.read_bytes()
 info = macho(raw)

@@ -28,6 +28,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / 'build/verified-root-stub'
+# On a host with the real macOS evidence the probe archive provides the
+# VerifiedRoot symbols; merging the stub as well would duplicate them.
+if (ROOT / 'build/verified-root-os/verification.json').is_file():
+    print('verified-root evidence staged: stub not merged (real probe archive is the root verifier)')
+    raise SystemExit(0)
 OUT.mkdir(parents=True, exist_ok=True)
 
 record = json.loads((ROOT / 'build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/iokit/DEVELOPMENT/'

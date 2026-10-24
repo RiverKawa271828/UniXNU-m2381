@@ -66,7 +66,8 @@ while index < len(arguments):
 command.extend(['-Wall', '-Wextra', '-Werror', '-Wno-unknown-warning-option',
                 '-Wno-unused-parameter',
                 '-Wno-c99-designator', '-Wno-reorder-init-list', '-Wno-deprecated-enum-enum-conversion',
-                '-Wno-unnecessary-virtual-specifier', '-I', str(ROOT / '.cache/xnu-work/osfmk')])
+                '-Wno-unnecessary-virtual-specifier',
+                '-I', str(ROOT / '.cache/xnu-work/osfmk')])
 if component in ('NativeVirtioBlock', 'NativeRamBlock', 'NativeUfs'):
     command += ['-I', str(ROOT / 'build/storage-abi/include')]
     if args.verified_root:
