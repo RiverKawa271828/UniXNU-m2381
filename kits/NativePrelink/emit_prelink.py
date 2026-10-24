@@ -9,7 +9,7 @@ from pathlib import Path
 import struct
 import xml.etree.ElementTree as ET
 
-from native_prelink import backed_offset, exports, macho, plan, unserialize_xml
+from native_prelink import backed_offset, exports, macho, plan, u64, unserialize_xml
 
 # Standard SHA-256 round constants, stored as 64 little-endian words. Some
 # assemblers embed these data in executable sections; do not decode as code.
@@ -131,8 +131,8 @@ def instruction_inventory(original_data, parent, modules):
             'register_dataflow_qualified': False}
 
 
-def emit(native_data, original_data, roots, slide, early_security_init=None):
-    report = plan(native_data, original_data, roots, slide)
+def emit(native_data, original_data, roots, slide, early_security_init=None, original_symbols=None):
+    report = plan(native_data, original_data, roots, slide, original_symbols)
     native, original = macho(native_data), macho(original_data)
     marker = [address for address, names in exports(native_data, native).items()
               if '_kalloc_sparse_prelink_index_version' in names]
@@ -148,7 +148,7 @@ def emit(native_data, original_data, roots, slide, early_security_init=None):
     entries = {e['CFBundleIdentifier']: e for e in metadata['_PrelinkInfoDictionary']}
     modules = {}
     for identifier in report['components']:
-        va = entries[identifier]['_PrelinkExecutableLoadAddr']
+        va = u64(entries[identifier]['_PrelinkExecutableLoadAddr'])
         modules[identifier] = macho(original_data, backed_offset(parent, va, 32, len(original_data)))
     report.update(instruction_inventory(original_data, parent, modules))
     early_security_init = early_security_init or {}
@@ -240,7 +240,7 @@ def emit(native_data, original_data, roots, slide, early_security_init=None):
     # Mach-O VM addresses are not all included in the cache's pointer list.
     # Rebase these headers explicitly; preserve section flags and offsets.
     for identifier, module in modules.items():
-        old_header = entries[identifier]['_PrelinkExecutableLoadAddr']
+        old_header = u64(entries[identifier]['_PrelinkExecutableLoadAddr'])
         original_header = backed_offset(parent, old_header, 32, len(original_data))
         new_header = new_offset(old_header + slide, 32)
         for segment in module['segments']:
@@ -253,25 +253,31 @@ def emit(native_data, original_data, roots, slide, early_security_init=None):
                     struct.pack_into('<Q', output, at + 32, section['va'] + slide)
     report['module_entrypoints'] = {}
     for identifier in report['components']:
-        va = entries[identifier]['_PrelinkKmodInfo']
+        va = u64(entries[identifier]['_PrelinkKmodInfo'])
         at = backed_offset(parent, va, 196, len(original_data))
-        start, stop = struct.unpack_from('<QQ', original_data, at + 180)
         # The original OSKext boot path slides this field separately from its
         # coalesced pointer table. An ordinary relink must do the same.
         address, = struct.unpack_from('<Q', original_data, at + 156)
         if address:
-            if address != entries[identifier]['_PrelinkExecutableLoadAddr']:
+            if address != u64(entries[identifier]['_PrelinkExecutableLoadAddr']):
                 raise ValueError('Original kmod address disagrees with its component header')
             struct.pack_into('<Q', output, new_offset(va + slide + 156, 8), address + slide)
+        if report['kmod_entrypoints'] is not None:
+            # Fileset caches chain-encode kmod_info start/stop; plan() decoded
+            # them from the bindings.
+            start = report['kmod_entrypoints'][identifier]['start']
+            stop = report['kmod_entrypoints'][identifier]['stop']
+        else:
+            start, stop = struct.unpack_from('<QQ', original_data, at + 180)
         report['module_entrypoints'][identifier] = {'kmod_info_va': va + slide,
             'start_va': start + slide if start else 0, 'stop_va': stop + slide if stop else 0}
-    headers = sorted(entries[name]['_PrelinkExecutableLoadAddr'] + slide for name in report['components'])
+    headers = sorted(u64(entries[name]['_PrelinkExecutableLoadAddr']) + slide for name in report['components'])
     prelink_text = next(s for s in new_segments if s['name'] == '__PRELINK_TEXT')
     index_size = len(headers) * 8
     index_va = (prelink_text['va'] + prelink_text['size'] - index_size) & ~7
     occupied_end = max([s['va'] + slide + s['size'] for module in modules.values()
                         for s in module['segments'] if s['name'] == '__TEXT'] +
-                       [entries[name]['_PrelinkExecutableLoadAddr'] + slide + entries[name]['_PrelinkExecutableSize']
+                       [u64(entries[name]['_PrelinkExecutableLoadAddr']) + slide + entries[name]['_PrelinkExecutableSize']
                         for name in report['kernel_interfaces']])
     if index_va < occupied_end:
         raise ValueError('No readonly prelink padding for the sparse header index')
@@ -287,7 +293,7 @@ def emit(native_data, original_data, roots, slide, early_security_init=None):
             entry['_NativePrelinkEarlySecurityInit'] = early_security_init[identifier] + slide
         for key in ('_PrelinkExecutableLoadAddr', '_PrelinkExecutableSourceAddr', '_PrelinkKmodInfo'):
             if entry.get(key):
-                entry[key] += slide
+                entry[key] = u64(entry[key]) + slide
         selected_entries.append(entry)
     new_base = next(s['va'] for s in new_segments if s['name'] == '__PRELINK_TEXT')
     offsets = [b['new_site'] - new_base for b in report['bindings']]

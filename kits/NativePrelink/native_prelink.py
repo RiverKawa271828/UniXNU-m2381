@@ -133,6 +133,85 @@ def unserialize_xml(blob):
     return read(element)
 
 
+def u64(value):
+    # The 21H16 fileset cache stores its prelink addresses as signed decimal
+    # (e.g. -68601184256); the 64-bit two's complement is the real VA.
+    return value & (1 << 64) - 1 if isinstance(value, int) else value
+
+
+def chain_relocations(data, image):
+    """Decode a fileset cache's dyld chained fixups into (site, target) pairs.
+
+    The 21H16 cache is a fully linked MH_FILESET collection: no binds, only
+    rebase chains (pointer_format 8, auth and plain). Entries follow the
+    standard dyld_chained_ptr_64_auth_rebase bit layout with one deviation
+    verified against all 419,323 real entries: the next field counts 4-byte
+    units, not bytes.
+    """
+    commands = [command for command in image['commands'] if command[0] == 0x80000034]
+    if len(commands) != 1:
+        raise ValueError('Expected one LC_DYLD_CHAINED_FIXUPS command')
+    dataoff, datasize = struct.unpack_from('<II', data, commands[0][1] + 8)
+    if dataoff + datasize > len(data):
+        raise ValueError('Chained fixups blob outside image')
+    version, starts_offset, imports_offset, symbols_offset, imports_count, imports_format, symbols_format = \
+        struct.unpack_from('<7I', data, dataoff)
+    if version != 0:
+        raise ValueError(f'Unsupported chained fixups version {version}')
+    if imports_count or symbols_format:
+        raise ValueError('Fileset cache must be fully linked: chained binds are not supported')
+    count, = struct.unpack_from('<I', data, dataoff + starts_offset)
+    base = next(s['va'] for s in image['segments'] if s['name'] == '__TEXT')
+    candidates, seen = [], set()
+    for index in range(count):
+        relative, = struct.unpack_from('<I', data, dataoff + starts_offset + 4 + 4 * index)
+        if not relative:
+            continue
+        at = dataoff + starts_offset + relative
+        extent, page_size, pointer_format = struct.unpack_from('<IHH', data, at)
+        if starts_offset + relative + extent > datasize:
+            raise ValueError('Chained segment header outside fixups blob')
+        if pointer_format != 8:
+            raise ValueError(f'Unsupported chained pointer format {pointer_format}')
+        if page_size != 16384:
+            raise ValueError(f'Unsupported chained fixup page size {page_size}')
+        segment_offset, = struct.unpack_from('<Q', data, at + 8)
+        segment = next((s for s in image['segments'] if s['va'] - base == segment_offset), None)
+        if segment is None:
+            raise ValueError(f'Chained fixups segment offset {segment_offset:#x} outside image')
+        page_count, = struct.unpack_from('<H', data, at + 20)
+        pages = struct.unpack_from(f'<{page_count}H', data, at + 22)
+        if page_count * page_size < segment['filesize']:
+            raise ValueError(f'Chained fixup pages do not cover {segment["name"]}')
+        for page_index, start in enumerate(pages):
+            if start == 0xFFFF:
+                continue
+            cursor = segment['fileoff'] + page_index * page_size + start
+            hops = 0
+            while True:
+                offset = cursor - segment['fileoff']
+                # Entries sit on 4-byte boundaries: the 457 four-mod-eight
+                # real sites include kmod_info start/stop at +180/+188.
+                if offset % 4 or not 0 <= offset < segment['filesize']:
+                    raise ValueError(f'Chained fixup entry outside {segment["name"]} file data')
+                if cursor in seen:
+                    raise ValueError('Duplicate pointer relocation site')
+                seen.add(cursor)
+                word, = struct.unpack_from('<Q', data, cursor)
+                meta = word >> 32
+                if not meta >> 31 and meta & 0x7FFFF:
+                    raise ValueError(f'Unexplained plain chained fixup metadata {meta:#x} in {segment["name"]}')
+                candidates.append((segment['va'] + offset, base + (word & 0xFFFFFFFF)))
+                following = (meta >> 19) & 0xFFF
+                if not following:
+                    break
+                cursor += following * 4
+                hops += 1
+                if hops > 4096:
+                    raise ValueError('Runaway chained fixup chain')
+    return candidates
+
+
 def unique_kernel_binding(address, original_exports, native_by_name):
     names = original_exports.get(address, [])
     choices = {new for name in names for new in native_by_name.get(name, set())}
@@ -141,15 +220,18 @@ def unique_kernel_binding(address, original_exports, native_by_name):
     return next(iter(choices))
 
 
-def plan(native_data, original_data, roots, slide):
+def plan(native_data, original_data, roots, slide, original_symbols=None):
     if slide % 4096:
         raise ValueError('Rebasing must preserve native 4K alignment')
     native, original = macho(native_data), macho(original_data)
-    if native['kind'] != 2 or original['kind'] != 2:
+    if native['kind'] != 2:
         raise ValueError('Expected MH_EXECUTE kernel images')
+    if original['kind'] not in (2, 12):
+        raise ValueError('Expected an MH_EXECUTE kernelcache or an MH_FILESET collection')
+    fileset = original['kind'] == 12
     parent = original['segments']
     info = next(s for s in parent if s['name'] == '__PRELINK_INFO')
-    at = backed_offset(parent, info['va'], info['filesize'], len(original_data))
+    at = backed_offset(parent, u64(info['va']), info['filesize'], len(original_data))
     metadata = unserialize_xml(original_data[at:at + info['filesize']])
     entries = {}
     for entry in metadata['_PrelinkInfoDictionary']:
@@ -175,7 +257,7 @@ def plan(native_data, original_data, roots, slide):
     for identifier, entry in entries.items():
         if entry.get('OSKernelResource') is True:
             continue
-        va = entry.get('_PrelinkExecutableLoadAddr')
+        va = u64(entry.get('_PrelinkExecutableLoadAddr'))
         if va is None or not entry.get('_PrelinkExecutableSize'):
             continue
         header = backed_offset(parent, va, 32, len(original_data))
@@ -207,24 +289,38 @@ def plan(native_data, original_data, roots, slide):
     for address, names in exports(native_data, native).items():
         for name in names:
             native_symbols.setdefault(name, set()).add(address)
-    original_symbols = exports(original_data, original)
-    packed = metadata['_PrelinkLinkKASLROffsets']
-    count, = struct.unpack_from('<I', packed)
-    if len(packed) != 4 + count * 4:
-        raise ValueError('Invalid pointer-table extent')
-    offsets = struct.unpack_from(f'<{count}I', packed, 4)
-    if len(set(offsets)) != count:
-        raise ValueError('Duplicate pointer relocation site')
-    base = next(s['va'] for s in parent if s['name'] == '__PRELINK_TEXT')
+    # Kernel targets are bound by name. Classical caches carry the donor's
+    # export symbol table; the 21H16 fileset release cache is fully stripped,
+    # so the caller must supply a KDK-derived {va: name} side table instead.
+    if fileset:
+        if original_symbols is None:
+            raise ValueError('Fileset release caches carry no kernel symbol table; a KDK-derived side table is required')
+        candidates = chain_relocations(original_data, original)
+    else:
+        packed = metadata.get('_PrelinkLinkKASLROffsets')
+        if packed is None:
+            raise ValueError('Missing _PrelinkLinkKASLROffsets pointer table')
+        if original_symbols is None:
+            original_symbols = exports(original_data, original)
+        count, = struct.unpack_from('<I', packed)
+        if len(packed) != 4 + count * 4:
+            raise ValueError('Invalid pointer-table extent')
+        offsets = struct.unpack_from(f'<{count}I', packed, 4)
+        if len(set(offsets)) != count:
+            raise ValueError('Duplicate pointer relocation site')
+        base = next(s['va'] for s in parent if s['name'] == '__PRELINK_TEXT')
+        candidates = []
+        for offset in offsets:
+            site = base + offset
+            target, = struct.unpack_from('<Q', original_data, backed_offset(parent, site, 8, len(original_data)))
+            candidates.append((site, target))
     bindings = []
-    for offset in offsets:
-        site = base + offset
+    for site, target in candidates:
         source = owner(site)
         if source is None or source[2] not in selected:
             continue
         if source != owner(site + 7):
             raise ValueError('Pointer spans component extent')
-        target, = struct.unpack_from('<Q', original_data, backed_offset(parent, site, 8, len(original_data)))
         destination = owner(target)
         if destination:
             if destination[2] not in selected:
@@ -240,6 +336,25 @@ def plan(native_data, original_data, roots, slide):
             raise ValueError('Rebased pointer outside 64-bit address space')
         bindings.append({'site': site, 'target': target, 'new_site': site + slide,
                          'new_target': replacement, 'kind': kind, 'module': source[2]})
+    if fileset:
+        # kmod_info start/stop are chained rebase entries in a fileset cache,
+        # so their original values come from the decoded bindings, not raw
+        # reads. A zero start/stop has no chain entry and stays zero.
+        decoded = {binding['site']: binding['target'] for binding in bindings}
+        kmod_entrypoints = {}
+        for identifier in modules:
+            va = u64(entries[identifier].get('_PrelinkKmodInfo'))
+            if not va:
+                continue
+            start, stop = decoded.get(va + 180, 0), decoded.get(va + 188, 0)
+            for name, address in (('start', start), ('stop', stop)):
+                if address:
+                    holder = owner(address)
+                    if holder is None or holder[2] != identifier:
+                        raise ValueError(f'kmod_info {name} of {identifier} does not decode inside {identifier}')
+            kmod_entrypoints[identifier] = {'start': start, 'stop': stop}
+    else:
+        kmod_entrypoints = None
     extents = []
     for start, end, identifier, segment in owned:
         if identifier not in selected:
@@ -257,6 +372,7 @@ def plan(native_data, original_data, roots, slide):
             'codeless_components': sorted(codeless), 'kernel_interfaces': sorted(interfaces),
             'pointer_counts': dict(Counter(binding['kind'] for binding in bindings)),
             'extents': extents, 'bindings': bindings, 'images_modified': False,
+            'kmod_entrypoints': kmod_entrypoints,
             'instruction_relocation_complete': False, 'abi_qualified': False, 'loadable': False}
 
 
