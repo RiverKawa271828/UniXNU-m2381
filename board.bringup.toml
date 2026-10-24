@@ -239,9 +239,11 @@ kernel_args = [
   # Board-side ApplePMGRNub publication; without it the donor AMFI panics
   # "No PMGR?" after its 30 s waitForMatchingService timeout.
   "sheng-pmgr=2",
-  # Root mount via the board's UFS (SM8550 SoC-level transport, no device
-  # specifics); round 17 ended at "Failed to mount root device".
-  "native-ufs-root=1",
+  # Round 20: read-only UFS data-path check (bring-up -> LUN0 GPT -> first
+  # block of "userdata", result printed on the panic screen). Rounds 18/19
+  # proved SMMU takeover + controller bring-up; root=1 stays parked until the
+  # verified-root chain and the IPSW-rebuilt userdata exist (macOS/CI step).
+  "native-ufs-probe=10",
 ]
 
 # text_fixups for the 21H461 shared caches (nx729j's set, byte-for-byte the
