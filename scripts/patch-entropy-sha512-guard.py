@@ -6,10 +6,15 @@ corecrypto dispatch table before the PRNG install: entropy_init ->
 SHA512_Init dispatches through g_crypto_funcs. The 20H392 (iOS 16.7)
 corecrypto kext installed the kernel PRNG *before* it called
 register_crypto_functions — an ordering its own iOS 16 kernel tolerated and
-the iOS 17 kexts (21H461, and the 21H16 train this board now pairs with) do
-not have. The 2026-10-23/24 device rounds panicked with a data abort at
-SHA512_Init+0x10 (FAR 0x40, g_crypto_funcs == NULL) inside the kext's
-register_and_init_prng.
+the iOS 17 kexts do not have. The 2026-10-23/24 device rounds against the
+20H392 donor panicked with a data abort at SHA512_Init+0x10 (FAR 0x40,
+g_crypto_funcs == NULL) inside the kext's register_and_init_prng.
+
+With the 2026-10-24 donor swap to 21H461 (fuxi/nx729j's exact build) this
+guard is believed unnecessary — those boards never needed it on the same
+train — and the binary patch below must NOT be applied on the 21H461 path
+(its trampoline site was derived from the 20H392 prelinked image). Keep the
+source-level patch available for a future 16-gen donor; skip this script.
 
 The digest context is only consumed through entropy_provide, which runs when
 the PRNG first generates — after that same kext start has completed the

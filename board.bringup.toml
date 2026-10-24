@@ -25,34 +25,35 @@ soc = "SM8550"
 description = "Meizu 20 Classic"
 kit = "m2381"                      # package/ of this repository appears as kits/m2381 in the build tree
 
-# The target OS image: the unchanged iPhone11,2 (iPhone XS) iOS 17.7 restore
-# image. User decision 2026-10-24 (replacing the 2026-10-23 iPhone10,3/20H392
-# choice): the UniXNU kernel source is xnu-10063.141.1 (iOS 17.6 generation),
-# so the 20H392 donor was a cross-generation pairing all along — that mismatch
-# produced both the entropy wall and the AppleImage4 mix-n-match wall on
-# device. 21H16 is the same 21H train the upstream boards (fuxi/nx729j on
-# 21H461) pair natively with their xnu-10063 source, on a phone identity
-# (d321ap) instead of a tablet. Apple no longer signs 21H16, which is
-# irrelevant here: nothing in this flow asks Apple to countersign a restore.
-# chip_id/board_id read from the local IPSW BuildManifest (d321ap Erase
-# identity): ApChipID 0x8020 (t8020), ApBoardID 0x0e.
+# The target OS image: the unchanged iPad7,1 (iPad Pro 12.9-inch 2nd gen)
+# iOS 17.7.11 restore image - the fuxi/nx729j donor, byte-for-byte the same
+# build those boards pair with the xnu-10063 source. User decision 2026-10-24
+# (second swap of the day): the 21H16 iPhone XS cache turned out to be a
+# fileset kernel collection with chained fixups and no KASLR offsets table,
+# which the prelink kit cannot rebind yet; the 21H461 cache is a classic
+# kernelcache (arm64, KASLR offsets table) the kit already consumes - so the
+# same-generation pairing fix lands through the proven donor first. The
+# tablet identity is a deliberate trade-off (the 2026-10-23 "no iPadOS"
+# decision was made in the 16.7 context) and gets revisited once the
+# fileset-KC rebinder exists.
+# chip_id/board_id read from the IPSW BuildManifest (j120ap Erase identity):
+# ApChipID 0x8011 (t8011), ApBoardID 0x0c.
 [ipsw]
-url = "https://updates.cdn-apple.com/2024FallFCS/fullrestores/062-79002/2CDE0E28-284D-4554-A20B-DAFB4703AF3F/iPhone11,2,iPhone11,4,iPhone11,6_17.7_21H16_Restore.ipsw"
-product = "iPhone11,2"
-version = "17.7"
-build = "21H16"
-device_class = "d321ap"
-chip_id = 0x8020
-board_id = 14
+url = "https://updates.cdn-apple.com/2025SpringFCS/fullrestores/122-77166/DCA6CFE8-90E9-4B92-880D-3DE171798E40/iPad_Pro_HFR_17.7.11_21H461_Restore.ipsw"
+product = "iPad7,1"
+version = "17.7.11"
+build = "21H461"
+device_class = "j120ap"
+chip_id = 0x8011
+board_id = 12
 fetch = ["KernelCache", "DeviceTree", "StaticTrustCache", "Cryptex1,SystemTrustCache"]
 
 [ipsw.sha256]
-# Whole-file sha256 of the two disk-image members inside the IPSW, computed
-# from the local copy (sha256 of the full restore zip itself is
-# 6fd757bed0d54ea97c60df7492024a778db28077ccab40b59861343c1b2cb722, also
-# confirmed by the ipsw.me record for this build).
-"044-17947-018.dmg" = "9b69f645e5673b9ce14ffed6211e33f13483b080781c5865739f3676db649c0e"   # OS
-"044-17442-018.dmg" = "3b21f08ab8c9f21c5296e5a85f62054126ea9e604f3fe141c4d117c0ce127a58"   # Cryptex1,SystemOS
+# Whole-file sha256 of the two disk-image members inside the IPSW, taken from
+# the fuxi board pin for this exact build (same upstream URL); re-verify
+# against the local IPSW copy when it arrives before any push/dispatch.
+"044-76040-038.dmg" = "3f99b859c9728379110b66657c7b15285bcb1925ad8b5726542e2cdcf8b1028d"   # OS
+"044-76034-038.dmg" = "b4908cde41d23e6bc05e6af51a2c9eeb00cf0f863a6a18b1600c96a3fd70414f"   # Cryptex1,SystemOS
 
 # The raw image for the userdata partition: the OS and SystemOS disk images of
 # the IPSW behind a manifest.
@@ -95,24 +96,18 @@ archives = [
 [kernel.prelink]
 tool = "kits/NativePrelink/emit_prelink.py"
 kernel = "build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/mach.development.bcm2837.unstripped.noctf"
-# sha256 of the decompressed 21H16 arm64 kernelcache, computed on Linux from
-# the local IPSW (research/bin/ipsw kernel dec, 2026-10-24). The 20H392 value
-# 2ec297ba… belonged to the retired iPhone10,3 pairing; the fuxi/nx729j value
-# f18b4df8… is the 21H461 iPadOS kernelcache and does not apply either.
-kernelcache_sha256 = "0fb5cf5915feeaa792e80af4d4a0ba2effdba658b41a68dbf0c2fd905d1f59f0"
+# sha256 of the decompressed 21H461 arm64 kernelcache. Verified locally:
+# fetched via Apple CDN range requests and decompressed on Linux 2026-10-24,
+# sha matches the fuxi board pin exactly (f18b4df8…).
+kernelcache_sha256 = "f18b4df865405f2a287b84977d7aca745e056d656d9fc9df1662970ce2969de7"
+# AMFI early initializer, verified two ways on this kernelcache (2026-10-24):
+# the fuxi/nx729j on-device value, AND the sole hit of the three-build
+# function fingerprint inside this build's AMFI __TEXT_EXEC
+# (0xfffffff005aaa000 + 0xaae0). slide follows the upstream build convention
+# (-0x1000000, image-generation independent); the prelink pointer binding
+# check adjudicates it.
 slide = "-0x1000000"
-# The AMFI early initializer for the 21H16 kernelcache, derived on Linux
-# 2026-10-24 by the three-build fingerprint method: the function prologue
-# (ff0304d1 f85f0ca9 f6570da9 f44f0ea9 fd7b0fa9 fdc30391) is identical across
-# 21H461/20H392/21H16 and unique inside each build's AMFI __TEXT_EXEC. On
-# 21H461 the sole hit reproduces the fuxi value 0xfffffff005ab4ae0 (TEXT_EXEC
-# 0xfffffff005aaa000 + 0xaae0); on 20H392 the sole hit reproduces the
-# device-proven 0xfffffff0056fc3f8 (+0x13f8). 21H16: AMFI __TEXT_EXEC
-# 0xfffffff008f2ea10, sole hit +0xd308. The kernel's early-security call
-# validates the address is inside the module's executable segment (initprot
-# R|X, maxprot W-free — confirmed on the 21H16 segment) and panics loudly
-# otherwise.
-early_security_init = "com.apple.driver.AppleMobileFileIntegrity=0xfffffff008f3bd18"
+early_security_init = "com.apple.driver.AppleMobileFileIntegrity=0xfffffff005ab4ae0"
 roots = [
   "com.apple.AppleFSCompression.AppleFSCompressionTypeZlib",
   "com.apple.driver.AppleARMPlatform",
@@ -198,13 +193,14 @@ panic_screen = false
 # kernel by absolute virtual address measured on sheng's kernel, and this
 # board's _panic address is unknown until a kernel exists (same refusal nx729j
 # recorded in its bring-up board).
-# sha256 of the two trust caches inside the local 21H16 IPSW (2026-10-24).
+# sha256 of the two trust caches inside the 21H461 IPSW, computed from the
+# members fetched via Apple CDN range requests (CRC-32 verified, 2026-10-24).
 trust_cache_sha256 = [
-  "090c6a97ecfee493b4828733a37f505ebf51a890370204a6a948019ffff01cc7",   # StaticTrustCache (044-17947-018.dmg.trustcache)
-  "8e43fc06870a087ddd7bda2d65f7439b8025195cf26c1ebb5cb3c9fb32f0da43",   # Cryptex1,SystemTrustCache (044-17442-018.dmg.trustcache)
+  "4563bdbf6ed8f72237d45dbba3ccde432634338f95c10d79d5d4631678a97c7c",   # StaticTrustCache (044-76040-038.dmg.trustcache)
+  "9742f3d566369e6c48f63b3dc0740b06c243d13c6650e25bbf44616e13d6d097",   # Cryptex1,SystemTrustCache (044-76034-038.dmg.trustcache)
   # The flat two-module bundle made by scripts/make-m2381-trust-bundle.py from the two above
   # (DarwinBoot/kernel need the bare container, not the IM4P files; modules unchanged).
-  "e9f6c5b9e17849d3a4c33c5da4ed7d5008491f1cf30e44073f8d5978b3928b19",   # original-trust.bundle
+    "7416ca4f8377146626bb284e2133c76bee6cb4e3ee0af5d648b186235a7323a7",   # original-trust.bundle (reproduces the fuxi pin independently)
 ]
 # First light keeps the command line to what this kernel actually links,
 # mirroring the nx729j bring-up discipline: every sheng-*/offline-* argument
@@ -220,19 +216,24 @@ kernel_args = [
   "-no_slto_panic",
 ]
 
-# text_fixups for the shared caches: none carried yet. The nx729j 21H461
-# fixups do NOT apply to the 21H16 caches this board boots; [TODO] derive the
-# iPhone11,2/iOS 17.7 fixups at the userland stage (P4).
+# text_fixups for the 21H461 shared caches (nx729j's set, byte-for-byte the
+# same donor build this board now uses); the kernel reaches them as
+# /chosen/text-fixups after signature validation.
+text_fixups = [
+  "dyld_shared_cache_arm64.15,421e8bc,28ad1bb0008544f9,c0035fd6008544f9",
+  "dyld_shared_cache_arm64.13,1b05bec,44008052,24008052",
+  "dyld_shared_cache_arm64.13,1b05b08,44008052,24008052",
+  "BTAudioHALPlugin,38bec,ffc300d1f44f01a9,000080d2c0035fd6",
+]
 
 [payload.adt]
 tool = "scripts/make-m2381-adt.py"
 chip_id = "207"                     # [DTB] qcom,msm-id 0x207 (SM8550-AB) — same value sheng/nx729j use
 owned_memory_size = "0x130000000"
-# [TODO P3] root_match_volume_uuid of OUR userdata image (built from 21H16).
-# The fuxi/nx729j value 04769D26-… belongs to the 21H461 iPadOS image and must
-# not be copied; derive both this and CONFIG_XNU_OWNER_DATA_VOLUME_UUID from
-# the built userdata image.
-root_match_volume_uuid = "TODO-P3"
+# root_match_volume_uuid of the donor OS image's Data volume: the same value
+# fuxi/nx729j pin for this exact 21H461 build (same IPSW = same UUID), so the
+# 21H461 userdata build will carry it natively.
+root_match_volume_uuid = "04769D26-2CA0-4825-B443-E2E5F88300F2"   # the 21H461 OS image Data volume UUID (same value fuxi/nx729j pin for this build)
 cpu_regs = "0,0x100,0x200,0x300,0x400,0x500,0x600,0x700"   # [DTB] /cpus reg 0x00..0x700, 8 CPUs
 packed_data_ramdisk = true
 unique_chip_id = "required"          # the platform seed is not stored in any repository

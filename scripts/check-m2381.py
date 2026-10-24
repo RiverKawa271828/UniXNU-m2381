@@ -68,10 +68,10 @@ def main():
 
     # --- identity -----------------------------------------------------------
     ipsw = board['ipsw']
-    if (ipsw['product'], ipsw['build'], ipsw['device_class']) != ('iPhone11,2', '21H16', 'd321ap'):
-        record(FAIL, 'ipsw identity', 'm2381 targets iPhone11,2 / 21H16 / d321ap (user decision 2026-10-24, same-train pairing for xnu-10063)')
-    elif ipsw.get('chip_id') != 0x8020 or ipsw.get('board_id') != 14:
-        record(FAIL, 'ipsw chip/board id', f"expected 0x8020/14 (d321ap BuildManifest), got {ipsw.get('chip_id')}/{ipsw.get('board_id')}")
+    if (ipsw['product'], ipsw['build'], ipsw['device_class']) != ('iPad7,1', '21H461', 'j120ap'):
+        record(FAIL, 'ipsw identity', 'm2381 targets iPad7,1 / 21H461 / j120ap (user decision 2026-10-24: fuxi-proven same-train donor while the fileset-KC rebinder is pending)')
+    elif ipsw.get('chip_id') != 0x8011 or ipsw.get('board_id') != 12:
+        record(FAIL, 'ipsw chip/board id', f"expected 0x8011/12 (j120ap BuildManifest), got {ipsw.get('chip_id')}/{ipsw.get('board_id')}")
     else:
         record(OK, 'ipsw identity', f"{ipsw['product']} {ipsw['version']} {ipsw['build']} chip {ipsw['chip_id']:#x} board {ipsw['board_id']}")
 
@@ -99,7 +99,7 @@ def main():
     adt = board['payload']['adt']
     uuid = adt.get('root_match_volume_uuid', '')
     # P2 builds the firmware only; nothing here writes a disk. The placeholder
-    # becomes a hard failure at P3, when the 21H16 userdata image exists.
+    # no longer a placeholder: the donor image UUID applies verbatim (same 21H461 IPSW as fuxi/nx729j).
     if not uuid or uuid.upper().startswith('TODO'):
         record(WARN, 'root_match_volume_uuid', 'still the P3 placeholder; must be derived from the 21H16 userdata build before any payload/userdata image is written')
     else:

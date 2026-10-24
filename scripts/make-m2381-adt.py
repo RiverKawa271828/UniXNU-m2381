@@ -6,13 +6,17 @@ make-sheng-adt.py). The tree structure, the required nodes and the property
 set are unchanged: they are what the source XNU entry converged on. The
 deltas are the device identity and the panel geometry.
 
-Unlike nx729j, this board boots the native iPhone11,2 (iPhone XS, d321ap)
-iOS 17.7 userland, so the Apple identity is not a flag but the only path:
-hw.product must read iPhone11,2 or MobileGestalt in that userland mismatches
-the image. The identity strings follow the real d321ap ADT shipped in the
-21H16 IPSW (out/ipsw/21H16/raw/Firmware/all_flash/DeviceTree.d321ap.im4p):
-model iPhone11,2, target-type D321, product-name "iPhone XS", artwork idiom
-"phone", scale factor 3, subtype = panel height.
+The donor userland is iPad7,1 (iPad Pro 12.9-inch 2nd generation, j120ap)
+iOS 17.7.11 - the fuxi/nx729j donor - so hw.product must read iPad7,1 or
+MobileGestalt in that userland mismatches the image. The identity strings
+follow both the real j120ap ADT shipped in the 21H461 IPSW (verified against
+out/ipsw/21H461/Firmware/all_flash/DeviceTree.j120ap.im4p on 2026-10-24) and
+the proven make-fuxi-adt.py values: model iPad7,1, target-type J120,
+product-name "iPad Pro (12.9-inch) (2nd generation)", artwork idiom "pad",
+scale factor 2, subtype 2732 (the real j120ap panel height), fallback
+iPad6,7. The buttons node stays this phone's own shape (no Home button,
+hold + both volumes, non-mechanical type 2) - exactly what fuxi/nx729j run
+for this identity.
 
 The SoC level values are shared with every SM8550 board and are re-confirmed
 by this phone's own device tree (docs/hardware/):
@@ -53,17 +57,21 @@ UFS_PHY_SIZE = 0x2000
 BOARD_COMPATIBLE = b'meizu,meizu-20\0qcom,sm8550\0'
 BOARD_MODEL = b'meizu,meizu-20\0'
 
-# Apple identity of the donor userland (d321ap ADT of 21H16).
-APPLE_MODEL = b'iPhone11,2\0'
-APPLE_TARGET_TYPE = b'D321\0'
-APPLE_PRODUCT_NAME = b'iPhone XS\0'
-APPLE_PRODUCT_DESCRIPTION = b'iPhone XS (m2381 bring-up)\0'
-APPLE_COMPATIBLE_FALLBACK = b'iPhone10,3\0'   # [d321ap.adt] fallback string
+# Apple identity of the donor userland (j120ap ADT of 21H461; values verified
+# against the real DeviceTree and identical to the fuxi maker's).
+APPLE_MODEL = b'iPad7,1\0'
+APPLE_TARGET_TYPE = b'J120\0'
+APPLE_PRODUCT_NAME = b'iPad Pro (12.9-inch) (2nd generation)\0'
+APPLE_PRODUCT_DESCRIPTION = APPLE_PRODUCT_NAME
+APPLE_COMPATIBLE_FALLBACK = b'iPad6,7\0'   # [j120ap.adt] fallback string
 
 # Panel geometry, used by the artwork properties of the product node.
 PANEL_WIDTH = 1080
 PANEL_HEIGHT = 2400
-ARTWORK_SCALE_FACTOR = 3         # 1080 px / 3 = 360 pt logical width
+# The donor identity's artwork scale (real j120ap tree = 0x2); this phone's
+# own panel would be 3, but the identity, not the display, drives userland
+# artwork decisions.
+ARTWORK_SCALE_FACTOR = 2
 
 
 def node(name, properties=(), children=()):
@@ -148,7 +156,7 @@ def main():
             for index, reg in enumerate(cpu_regs)]
     tree = node('device-tree', [
         # hw.product/hw.machine/hw.target come from the root 'model'/'target-type' (IODTPlatformExpert);
-        # the d321ap userland reads iPhone11,2 from here (libMobileGestalt prefix-match).
+        # the j120ap userland reads iPad7,1 from here (libMobileGestalt prefix-match).
         ('model', APPLE_MODEL),
         ('target-type', APPLE_TARGET_TYPE),
         # Root compatible strings of the compiled board DT (meizu,meizu-20 / qcom,sm8550).
@@ -178,7 +186,7 @@ def main():
                            if args.owned_memory_size else [] ),
                         ('dram-base', struct.pack('<Q', DRAM_BASE)),
                         ('dram-size', struct.pack('<Q', args.dram_size)),
-                        # Image4 hash algorithm, as in the real d321ap tree.
+                        # Image4 hash algorithm, as in the real j120ap tree.
                         ('crypto-hash-method', b'sha2-384\0'),
                         *( [('root-matching', ('<dict><key>IOProviderClass</key><string>IOMedia</string>'
                                                '<key>IOPropertyMatch</key><dict><key>UUID</key><string>' +
@@ -200,19 +208,21 @@ def main():
         # root-domain policy input rather than allowing the CPU to park forever.
         node('defaults', [('sleep-disabled', struct.pack('<I', 1))]),
         node('options', []),
-        # iPhone XS class: no Home button (gesture navigation); power (hold) and
+        # The phone itself has no Home button; fuxi/nx729j run the same node for
+        # this iPad identity (power (hold) and
         # both volume keys only, matching the PMK8550 PON pwrkey + resin layout.
         node('buttons', [('compatible', b'buttons\0'), ('device_type', b'buttons\0'),
                          # 2 = the non-mechanical answer BSPlatform passes through.
                          ('button-names', b'hold\0voldown\0volup\0'),
                          ('home-button-type', struct.pack('<I', 2))]),
-        node('product', [('product-name', APPLE_PRODUCT_NAME),
+        node('product', [        ('product-name', APPLE_PRODUCT_NAME),
                          ('model', BOARD_MODEL),
                          ('product-description', APPLE_PRODUCT_DESCRIPTION),
-                         ('artwork-device-idiom', b'phone\0'),
-                         # Panel height in pixels, as the real d321ap tree (2436)
-                         # and nx729j (2480) do.
-                         ('artwork-device-subtype', struct.pack('<I', PANEL_HEIGHT)),
+                         ('artwork-device-idiom', b'pad\0'),
+                         # Real j120ap panel height (0xaac), as fuxi runs for this identity;
+                         # NOT this phone's panel height - the identity, not the
+                         # display, is what MobileGestalt matches on.
+                         ('artwork-device-subtype', struct.pack('<I', 2732)),
                          ('artwork-scale-factor', struct.pack('<I', ARTWORK_SCALE_FACTOR)),
                          ('artwork-display-gamut', b'P3\0'),
                          ('compatible-device-fallback', APPLE_COMPATIBLE_FALLBACK),

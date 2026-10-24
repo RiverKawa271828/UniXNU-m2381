@@ -29,7 +29,9 @@ CONFIG_XNU_NATIVE_LEGACY_DISPLAY=y
 CONFIG_XNU_NATIVE_ADRENO=y
 
 CONFIG_XNU_CRYPTO_BOOTSTRAP="prelinked"
-# [TODO P3] 21H461 placeholder — replace with the 21H16 Data volume UUID derived from OUR userdata build.
+# The 21H461 donor image Data volume UUID - the same value fuxi/nx729j run
+# for this exact build, and correct here as long as the userdata image is
+# rebuilt from the same IPSW.
 CONFIG_XNU_OWNER_DATA_VOLUME_UUID="18AB5557-DC2D-469B-8758-855E60F5B0DF"
 CONFIG_XNU_NATIVE_VIRTIO_BLOCK_ARCHIVE="{tree}/build/native-virtio-block-verified-bundle/libNativeVirtioBlock.a"
 CONFIG_XNU_VERIFIED_ROOT_ARCHIVE="{tree}/build/verified-root-os-xnu-bundle/libVerifiedRootProbe.a"
