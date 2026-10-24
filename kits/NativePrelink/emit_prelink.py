@@ -24,16 +24,22 @@ MATH_LITERAL_POOLS = (
     ('0000c1c00000807f0000000084aec68f', 212, '43ef8598a507444b21d8a2abbe4065554baaa3b6a29dbe390465cc0ba0dfbe28'),
     ('9b1a86a049faa8bd053f4e7b9dee213e', 56, 'e874aeba59eebdebdf68d18b1196d1ca6aeee12b110985a856f8fe404e0c76ee'),
 )
-# Inline data of the iOS 16.7.16 (20H392) com.apple.kec.Libm prelinked kext:
-# three data runs inside its __TEXT_EXEC (dispatch/lookup tables around
-# 0xfffffff005b8c1b0-0xfffffff005b8c510) that decode as PC-relative branches
-# into the image but are constants. The digests pin the exact 20H392 kext
-# bytes; a different base build fails loudly instead of silently skipping code.
-IOS16_LIBM_LITERAL_POOLS = (
+# Inline data of the com.apple.kec.Libm prelinked kext: three data runs inside
+# its __TEXT_EXEC (dispatch/lookup tables) that decode as PC-relative branches
+# into the image but are constants. The runs are byte-identical across the
+# 20H392, 21H461 and 21H16 caches (verified 2026-10-24 on all three), so one
+# prefix+digest table covers every supported pairing; a cache without them
+# fails loudly instead of silently skipping code.
+LIBM_LITERAL_POOLS = (
     ('2a889c3d', 112, '31261217f7e08341597fc8debf9f7a125b5f3176936060904aabef1d8b0e3a31'),
     ('620f08bc', 96, '64ea85f5b738ed3b316694f491aaab33a8c70240c59d0c1ccee017a5c652a9b8'),
     ('526cdb37', 144, '2ccd4185649daaead86d57455b45a0a26196309548aab62407c6f0661a28dd61'),
 )
+# native placeholder segment -> original component segment name. The 21H461
+# caches carry the component regions as dedicated __PLK_*/__PRELINK_* segments;
+# the 21H16 (t8020) cache instead packs the kext segments inside the kernel's
+# own __TEXT_EXEC/__DATA_CONST/__DATA, so emit() resolves each source region
+# by containment of the component VAs (see below).
 COALESCED = {'__PRELINK_TEXT': '__TEXT', '__PLK_TEXT_EXEC': '__TEXT_EXEC',
              '__PLK_DATA_CONST': '__DATA_CONST', '__PRELINK_DATA': '__DATA'}
 
@@ -97,7 +103,7 @@ def instruction_inventory(original_data, parent, modules):
                     (bytes.fromhex('0001000100010001'), 528, VECTOR_REPEAT_DIGEST, 64),
                     (bytes(range(32, 24, -1)), 40, ADLER32_VECTOR_DIGEST, 0),
                     *((bytes.fromhex(prefix), size, digest, 0) for prefix, size, digest in MATH_LITERAL_POOLS),
-                    *((bytes.fromhex(prefix), size, digest, 0) for prefix, size, digest in IOS16_LIBM_LITERAL_POOLS)):
+                    *((bytes.fromhex(prefix), size, digest, 0) for prefix, size, digest in LIBM_LITERAL_POOLS)):
                 search = 0
                 while (search := blob.find(prefix, search)) >= 0:
                     start = search - prefix_offset
@@ -192,7 +198,19 @@ def emit(native_data, original_data, roots, slide, early_security_init=None):
     # Keep coalesced geometry, but only copy selected component segments.
     # Packed kernel-resource records are copied as original readonly metadata.
     for coalesced_name, component_name in COALESCED.items():
-        source = next(s for s in parent if s['name'] == coalesced_name)
+        # Resolve the parent region the component segments live in: by
+        # containment of any populated component VA (works for both the
+        # __PLK_* dedicated-region caches and the 21H16-style kernel-segment
+        # packing), falling back to the dedicated-region name.
+        sample = next((s for m in modules.values() for s in m['segments']
+                       if s['name'] == component_name and s['filesize']), None)
+        if sample is not None:
+            source = next((s for s in parent if s['name'] != '__PRELINK_INFO'
+                           and s['va'] <= sample['va'] < s['va'] + s['size']), None)
+        else:
+            source = None
+        if source is None:
+            source = next(s for s in parent if s['name'] == coalesced_name)
         blob = bytearray(source['size'])
         for module in modules.values():
             for segment in module['segments']:

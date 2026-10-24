@@ -15,8 +15,14 @@ def macho(data, at=0):
     if at < 0 or at + 32 > len(data):
         raise ValueError('Mach-O header outside image')
     magic, cpu, subtype, kind, count, size = struct.unpack_from('<6I', data, at)
-    if (magic, cpu, subtype) != (0xfeedfacf, 0x100000c, 0):
-        raise ValueError('Only ordinary little-endian ARM64 is supported')
+    # subtype 0 = plain arm64 (the 20H392/21H461 caches); base subtype 2 with
+    # the pointer-auth version in the top two bits = arm64e (the 21H16
+    # iPhone11,2 cache and every component embedded in it). The arm64e
+    # component code is copied unchanged; its PAC instructions are
+    # self-balanced, so the host CPU only needs FEAT_PAuth. Refuse anything
+    # outside these two so a new shape fails loudly here.
+    if magic != 0xfeedfacf or cpu != 0x100000c or subtype & 0x3FFFFFFF not in (0, 2):
+        raise ValueError(f'Only little-endian ARM64/arm64e is supported, got cpu {cpu:#x} subtype {subtype:#x}')
     end = at + 32 + size
     if end > len(data):
         raise ValueError('Load commands outside image')
@@ -116,7 +122,15 @@ def unserialize_xml(blob):
             refs[identifier] = value
         return value
 
-    return read(ET.fromstring(blob.split(b'\0', 1)[0]))
+    element = ET.fromstring(blob.split(b'\0', 1)[0])
+    # The 21H16 cache wraps its prelink dictionary in a <plist> element (the
+    # earlier caches carry the bare dict); unwrap it so both shapes parse.
+    if element.tag == 'plist':
+        children = list(element)
+        if len(children) != 1 or children[0].tag != 'dict':
+            raise ValueError('Unexpected <plist> payload in prelink metadata')
+        element = children[0]
+    return read(element)
 
 
 def unique_kernel_binding(address, original_exports, native_by_name):

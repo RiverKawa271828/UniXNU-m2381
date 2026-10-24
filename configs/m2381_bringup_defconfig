@@ -90,7 +90,7 @@ CONFIG_XNU_OWNER_UNION_SYSTEMOS=n
 CONFIG_XNU_BOOT_PROGRESS=n
 
 # Kept because the patch guards read it even when OWNER_DATA_MOUNT is off.
-# Zero placeholder until the owner stage derives the real 20H392 Data volume
+# Zero placeholder until the owner stage derives the real 21H16 Data volume
 # UUID from the built userdata image (the fuxi value names a volume on the
 # 21H461 image and must not be reused).
 CONFIG_XNU_OWNER_DATA_VOLUME_UUID="00000000-0000-0000-0000-000000000000"

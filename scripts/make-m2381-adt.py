@@ -6,12 +6,13 @@ make-sheng-adt.py). The tree structure, the required nodes and the property
 set are unchanged: they are what the source XNU entry converged on. The
 deltas are the device identity and the panel geometry.
 
-Unlike nx729j, this board boots the native iPhone10,3 (d22ap) iOS 16.7.16
-userland, so the Apple identity is not a flag but the only path: hw.product
-must read iPhone10,3 or MobileGestalt in that userland mismatches the image.
-The identity strings follow the real d22ap ADT shipped in the 20H392 IPSW
-(research/ipsw-x/d22ap.adt): model iPhone10,3, target-type D22, product-name
-"iPhone X", artwork idiom "phone", scale factor 3, subtype = panel height.
+Unlike nx729j, this board boots the native iPhone11,2 (iPhone XS, d321ap)
+iOS 17.7 userland, so the Apple identity is not a flag but the only path:
+hw.product must read iPhone11,2 or MobileGestalt in that userland mismatches
+the image. The identity strings follow the real d321ap ADT shipped in the
+21H16 IPSW (out/ipsw/21H16/raw/Firmware/all_flash/DeviceTree.d321ap.im4p):
+model iPhone11,2, target-type D321, product-name "iPhone XS", artwork idiom
+"phone", scale factor 3, subtype = panel height.
 
 The SoC level values are shared with every SM8550 board and are re-confirmed
 by this phone's own device tree (docs/hardware/):
@@ -52,12 +53,12 @@ UFS_PHY_SIZE = 0x2000
 BOARD_COMPATIBLE = b'meizu,meizu-20\0qcom,sm8550\0'
 BOARD_MODEL = b'meizu,meizu-20\0'
 
-# Apple identity of the donor userland (d22ap ADT of 20H392).
-APPLE_MODEL = b'iPhone10,3\0'
-APPLE_TARGET_TYPE = b'D22\0'
-APPLE_PRODUCT_NAME = b'iPhone X\0'
-APPLE_PRODUCT_DESCRIPTION = b'iPhone X (m2381 bring-up)\0'
-APPLE_COMPATIBLE_FALLBACK = b'iPhone9,2\0'   # [d22ap.adt] fallback string
+# Apple identity of the donor userland (d321ap ADT of 21H16).
+APPLE_MODEL = b'iPhone11,2\0'
+APPLE_TARGET_TYPE = b'D321\0'
+APPLE_PRODUCT_NAME = b'iPhone XS\0'
+APPLE_PRODUCT_DESCRIPTION = b'iPhone XS (m2381 bring-up)\0'
+APPLE_COMPATIBLE_FALLBACK = b'iPhone10,3\0'   # [d321ap.adt] fallback string
 
 # Panel geometry, used by the artwork properties of the product node.
 PANEL_WIDTH = 1080
@@ -147,7 +148,7 @@ def main():
             for index, reg in enumerate(cpu_regs)]
     tree = node('device-tree', [
         # hw.product/hw.machine/hw.target come from the root 'model'/'target-type' (IODTPlatformExpert);
-        # the d22ap userland reads iPhone10,3 from here (libMobileGestalt prefix-match).
+        # the d321ap userland reads iPhone11,2 from here (libMobileGestalt prefix-match).
         ('model', APPLE_MODEL),
         ('target-type', APPLE_TARGET_TYPE),
         # Root compatible strings of the compiled board DT (meizu,meizu-20 / qcom,sm8550).
@@ -177,7 +178,7 @@ def main():
                            if args.owned_memory_size else [] ),
                         ('dram-base', struct.pack('<Q', DRAM_BASE)),
                         ('dram-size', struct.pack('<Q', args.dram_size)),
-                        # Image4 hash algorithm, as in the real d22ap tree.
+                        # Image4 hash algorithm, as in the real d321ap tree.
                         ('crypto-hash-method', b'sha2-384\0'),
                         *( [('root-matching', ('<dict><key>IOProviderClass</key><string>IOMedia</string>'
                                                '<key>IOPropertyMatch</key><dict><key>UUID</key><string>' +
@@ -199,7 +200,7 @@ def main():
         # root-domain policy input rather than allowing the CPU to park forever.
         node('defaults', [('sleep-disabled', struct.pack('<I', 1))]),
         node('options', []),
-        # iPhone X class: no Home button (gesture navigation); power (hold) and
+        # iPhone XS class: no Home button (gesture navigation); power (hold) and
         # both volume keys only, matching the PMK8550 PON pwrkey + resin layout.
         node('buttons', [('compatible', b'buttons\0'), ('device_type', b'buttons\0'),
                          # 2 = the non-mechanical answer BSPlatform passes through.
@@ -209,7 +210,7 @@ def main():
                          ('model', BOARD_MODEL),
                          ('product-description', APPLE_PRODUCT_DESCRIPTION),
                          ('artwork-device-idiom', b'phone\0'),
-                         # Panel height in pixels, as the real d22ap tree (2436)
+                         # Panel height in pixels, as the real d321ap tree (2436)
                          # and nx729j (2480) do.
                          ('artwork-device-subtype', struct.pack('<I', PANEL_HEIGHT)),
                          ('artwork-scale-factor', struct.pack('<I', ARTWORK_SCALE_FACTOR)),

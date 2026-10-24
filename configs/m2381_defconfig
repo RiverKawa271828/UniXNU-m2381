@@ -29,7 +29,7 @@ CONFIG_XNU_NATIVE_LEGACY_DISPLAY=y
 CONFIG_XNU_NATIVE_ADRENO=y
 
 CONFIG_XNU_CRYPTO_BOOTSTRAP="prelinked"
-# [TODO P3] 21H461 placeholder — replace with the 20H392 Data volume UUID derived from OUR userdata build.
+# [TODO P3] 21H461 placeholder — replace with the 21H16 Data volume UUID derived from OUR userdata build.
 CONFIG_XNU_OWNER_DATA_VOLUME_UUID="18AB5557-DC2D-469B-8758-855E60F5B0DF"
 CONFIG_XNU_NATIVE_VIRTIO_BLOCK_ARCHIVE="{tree}/build/native-virtio-block-verified-bundle/libNativeVirtioBlock.a"
 CONFIG_XNU_VERIFIED_ROOT_ARCHIVE="{tree}/build/verified-root-os-xnu-bundle/libVerifiedRootProbe.a"

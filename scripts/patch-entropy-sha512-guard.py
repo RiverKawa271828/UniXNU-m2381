@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """Guard entropy_init's eager SHA512_Init against an unregistered g_crypto_funcs.
 
-xnu-8796 (our source base) requires the corecrypto dispatch table before the
-PRNG install: entropy_init -> SHA512_Init dispatches through g_crypto_funcs.
-The 20H392 (iOS 16.7) corecrypto kext installs the kernel PRNG *before* it
-calls register_crypto_functions — an ordering its own iOS 16 kernel tolerated
-and the iOS 17 kexts (nx729j/fuxi's 21H461) do not have. First boot therefore
-panicked with a data abort at SHA512_Init+0x10 (FAR 0x40, g_crypto_funcs
-== NULL) inside the kext's register_and_init_prng.
+The source base (xnu-10063.141.1, iOS 17.6 generation) requires the
+corecrypto dispatch table before the PRNG install: entropy_init ->
+SHA512_Init dispatches through g_crypto_funcs. The 20H392 (iOS 16.7)
+corecrypto kext installed the kernel PRNG *before* it called
+register_crypto_functions — an ordering its own iOS 16 kernel tolerated and
+the iOS 17 kexts (21H461, and the 21H16 train this board now pairs with) do
+not have. The 2026-10-23/24 device rounds panicked with a data abort at
+SHA512_Init+0x10 (FAR 0x40, g_crypto_funcs == NULL) inside the kext's
+register_and_init_prng.
 
 The digest context is only consumed through entropy_provide, which runs when
 the PRNG first generates — after that same kext start has completed the
@@ -27,7 +29,14 @@ from pathlib import Path
 ENTROPY_INIT = None   # resolved from the symbol table
 SHA512_INIT = None
 GUARD_SITE_OFFSET = 0x1c          # entropy_init+0x1c = `bl _SHA512_Init`
-TRAMPOLINE_VA = 0xFFFFFFF0046D8B3C  # corecrypto kext __TEXT_EXEC udf padding
+# [TODO kernel step] donor-specific: the trampoline sits in the prelinked
+# corecrypto kext's __TEXT_EXEC udf#0 padding. 0x...46D8B3C was derived from
+# the 20H392 prelinked image; with the 21H16 donor the corecrypto kext lands
+# elsewhere, so re-derive from the new prelinked kernel before running the
+# guard. The empty-padding probe below makes a stale value fail loudly, but a
+# coincidental zero region of another component would be corrupted — derive,
+# do not guess.
+TRAMPOLINE_VA = 0xFFFFFFF0046D8B3C
 TRAMPOLINE_BYTES = 0x94           # udf#0 region observed through +0x8c28
 
 

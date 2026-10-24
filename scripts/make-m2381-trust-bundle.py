@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bundle the two 20H392 Apple trust caches into the flat container DarwinBoot and the kernel consume.
+"""Bundle the two 21H16 Apple trust caches into the flat container DarwinBoot and the kernel consume.
 
 The IPSW carries both caches as DER/IM4P ("IM4P"/"trst") files; "unixnu build payload" copies
 --trust-cache byte for byte, and DarwinBoot's ValidTrustCaches only accepts the flat multi-module
@@ -13,15 +13,15 @@ from pathlib import Path
 import struct
 
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument('static_trustcache', type=Path, help='IPSW StaticTrustCache (IM4P, e.g. 087-86698-044.dmg.trustcache)')
-parser.add_argument('system_trustcache', type=Path, help='IPSW Cryptex1,SystemTrustCache (IM4P, e.g. 087-86593-047.dmg.trustcache)')
+parser.add_argument('static_trustcache', type=Path, help='IPSW StaticTrustCache (IM4P, e.g. 044-17947-018.dmg.trustcache)')
+parser.add_argument('system_trustcache', type=Path, help='IPSW Cryptex1,SystemTrustCache (IM4P, e.g. 044-17442-018.dmg.trustcache)')
 parser.add_argument('--output', type=Path, required=True)
 args = parser.parse_args()
 
 # board.toml [payload] trust_cache_sha256 pins the two IPSW inputs.
 PINNED_INPUTS = {
-    '63e01c03b31e1532a5581a24865490673f0b5c297b0199fe0095637c6100ef4b': 'StaticTrustCache',
-    '9cc478fe3525e2683b5b9ea1eea0851eaebebdab21d206556233400e59d2e361': 'Cryptex1,SystemTrustCache',
+    '090c6a97ecfee493b4828733a37f505ebf51a890370204a6a948019ffff01cc7': 'StaticTrustCache',
+    '8e43fc06870a087ddd7bda2d65f7439b8025195cf26c1ebb5cb3c9fb32f0da43': 'Cryptex1,SystemTrustCache',
 }
 
 
@@ -74,7 +74,7 @@ for path, name in ((args.static_trustcache, 'StaticTrustCache'), (args.system_tr
     original, module = im4p_payload(path)
     digest = hashlib.sha256(original).hexdigest()
     if digest not in PINNED_INPUTS:
-        raise SystemExit(f'{path.name}: sha256 {digest} is not one of the pinned 20H392 trust caches')
+        raise SystemExit(f'{path.name}: sha256 {digest} is not one of the pinned 21H16 trust caches')
     entries = check_module(module, name)
     print(f'{name}: {len(module)} bytes, {entries} entries, input sha256 {digest[:16]}... pinned')
     modules.append(module)
@@ -109,5 +109,5 @@ args.output.write_bytes(bundle)
 (args.output.with_suffix('.json')).write_text(json.dumps({
     'bundle_sha256': hashlib.sha256(bundle).hexdigest(), 'modules': inputs,
     'original_modules_modified': False, 'own_code_entries_added': False,
-    'purpose': 'm2381 boot trust cache: both unchanged 20H392 modules'}, indent=2) + '\n')
-print('PASS: 20H392 trust bundle (StaticTrustCache + Cryptex1,SystemTrustCache)', hashlib.sha256(bundle).hexdigest())
+    'purpose': 'm2381 boot trust cache: both unchanged 21H16 modules'}, indent=2) + '\n')
+print('PASS: 21H16 trust bundle (StaticTrustCache + Cryptex1,SystemTrustCache)', hashlib.sha256(bundle).hexdigest())

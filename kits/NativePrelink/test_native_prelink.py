@@ -129,9 +129,16 @@ class NativePrelinkTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, '4K alignment'):
             plan(*fixture(), ['test.a'], 1)
 
-    def test_refuse_arm64e(self):
+    def test_accept_arm64e_and_refuse_other_subtypes(self):
+        # arm64e (base subtype 2, pointer-auth version in the top bits) is the
+        # 21H16 iPhone11,2 cache shape and is accepted since the 2026-10-24
+        # donor pivot; anything else still fails loudly.
         data = bytearray(fixture()[0]); struct.pack_into('<I', data, 8, 2)
-        with self.assertRaisesRegex(ValueError, 'ordinary'):
+        macho(data)
+        data = bytearray(fixture()[0]); struct.pack_into('<I', data, 8, 0xC0000002)
+        macho(data)
+        data = bytearray(fixture()[0]); struct.pack_into('<I', data, 8, 10)
+        with self.assertRaisesRegex(ValueError, 'ARM64/arm64e'):
             macho(data)
 
     def test_xml_references_and_duplicate_rejection(self):
