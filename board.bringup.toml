@@ -209,7 +209,7 @@ BUILDID_STRING = "m2381-research"
 # DarwinBoot (in the firmware volume) reads it through the UFS driver.
 [payload]
 volume = "M2381ESP"
-size_mib = 96
+size_mib = 100
 loader = "firmware"
 title = "m2381 first boot: source 4K XNU to console"
 dram_size = "0x400000000"            # [DEVICE] 16 GiB LPDDR5X
@@ -243,11 +243,12 @@ kernel_args = [
   # Board-side ApplePMGRNub publication; without it the donor AMFI panics
   # "No PMGR?" after its 30 s waitForMatchingService timeout.
   "sheng-pmgr=2",
-  # Round 20: read-only UFS data-path check (bring-up -> LUN0 GPT -> first
-  # block of "userdata", result printed on the panic screen). Rounds 18/19
-  # proved SMMU takeover + controller bring-up; root=1 stays parked until the
-  # verified-root chain and the IPSW-rebuilt userdata exist (macOS/CI step).
-  "native-ufs-probe=10",
+  # Round 21+: mount the root volume through the board's UFS. Rounds 18-20
+  # proved the whole transport (SMMU takeover, controller, DMA, GPT); the real
+  # VerifiedRoot single-policy bundle (OS volume 04769D26) replaced the
+  # refusing stub, so NativeUfs now publishes the block device. The probe=10
+  # read-only check stays in the history as the transport gate.
+  "native-ufs-root=1",
 ]
 
 # text_fixups for the 21H461 shared caches (nx729j's set, byte-for-byte the

@@ -77,7 +77,7 @@ command += ['-Wall', '-Wextra', '-Werror', '-Wno-unknown-warning-option', '-Wno-
             '-Wno-c99-designator', '-Wno-reorder-init-list', '-Wno-deprecated-enum-enum-conversion',
             # clang>=24 needs this for OSSymbol.h; older Apple clang ignores it
             # thanks to -Wno-unknown-warning-option above.
-            '-Wno-unnecessary-virtual-specifier',
+            '-Wno-missing-designated-field-initializers', '-Wno-unnecessary-virtual-specifier',
             '-I', OUT, '-I', ROOT / '.cache/xnu-work/osfmk']
 run(command, cwd=record['directory'])
 raw = obj.read_bytes()
@@ -147,7 +147,9 @@ for slot, name in enumerate(entries):
         require('9ApplePMGR' in name, 'Only actual original AON implementations inherited')
 if candidate is not None:
     for slot, name in enumerate(entries):
-        if slot not in (320, 321) and not (slot in (0, 1, 7) or 168 <= slot < 340):
+        if slot in (320, 321):
+            bindings[name] = ptr(0xfffffff005ce26d8 + slot * 8)
+        elif slot not in (0, 1, 7) and not 168 <= slot < 340:
             require(native_names.get(name) == ptr(native_names['__ZTV6IOPMGR'] + 16 + slot * 8),
                     f'Native IOPMGR/IOService entry differs at {slot}')
     undefined = {n for n, _, k in symbols if k == 1 and 'ApplePMGR' in n}
