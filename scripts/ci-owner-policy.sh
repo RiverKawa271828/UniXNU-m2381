@@ -11,6 +11,9 @@
 # macOS-only pieces: openssl + clang dylib build, hdiutil attach, diskutil.
 set -euo pipefail
 echo "== ci-owner-policy: resolve inputs"
+# The rewritten workflow checks out without submodules; the kernel step fetches
+# its own references later. The evidence build needs these two kits now.
+git submodule update --init kits/VerifiedRoot kits/NativePrelink
 IPSW_URL=$(python3 - "$DEVICE_DIR/board.toml" <<'PY'
 import sys, tomllib, pathlib
 print(tomllib.loads(pathlib.Path(sys.argv[1]).read_text())['ipsw']['url'])
