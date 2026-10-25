@@ -139,7 +139,10 @@ for source in (ROOT / 'kits/VerifiedRoot/src/verified_root.c', ROOT / 'kits/Veri
         elif value not in ('-MD', '-MP'):
             command.append(value)
         index += 1
-    command += ['-I' + str(ROOT / 'kits/VerifiedRoot/include'), '-Werror']
+    command += ['-I' + str(ROOT / 'kits/VerifiedRoot/include'), '-Werror',
+                # m2381 local: clang 24 warns -Wunsafe-buffer-usage under the
+                # kernel recipe's -Weverything; the kit's C predates it.
+                '-Wno-unsafe-buffer-usage', '-Wno-shadow-header', '-Wno-unknown-warning-option']
     result = subprocess.run(command, cwd=record['directory'], capture_output=True, text=True)
     (out / (source.stem + '.log')).write_text(result.stdout + result.stderr)
     if result.returncode:
