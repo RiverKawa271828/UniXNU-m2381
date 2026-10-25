@@ -206,7 +206,7 @@ for base in range(0, len(data), BLOCK):
 
 image.write_bytes(data)
 print('patched blocks:', patched)
-packed = packed_ramdisk.pack(str(image), 'build/owner-data-fixture/scratch-data.img')
+packed = packed_ramdisk.pack(image, Path('build/owner-data-fixture/scratch-data.img'))
 print('packed ramdisk:', packed)
 PY
 
