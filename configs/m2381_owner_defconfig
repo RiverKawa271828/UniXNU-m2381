@@ -54,8 +54,9 @@ CONFIG_XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,{tree}/build/io-storage-family/lib
 #                          IOMobileFramebufferLegacy candidate
 #   NATIVE_MOBILE_DISPLAY  the SM8550 display provider, same evidence
 #   NATIVE_ADRENO          the A740 kit, qualified against a prelink candidate
-#   NATIVE_VIRTIO_BLOCK    no virtio transport on this board, and its binding
-#                          needs the original block-storage class dispatch
+#   NATIVE_VIRTIO_BLOCK    no virtio transport on this board; linked as the
+#                          verified-block root authorizer (fuxi/nx729j pattern),
+#                          its class dispatch binding is libStorageBindings.a
 #   NATIVE_UFS             build/native-ufs/libNativeUfs.a. The builder hardcodes
 #                          -DNATIVE_VERIFIED_BLOCK=1, so the object needs
 #                          vr_open/vr_verify_block/vr_xnu_crypto/verified_root_*
@@ -74,7 +75,7 @@ CONFIG_XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,{tree}/build/io-storage-family/lib
 CONFIG_XNU_NATIVE_LEGACY_DISPLAY=n
 CONFIG_XNU_NATIVE_MOBILE_DISPLAY=n
 CONFIG_XNU_NATIVE_ADRENO=n
-CONFIG_XNU_NATIVE_VIRTIO_BLOCK=n
+CONFIG_XNU_NATIVE_VIRTIO_BLOCK=y
 CONFIG_XNU_NATIVE_UFS=y
 CONFIG_XNU_NATIVE_RAM_BLOCK=n
 CONFIG_XNU_NATIVE_VIRTIO_CONSOLE=n
@@ -86,8 +87,13 @@ CONFIG_XNU_ZONE_PGZ_ALIGNMENT_PROBE=n
 # owner lane: needs the macOS-produced policy staged in .cache/firmware
 CONFIG_XNU_VERIFIED_ROOT_PROBE=y
 CONFIG_XNU_VERIFIED_ROOT_ARCHIVE="{tree}/build/verified-root-os-xnu/libVerifiedRootProbe.a"
-CONFIG_XNU_OWNER_ROOT_AUDIT=n
-CONFIG_XNU_OWNER_ROOT_TRUST=n
+# The verified-block root authorizer (native_verified_block_root_authorized in
+# bsd_init's root authentication); single-policy bundle mode matches the
+# single-window OS image. Round 23: root mounted, bsd_init.c:1100
+# "rootvp not authenticated" — the owner decision must answer the check.
+CONFIG_XNU_NATIVE_VIRTIO_BLOCK_ARCHIVE="{tree}/build/native-virtio-block-verified-bundle/libNativeVirtioBlock.a"
+CONFIG_XNU_OWNER_ROOT_AUDIT=y
+CONFIG_XNU_OWNER_ROOT_TRUST=y
 CONFIG_XNU_OWNER_CACHE_MOUNT=n
 CONFIG_XNU_OWNER_CACHE_STARTUP=n
 CONFIG_XNU_OWNER_BOOT_MANIFEST=n
