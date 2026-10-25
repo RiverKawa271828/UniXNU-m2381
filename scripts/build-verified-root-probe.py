@@ -32,7 +32,10 @@ manifest = policy_dir / 'manifest.bin'
 key = policy_dir / 'trusted-key.bin'
 expected_digest = ('e5634d04a8ac35f024845f583394e0a35deb26a04cb0c00286a8674e25a9a4f2' if args.component == 'os' else
                    'b4908cde41d23e6bc05e6af51a2c9eeb00cf0f863a6a18b1600c96a3fd70414f')
-expected_count = 1483785 if args.component == 'os' else 806400
+# m2381: 16 KiB verification blocks (the 100 MiB recovery_a payload cannot
+# hold the 4 KiB manifests of both windows).
+block_bytes = 16384
+expected_count = 370947 if args.component == 'os' else 201600
 if (metadata['image_sha256'] != expected_digest or
         metadata['blocks_verified'] != expected_count or not metadata['real_c_signature_and_block_verification'] or
         hashlib.sha256(key.read_bytes()).hexdigest() != metadata['trusted_key_sha256']):
@@ -55,19 +58,19 @@ if args.negative_volume_uuid:
     manifest.write_bytes(header + signature + envelope[544:])
 indices = [0, 1, metadata['blocks_verified'] // 2, metadata['blocks_verified'] - 1]
 samples = out / 'original-samples.bin'
-lengths = [4096] * 4
+lengths = [block_bytes] * 4
 if args.component == 'os':
     indices = metadata['actual_sample_indices']
     lengths = metadata['actual_sample_lengths']
-    if lengths != [4096, 4096, 4096, 1536]:
+    if lengths != [16384, 16384, 16384, 1536]:
         raise SystemExit('Expected the actual original OS final block length')
     samples.write_bytes((policy_dir / 'original-samples.bin').read_bytes())
 else:
     with image.open('rb') as stream, samples.open('wb') as selected:
         for index in indices:
-            stream.seek(index * 4096)
-            data = stream.read(4096)
-            if len(data) != 4096:
+            stream.seek(index * block_bytes)
+            data = stream.read(block_bytes)
+            if len(data) != block_bytes:
                 raise SystemExit('Require full original sample blocks')
             selected.write(data)
 assembly = out / 'inputs.S'
@@ -136,10 +139,7 @@ for source in (ROOT / 'kits/VerifiedRoot/src/verified_root.c', ROOT / 'kits/Veri
         elif value not in ('-MD', '-MP'):
             command.append(value)
         index += 1
-    command += ['-I' + str(ROOT / 'kits/VerifiedRoot/include'), '-Werror',
-                 # m2381 local: clang 24 warns -Wunsafe-buffer-usage under the
-                 # kernel recipe's -Weverything; the kit's C predates it.
-                 '-Wno-unsafe-buffer-usage', '-Wno-shadow-header', '-Wno-unknown-warning-option']
+    command += ['-I' + str(ROOT / 'kits/VerifiedRoot/include'), '-Werror']
     result = subprocess.run(command, cwd=record['directory'], capture_output=True, text=True)
     (out / (source.stem + '.log')).write_text(result.stdout + result.stderr)
     if result.returncode:
