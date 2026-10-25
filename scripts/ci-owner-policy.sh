@@ -134,18 +134,22 @@ target = uuidlib.UUID('18AB5557-DC2D-469B-8758-855E60F5B0DF').bytes
 data = bytearray(image.read_bytes())
 BLOCK, HEADER, UUID_AT = 4096, 32, 56
 
-def fletcher64(block):
-    mod, a, b = 0xffffffff, 0, 0
-    words = memoryview(block).cast('I')
-    for word in words:
-        a = (a + word) % mod
-        b = (b + a) % mod
-    return (b << 32) | a
+def fletcher64(body):
+    # Apple's APFS object checksum is not the classic Fletcher64: the sums
+    # accumulate unreduced over the checksum-sized body, and the final words
+    # come out of the Nakassis complement (linux-apfs-rw object.c; verified
+    # byte-exact against the 21H461 OS container's real superblocks).
+    sum1 = sum2 = 0
+    for i in range(0, len(body), 4):
+        sum1 += int.from_bytes(body[i:i + 4], 'little')
+        sum2 += sum1
+    c1 = 0xffffffff - (sum1 + sum2) % 0xffffffff
+    c2 = 0xffffffff - (sum1 + c1) % 0xffffffff
+    return (c2 << 32) | c1
 
 def seal(block):
     stored = int.from_bytes(block[0:8], 'little')
-    block[0:8] = b'\0' * 8
-    computed = fletcher64(block)
+    computed = fletcher64(block[8:])
     if stored not in (computed, 0):
         raise SystemExit('Fletcher64 self-test failed: stored %#x computed %#x' % (stored, computed))
     block[0:8] = computed.to_bytes(8, 'little')
