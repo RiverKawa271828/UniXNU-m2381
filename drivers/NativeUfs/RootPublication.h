@@ -5,7 +5,7 @@ struct UfsRootPlan { unsigned count = 0, order[4] = {}; };
 static bool ufsBuildRootPlan (const char *const *names, unsigned count, UfsRootPlan &plan)
 {
   plan = {};
-  if (!names || count < 2 || count > 4) return false;
+  if (!names || count < 1 || count > 4) return false;
   unsigned system = count, os = count;
   for (unsigned i = 0; i < count; ++i) {
     if (!names[i] || !names[i][0]) return false;
@@ -13,9 +13,12 @@ static bool ufsBuildRootPlan (const char *const *names, unsigned count, UfsRootP
     if (!strcmp (names[i], "SystemOS")) system = i;
     if (!strcmp (names[i], "OS")) os = i;
   }
-  if (system == count || os == count) return false;
-  plan.order[0] = system;
-  unsigned position = 1;
+  // The OS window is the root and is always required; SystemOS only pairs with
+  // it when the image carries a second window (a single-policy OS-only image
+  // publishes the OS window alone).
+  if (os == count || (count > 1 && system == count)) return false;
+  unsigned position = 0;
+  if (system != count) plan.order[position++] = system;
   for (unsigned i = 0; i < count; ++i) if (i != system && i != os) plan.order[position++] = i;
   plan.order[position] = os;
   plan.count = count;
@@ -34,7 +37,7 @@ template <class Ops> static void ufsDiscardPrepared (Ops &ops, unsigned count)
 template <class Ops>
 static UfsRootPublicationResult ufsPrepareRootWindows (Ops &ops, unsigned count)
 {
-  if (count < 2 || count > 4) return { UfsRootPhase::Prepare, 0, 0 };
+  if (count < 1 || count > 4) return { UfsRootPhase::Prepare, 0, 0 };
   for (unsigned i = 0; i < count; ++i) {
     if (!ops.prepare (i)) {
       // Include a partially allocated/initialized current object.
