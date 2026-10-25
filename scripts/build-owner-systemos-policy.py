@@ -50,20 +50,29 @@ if len(found) != 1:
 entities = found[0]['system-entities']
 candidates = [e['dev-entry'] for e in entities
               if re.fullmatch(r'/dev/disk[0-9]+', e.get('dev-entry', ''))]
-# Identify the image disk by content: the container's prefix must equal the
-# member file's prefix, while the GPT-synthesized partition disks read from a
-# different offset. No macOS presentation assumption involved.
+# macOS can expose the same container through several disk nodes with
+# identical prefixes (the raw image disk and the synthesized container disk),
+# so the prefix only shortlists; the full member digest picks the disk —
+# which also proves its exact size by construction.
 with source.open('rb') as stream:
     prefix = stream.read(1024 * 1024)
 facts, whole = [], []
 for entry in candidates:
-    with open('/dev/r' + entry[len('/dev/'):], 'rb') as probe:
+    device = Path('/dev/r' + entry[len('/dev/'):])
+    with device.open('rb') as probe:
         head = probe.read(len(prefix))
-    facts.append((entry, len(head), hashlib.sha256(head).hexdigest()[:16]))
-    if head == prefix:
+    if head != prefix:
+        facts.append((entry, 'prefix differs', hashlib.sha256(head).hexdigest()[:16]))
+        continue
+    digest = hashlib.sha256()
+    with device.open('rb') as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+            digest.update(chunk)
+    facts.append((entry, digest.hexdigest()[:16]))
+    if digest.hexdigest() == expected_compressed:
         whole.append(entry)
-if len(whole) != 1:
-    raise SystemExit(f'Require one actual whole virtual media matching the member prefix: {facts!r}')
+if len(whole) < 1:
+    raise SystemExit(f'No disk presents the exact original SystemOS member bytes: {facts!r}')
 info = plistlib.loads(subprocess.check_output(['diskutil', 'info', '-plist', whole[0]]))
 volume_info = plistlib.loads(subprocess.check_output(['diskutil', 'info', '-plist', volume]))
 if (info.get('BusProtocol') != 'Disk Image' or info.get('Writable') is not False or
