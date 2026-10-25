@@ -48,11 +48,15 @@ found = [i for i in images if Path(i['image-path']).resolve() == source.resolve(
 if len(found) != 1:
     raise SystemExit('Require one existing exact read-only image attachment')
 entities = found[0]['system-entities']
-# The raw container carries a GPT (EFI + APFS slices), so entity content hints
-# are partition type GUIDs and the whole disk's hint is empty; select it by
-# device-name shape instead (a bare /dev/diskN, no slice suffix).
-whole = [e['dev-entry'] for e in entities
-         if re.fullmatch(r'/dev/disk[0-9]+', e.get('dev-entry', ''))]
+# The raw container carries a GPT whose synthesized members also appear as
+# bare disk nodes (/dev/diskN), so pick the image disk by its exact size and
+# bus — the member bytes are the verification target by construction.
+whole = []
+for entry in [e['dev-entry'] for e in entities
+              if re.fullmatch(r'/dev/disk[0-9]+', e.get('dev-entry', ''))]:
+    di = plistlib.loads(subprocess.check_output(['diskutil', 'info', '-plist', entry]))
+    if di.get('TotalSize') == expected_size and di.get('BusProtocol') == 'Disk Image':
+        whole.append(entry)
 if len(whole) != 1:
     raise SystemExit('Require one actual whole virtual media mapping: '
                      + repr([(e.get('content-hint'), e.get('dev-entry')) for e in entities]))
