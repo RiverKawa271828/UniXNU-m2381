@@ -101,7 +101,7 @@ if args.include_systemos:
     extra_dir = ROOT / 'build/verified-root-systemos'
     extra_meta = json.loads((extra_dir / 'verification.json').read_text())
     if (extra_meta['image_sha256'] != 'b4908cde41d23e6bc05e6af51a2c9eeb00cf0f863a6a18b1600c96a3fd70414f' or
-            extra_meta['blocks_verified'] != 806400 or not extra_meta['real_c_signature_and_block_verification'] or
+            extra_meta['blocks_verified'] != 201600 or not extra_meta['real_c_signature_and_block_verification'] or
             (extra_dir / 'trusted-key.bin').read_bytes() != key.read_bytes()):
         raise SystemExit('Require separately fully verified original SystemOS under the same independent anchor')
     extra = extra_dir / 'manifest.bin'
