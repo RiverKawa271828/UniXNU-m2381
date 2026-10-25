@@ -11,13 +11,18 @@ import ctypes
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
 import plistlib
 import stat
 import subprocess
 import uuid
 
-ROOT = Path(__file__).resolve().parents[1]
+# The shell runs this from the device repository with the UniXNU checkout as
+# the working directory; the inputs live in the checkout's build/ and
+# .cache/firmware trees (build-owner-os-policy.py sits in the checkout itself
+# and needs no override).
+ROOT = Path(os.environ.get('UNIXNU_CHECKOUT') or Path(__file__).resolve().parents[1])
 source = ROOT / '.cache/firmware/target-volumes/044-76034-038.dmg'
 volume = ROOT / '.cache/firmware/target-volumes/systemos-mount'
 out = ROOT / 'build/verified-root-systemos'

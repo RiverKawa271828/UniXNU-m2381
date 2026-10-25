@@ -95,7 +95,7 @@ python3 scripts/build-owner-os-policy.py
 attach_volume "$TV/044-76034-038.dmg" 8846FE78-2910-4297-AF97-D59BB6F8FC16 systemos-mount
 
 echo "== SystemOS policy (same committed anchor, full block verification)"
-python3 "$DEVICE_DIR/scripts/build-owner-systemos-policy.py"
+UNIXNU_CHECKOUT="$PWD" python3 "$DEVICE_DIR/scripts/build-owner-systemos-policy.py"
 
 echo "== cross-build two-volume probe bundle (OS + SystemOS, one anchor)"
 python3 scripts/build-verified-root-probe.py --component os --include-systemos
