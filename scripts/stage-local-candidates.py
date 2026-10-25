@@ -45,6 +45,21 @@ if (policy / 'verification.json').is_file():
 else:
     print('no verified-root-os policy in the device firmware cache (probe archive will fail if enabled)')
 
+# Round 25 (stage 7): the SystemOS cryptex policy, same anchor — the second
+# half of the two-volume bundle.
+policy = ROOT / '.cache/firmware/verified-root-systemos'
+if (policy / 'verification.json').is_file():
+    target = ROOT / 'build/verified-root-systemos'
+    target.mkdir(parents=True, exist_ok=True)
+    for name in ('verification.json', 'manifest.bin', 'trusted-key.bin',
+                 'original-samples.bin'):
+        if (policy / name).is_file():
+            shutil.copyfile(policy / name, target / name)
+    print('staged verified-root-systemos policy from the device firmware cache')
+else:
+    print('no verified-root-systemos policy in the device firmware cache '
+          '(single-policy fallback applies)')
+
 kernel = OUT / 'm2381/kernel'
 clean = kernel / 'kernel.clean.macho'
 macho = clean if clean.is_file() else kernel / 'kernel.macho'
