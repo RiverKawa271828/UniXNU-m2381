@@ -48,18 +48,22 @@ found = [i for i in images if Path(i['image-path']).resolve() == source.resolve(
 if len(found) != 1:
     raise SystemExit('Require one existing exact read-only image attachment')
 entities = found[0]['system-entities']
-# The raw container carries a GPT whose synthesized members also appear as
-# bare disk nodes (/dev/diskN), so pick the image disk by its exact size and
-# bus — the member bytes are the verification target by construction.
-whole = []
-for entry in [e['dev-entry'] for e in entities
-              if re.fullmatch(r'/dev/disk[0-9]+', e.get('dev-entry', ''))]:
-    di = plistlib.loads(subprocess.check_output(['diskutil', 'info', '-plist', entry]))
-    if di.get('TotalSize') == expected_size and di.get('BusProtocol') == 'Disk Image':
+candidates = [e['dev-entry'] for e in entities
+              if re.fullmatch(r'/dev/disk[0-9]+', e.get('dev-entry', ''))]
+# Identify the image disk by content: the container's prefix must equal the
+# member file's prefix, while the GPT-synthesized partition disks read from a
+# different offset. No macOS presentation assumption involved.
+with source.open('rb') as stream:
+    prefix = stream.read(1024 * 1024)
+facts, whole = [], []
+for entry in candidates:
+    with open('/dev/r' + entry[len('/dev/'):], 'rb') as probe:
+        head = probe.read(len(prefix))
+    facts.append((entry, len(head), hashlib.sha256(head).hexdigest()[:16]))
+    if head == prefix:
         whole.append(entry)
 if len(whole) != 1:
-    raise SystemExit('Require one actual whole virtual media mapping: '
-                     + repr([(e.get('content-hint'), e.get('dev-entry')) for e in entities]))
+    raise SystemExit(f'Require one actual whole virtual media matching the member prefix: {facts!r}')
 info = plistlib.loads(subprocess.check_output(['diskutil', 'info', '-plist', whole[0]]))
 volume_info = plistlib.loads(subprocess.check_output(['diskutil', 'info', '-plist', volume]))
 if (info.get('BusProtocol') != 'Disk Image' or info.get('Writable') is not False or
