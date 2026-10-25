@@ -132,7 +132,8 @@ import packed_ramdisk
 image = Path('build/owner-data-fixture/owner-data-32.cdr')
 target = uuidlib.UUID('18AB5557-DC2D-469B-8758-855E60F5B0DF').bytes
 data = bytearray(image.read_bytes())
-BLOCK, HEADER, UUID_AT = 4096, 32, 56
+BLOCK, HEADER = 4096, 32
+UUID_AT = 240   # apfs_superblock volume UUID (offset 56 is the NXSB container layout)
 
 def fletcher64(body):
     # Apple's APFS object checksum is not the classic Fletcher64: the sums
@@ -147,20 +148,23 @@ def fletcher64(body):
     c2 = 0xffffffff - (sum1 + c1) % 0xffffffff
     return (c2 << 32) | c1
 
-def seal(block):
+def verifies(block):
     stored = int.from_bytes(block[0:8], 'little')
-    computed = fletcher64(block[8:])
-    if stored not in (computed, 0):
-        raise SystemExit('Fletcher64 self-test failed: stored %#x computed %#x' % (stored, computed))
-    block[0:8] = computed.to_bytes(8, 'little')
+    return stored == 0 or stored == fletcher64(block[8:])
 
-patched = 0
+def reseal(block):
+    block[0:8] = fletcher64(block[8:]).to_bytes(8, 'little')
+
 current = None
+verified = patched = skipped = 0
 for base in range(0, len(data), BLOCK):
     block = data[base:base + BLOCK]
     if block[HEADER:HEADER + 4] != b'APSB':
         continue
-    seal(block)                      # self-test the checksum math before touching anything
+    if not verifies(block):
+        skipped += 1   # a byte-sequence coincidence, not a verifiable superblock
+        continue
+    verified += 1
     old = bytes(block[UUID_AT:UUID_AT + 16])
     if current is None:
         current = old
@@ -168,35 +172,37 @@ for base in range(0, len(data), BLOCK):
     if old == target:
         continue
     block[UUID_AT:UUID_AT + 16] = target
+    reseal(block)
+    data[base:base + BLOCK] = block
     patched += 1
 
-if current is None:
-    raise SystemExit('no APSB volume superblock found in the seed image')
-if current == target:
-    print('volume already carries the pinned UUID')
-else:
-    # Rewrite every remaining occurrence of the generated UUID (checkpoint
-    # copies keep their own APSB seal; other structures get re-sealed too).
-    forms = {current, current[::-1]}
+if not verified:
+    raise SystemExit('no checksum-verifying APSB volume superblock in the seed image')
+if current != target:
+    # The generated UUID also lives in non-superblock structures; rewrite it
+    # only where the block re-seals, and leave unverifiable blocks untouched.
     for base in range(0, len(data), BLOCK):
         block = data[base:base + BLOCK]
-        hit = False
-        for form in forms:
-            cursor = block.find(form)
-            while cursor != -1:
-                block[cursor:cursor + 16] = target
-                hit = True
-                cursor = block.find(form, cursor + 1)
-        if hit:
-            seal(block)
+        hit = block.find(current)
+        if hit == -1:
+            continue
+        if not verifies(block):
+            continue
+        touched = False
+        while hit != -1:
+            block[hit:hit + 16] = target
+            touched = True
+            hit = block.find(current, hit + 1)
+        if touched:
+            reseal(block)
+            data[base:base + BLOCK] = block
             patched += 1
 
 for base in range(0, len(data), BLOCK):
     block = data[base:base + BLOCK]
-    if block[HEADER:HEADER + 4] == b'APSB':
-        seal(block)  # verifies every superblock re-seals to its own stored checksum
-        if block[UUID_AT:UUID_AT + 16] != target:
-            raise SystemExit('post-patch check: an APSB superblock does not carry the pinned UUID')
+    if block[HEADER:HEADER + 4] == b'APSB' and verifies(block) and \
+            bytes(block[UUID_AT:UUID_AT + 16]) != target:
+        raise SystemExit('post-patch check: a verifiable APSB does not carry the pinned UUID')
 
 image.write_bytes(data)
 print('patched blocks:', patched)
