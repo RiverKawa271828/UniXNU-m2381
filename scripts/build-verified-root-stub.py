@@ -121,7 +121,7 @@ while index < len(arguments):
 
 command.extend(['-Wall', '-Wextra', '-Werror', '-Wno-unused-parameter', '-Wno-unused-const-variable',
                 '-I', str(ROOT / 'kits/VerifiedRoot/include'),
-                '-I', str(ROOT / 'drivers/NativeVirtioBlock')])
+                '-I', str(ROOT / 'drivers/VirtioMmioBlock')])
 
 result = subprocess.run(command, cwd=record['directory'], capture_output=True, text=True)
 (OUT / 'compile.log').write_text(result.stdout + result.stderr)
@@ -178,10 +178,10 @@ print('VerifiedRootStub: %s exports %d external symbols; %s' %
 # standalone archive, and the bare object path on LD_KERNEL_ARCHIVES -- and the compile record, the object and
 # its symbol table were all verified correct each time, so this stops depending on how the build script's
 # extra link inputs reach the linker at all.
-UFS_ARCHIVE = ROOT / 'build/native-ufs/libNativeUfs.a'
+UFS_ARCHIVE = ROOT / 'build/sheng-ufs/libShengUfs.a'
 if not UFS_ARCHIVE.is_file():
-    raise SystemExit('build/native-ufs/libNativeUfs.a not built yet; build-verified-root-stub.py must run '
-                     'after "build-arm-driver.py NativeUfs" in the board archives list')
+    raise SystemExit('build/sheng-ufs/libShengUfs.a not built yet; build-verified-root-stub.py must run '
+                     'after the component:ShengUfs entry in the board archives list')
 subprocess.run(['xcrun', 'ar', 'rs', str(UFS_ARCHIVE), str(destination)], check=True)
 
 # Verify the merged archive, not just the object: that is what the kernel link reads.
@@ -197,7 +197,7 @@ for line in global_symbols.splitlines():
         merged[parts[-1]] = parts[-2]
 absent = needed - set(merged)
 if absent:
-    raise SystemExit('libNativeUfs.a still lacks %s' % ', '.join(sorted(absent)))
-print('VerifiedRootStub: merged into libNativeUfs.a; read back as defined: %s' %
+    raise SystemExit('libShengUfs.a still lacks %s' % ', '.join(sorted(absent)))
+print('VerifiedRootStub: merged into libShengUfs.a; read back as defined: %s' %
       ' '.join('%s(%s)' % (name.lstrip('_'), kind) for name, kind in sorted(merged.items())
                if name in needed))

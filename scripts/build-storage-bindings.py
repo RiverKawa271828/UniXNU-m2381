@@ -66,7 +66,7 @@ DESTRUCTOR = '__ZN' + MANGLED + 'D2Ev'
 SLOTS = 190
 PURE_VIRTUAL = '___cxa_pure_virtual'
 
-sys.path.insert(0, str(ROOT / 'kits/NativePrelink'))
+sys.path.insert(0, str(ROOT / 'kits/XnuPrelink'))
 import native_prelink as np  # noqa: E402
 
 

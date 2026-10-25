@@ -1,5 +1,12 @@
 # Kernel configuration of the m2381 image. CONFIG_XNU_<NAME> becomes XNU_<NAME> for the kernel build.
+# Schema v2 (2026-10-26): archive paths use the upstream component names
+# (VirtioMmioBlock), the storage ABI comes from the static nx729j binding
+# (build-storage-bindings.py → libStorageBindings.a, force-loaded below), and
+# NATIVE_LEGACY_DISPLAY is off until the IOMobileFramebufferLegacy evidence
+# stage exists (the v1 builder needed a staged display-analysis ABI audit;
+# the display path runs through the UEFI GOP offline-legacy-* arguments).
 
+CONFIG_XNU_BUILD_ARCHIVES=y
 CONFIG_XNU_SOURCE_CORECRYPTO14=y
 CONFIG_XNU_SOURCE_PTHREAD=y
 CONFIG_XNU_ARM_DT_PLATFORM=y
@@ -25,7 +32,7 @@ CONFIG_XNU_ZONE_PGZ_ALIGNMENT_PROBE=y
 CONFIG_XNU_NATIVE_ARCH_TIMER=y
 CONFIG_XNU_NATIVE_PAN=y
 CONFIG_XNU_BOOT_PROGRESS=y
-CONFIG_XNU_NATIVE_LEGACY_DISPLAY=y
+CONFIG_XNU_NATIVE_LEGACY_DISPLAY=n
 CONFIG_XNU_NATIVE_ADRENO=y
 
 CONFIG_XNU_CRYPTO_BOOTSTRAP="prelinked"
@@ -33,8 +40,10 @@ CONFIG_XNU_CRYPTO_BOOTSTRAP="prelinked"
 # for this exact build, and correct here as long as the userdata image is
 # rebuilt from the same IPSW.
 CONFIG_XNU_OWNER_DATA_VOLUME_UUID="18AB5557-DC2D-469B-8758-855E60F5B0DF"
-CONFIG_XNU_NATIVE_VIRTIO_BLOCK_ARCHIVE="{tree}/build/native-virtio-block-verified-bundle/libNativeVirtioBlock.a"
+CONFIG_XNU_NATIVE_VIRTIO_BLOCK_ARCHIVE="{tree}/build/virtio-mmio-block-verified-bundle/libVirtioMmioBlock.a"
 CONFIG_XNU_VERIFIED_ROOT_ARCHIVE="{tree}/build/verified-root-os-xnu-bundle/libVerifiedRootProbe.a"
-CONFIG_XNU_EXTRA_LD_ARCHIVES=""
+# The static storage ABI archive: absolute symbols for IOBlockStorageDevice's
+# 190 dispatch slots, force-loaded next to the drivers that subclass it.
+CONFIG_XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,{tree}/build/io-storage-family/libStorageBindings.a"
 CONFIG_XNU_NATIVE_MOBILE_DISPLAY=n
 CONFIG_XNU_ARMVIRT_PLATFORM=n

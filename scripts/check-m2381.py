@@ -31,6 +31,46 @@ def record(status, name, detail):
     results.append((status, name, detail))
 
 
+def load_merged_board(board_path):
+    """Schema v2: merge the arch/OS profiles under the device board, so the
+    checks below see [ipsw] and the payload policy the build will actually
+    use (the v2 board carries neither — they live in the OS profile).
+
+    The UniXNU checkout is found as the nearest ancestor with profiles/os/
+    (the workflow checks the device out beside it). Without it — a standalone
+    device branch — the plain board is checked and the identity check degrades
+    to a warning rather than a false failure. The soc layer contributes none
+    of the checked keys and is skipped (its pinned checkout may not exist
+    locally; check-m2381 stays offline-only)."""
+    board = tomllib.loads(board_path.read_text())
+    if board.get('schema_version', 1) < 2:
+        return board
+    root = None
+    for ancestor in [*Path(board_path).resolve().parents, Path.cwd(), *Path.cwd().parents]:
+        if (ancestor / 'profiles/os').is_dir():
+            root = ancestor
+            break
+    if root is None:
+        record(WARN, 'upstream checkout', 'no profiles/ ancestor found: checking the device board alone')
+        return board
+
+    def deep_merge(base, overlay):
+        out = dict(base)
+        for key, value in overlay.items():
+            if isinstance(value, dict) and isinstance(out.get(key), dict):
+                out[key] = deep_merge(out[key], value)
+            else:
+                out[key] = value
+        return out
+
+    def load(path):
+        return tomllib.loads(path.read_text()) if path.is_file() else {}
+
+    merged = load(root / 'profiles/arch/arm64/profile.toml')
+    merged = deep_merge(merged, load(root / 'profiles/os' / board['board']['os_profile'] / 'profile.toml'))
+    return deep_merge(merged, board)
+
+
 def find_board(explicit):
     """Locate board.toml: explicit path, the device repo itself, or — when run
     from the build tree by `unixnu build firmware` — the device repository the
@@ -64,7 +104,7 @@ def main():
     args = parser.parse_args()
     board_path = find_board(args.board)
 
-    board = tomllib.loads(board_path.read_text())
+    board = load_merged_board(board_path)
 
     # --- identity -----------------------------------------------------------
     ipsw = board['ipsw']

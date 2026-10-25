@@ -19,19 +19,32 @@
 set -euo pipefail
 echo "== ci-owner-policy: resolve inputs"
 # The rewritten workflow checks out without submodules; the kernel step fetches
-# its own references later. NativePrelink stays a submodule; VerifiedRoot is
-# REPLACED by the device fork (16 KiB verification blocks - the 100 MiB
-# recovery_a payload cannot hold the 4 KiB manifests of both windows).
-git submodule update --init kits/NativePrelink
+# its own references later. XnuPrelink and VerifiedRoot are REPLACED by the
+# device forks: XnuPrelink carries this port's 21H461 Libm literal pools and
+# the fileset-KC rebinder body; VerifiedRoot carries the 16 KiB verification
+# blocks (the 100 MiB recovery_a payload cannot hold the 4 KiB manifests of
+# both windows). The schema v2 board.toml has no [ipsw] table — the OS
+# profile in the UniXNU checkout owns the URL now.
+git submodule update --init kits/XnuPrelink
+rm -rf kits/XnuPrelink
+cp -r "$DEVICE_DIR/kits/XnuPrelink" kits/XnuPrelink
+git rm --cached -q kits/XnuPrelink
 rm -rf kits/VerifiedRoot
 cp -r "$DEVICE_DIR/kits/VerifiedRoot" kits/VerifiedRoot
-# The 16 KiB device fork now sits where the checkout's gitlink points at
-# upstream; unregister it so the kernel step's submodule pass does not try to
-# re-clone UniXNU/VerifiedRoot over the fork and abort the build.
+# The device forks now sit where the checkout's gitlinks point at upstream;
+# unregister them so the kernel step's submodule pass does not re-clone
+# UniXNU/XnuPrelink and UniXNU/VerifiedRoot over the forks and abort.
 git rm --cached -q kits/VerifiedRoot
 IPSW_URL=$(python3 - "$DEVICE_DIR/board.toml" <<'PY'
-import sys, tomllib, pathlib
-print(tomllib.loads(pathlib.Path(sys.argv[1]).read_text())['ipsw']['url'])
+import sys, pathlib, tomllib
+board = tomllib.loads(pathlib.Path(sys.argv[1]).read_text())
+if board.get('schema_version', 1) >= 2:
+    root = next(p for p in pathlib.Path(sys.argv[1]).resolve().parents
+                if (p / 'profiles/os').is_dir())
+    profile = root / 'profiles/os' / board['board']['os_profile'] / 'profile.toml'
+    print(tomllib.loads(profile.read_text())['ipsw']['url'])
+else:
+    print(board['ipsw']['url'])
 PY
 )
 echo "ipsw: ${IPSW_URL%%\?*}"

@@ -1,98 +1,67 @@
-# Board description of the Meizu 20 Classic (m2381, SM8550), read by the
-# unixnu build driver.
+# Board description of the Meizu 20 Classic (m2381, SM8550) — BRING-UP lane,
+# schema v2 (2026-10-26 migration, upstream 16e592a).
 #
-# Value provenance, following the nx729j discipline:
-#   [DTB]    read from docs/hardware/stock-fdt.dts (the DT the stock ABL hands
-#            to the payload on this phone; decompiled from the live device)
-#   [DEVICE] measured on the phone (date + method in the comment)
-#   [FW]     derived from the stock firmware package / ABL reverse engineering
-#   [TODO]   not derivable yet; preflight must fail while these are open
+# This is the first-console board the CI device branch rides (the nx729j
+# pattern: scripts/make-device-branch.sh device-m2381-bringup
+# board.bringup.toml). The owner board.toml is the qualified end state; this
+# one links only what a fresh runner can build from committed inputs.
 #
-# ABL constraints that shape this file (nura/docs/BOOT-CHAIN-RE.md §5, static
-# RE of this phone's LinuxLoader, plus 2026-10-22/23 live evidence):
-#   * the ABL gunzip window is [0x80080000, 0x85580000) ≈ 85 MiB total for
-#     kernel + ramdisk + DT gap. A fuxi-style 192 MiB ramdisk payload makes
-#     RdLoad go negative and trips the "Not Enough space" check — the payload
-#     CANNOT ride in the boot image ramdisk on this phone, unlike sheng/fuxi.
-#     Hence loader = firmware and the payload volume lives on the recovery_a
-#     ESP (the negroni precedent), read through the UEFI UFS driver.
-#   * boot header v4 (Flyme stock shape), kernel member gzipped, no appended
-#     DTB (the stock vendor_boot DTB is used and passes BoardDtMatch).
+# Layering and provenance comments live in board.toml; this file differs in
+# the kernel switches (m2381_bringup_defconfig), the archive plan below and
+# the first-light payload policy.
+
+schema_version = 2
 
 [board]
 name = "m2381"
 soc = "SM8550"
 description = "Meizu 20 Classic"
-kit = "sheng"                      # package/ of this repository appears as kits/sheng in the build tree (fuxi same: build-sheng-platform-power.py reads kits/sheng/ShengPlatformPower.cpp)
+kit = "sheng"
+soc_source = "sm8550"
+os_profile = "ipados-17.7.11-21H461"
 
-# The target OS image: the unchanged iPad7,1 (iPad Pro 12.9-inch 2nd gen)
-# iOS 17.7.11 restore image - the fuxi/nx729j donor, byte-for-byte the same
-# build those boards pair with the xnu-10063 source. User decision 2026-10-24
-# (second swap of the day): the 21H16 iPhone XS cache turned out to be a
-# fileset kernel collection with chained fixups and no KASLR offsets table,
-# which the prelink kit cannot rebind yet; the 21H461 cache is a classic
-# kernelcache (arm64, KASLR offsets table) the kit already consumes - so the
-# same-generation pairing fix lands through the proven donor first. The
-# tablet identity is a deliberate trade-off (the 2026-10-23 "no iPadOS"
-# decision was made in the 16.7 context) and gets revisited once the
-# fileset-KC rebinder exists.
-# chip_id/board_id read from the IPSW BuildManifest (j120ap Erase identity):
-# ApChipID 0x8011 (t8011), ApBoardID 0x0c.
-[ipsw]
-url = "https://updates.cdn-apple.com/2025SpringFCS/fullrestores/122-77166/DCA6CFE8-90E9-4B92-880D-3DE171798E40/iPad_Pro_HFR_17.7.11_21H461_Restore.ipsw"
-product = "iPad7,1"
-version = "17.7.11"
-build = "21H461"
-device_class = "j120ap"
-chip_id = 0x8011
-board_id = 12
-fetch = ["KernelCache", "DeviceTree", "StaticTrustCache", "Cryptex1,SystemTrustCache"]
-
-[ipsw.sha256]
-# Whole-file sha256 of the two disk-image members inside the IPSW, taken from
-# the fuxi board pin for this exact build (same upstream URL); re-verify
-# against the local IPSW copy when it arrives before any push/dispatch.
-"044-76040-038.dmg" = "3f99b859c9728379110b66657c7b15285bcb1925ad8b5726542e2cdcf8b1028d"   # OS
-"044-76034-038.dmg" = "b4908cde41d23e6bc05e6af51a2c9eeb00cf0f863a6a18b1600c96a3fd70414f"   # Cryptex1,SystemOS
-
-# The raw image for the userdata partition: the OS and SystemOS disk images of
-# the IPSW behind a manifest.
-#
-# [DEVICE] 2026-10-23, measured twice via the nura OS (USB net, devsh):
-#   * sysfs: sda22 start 18,643,776 / size 972,326,040 sectors at 512 B;
-#   * the numbers below are those converted to 4096 B LBAs (LUN 0 logical
-#     block size is 4096, read from /sys/class/block/sda/queue — same trap
-#     as nx729j), consistent with the on-device GPT.
-# [FW] cross-check against the stock fastboot package (gpt_main0.bin /
-# rawprogram0.xml) is still open — see scripts/collect-m2381.py.
+# Same measured geometry as the owner board ([DEVICE] 2026-10-23, nura OS).
 [userdata]
 first_lba = 0x238f68              # 2330472, 4 KiB sectors  [DEVICE]
 last_lba = 0x7621ffa              # 123871226               [DEVICE]
 lba_bytes = 4096
-# Bring-up order follows nx729j: mount the root "OS" window first; the
-# "SystemOS" cryptex window is added back at the userland stage (stage 7).
 windows = [
   { name = "OS", component = "OS" },
+  { name = "SystemOS", component = "Cryptex1,SystemOS" },
+]
+
+# Bring-up selection: no Adreno, no display archive — every switch in
+# m2381_bringup_defconfig links an archive this plan can build.
+[components]
+include = [
+  "ArmDTPlatform",
+  "ArmCpu",
+  "SoftwareAES",
+  "ShengUfs",
+  "VirtioMmioBlock",
+  "RamBlock",
+  "XnuPrelink",
+  "DarwinBoot",
+  "VerifiedRoot",
 ]
 
 [kernel]
 defconfig = "m2381_bringup_defconfig"
-# Stage 1 (first console) archive list: only the builders whose inputs live
-# in the base repository, mirroring the nx729j bring-up staging. Every driver
-# that needs an evidence artefact is switched off in
-# configs/m2381_bringup_defconfig together with the artefact it needs, and
-# comes back in the next stage; the defconfig stays closed under
-# "switch on => its archive is buildable here".
+config_fragments = ["arch:configs/common.config", "soc:configs/sm8550.config", "os:configs/ipados.config"]
+patch_series = ["arch:patches/xnu/series", "soc:patches/xnu/series", "os:patches/xnu/series", "device:patches/xnu/series"]
+# Archive builders of the kernel step, in order (nx729j static-binding lane:
+# no audit-storage-interface.py, no per-driver bindings — the storage ABI
+# comes from build-storage-bindings.py + prelink-storage-bindings.json).
 archives = [
   # Restage the tree-pruned evidence (original kernelcache, prelink candidate
   # pairs) before any audit archive runs; see the script header.
   "stage-local-candidates.py",
   "build-corecrypto-14.py",
   "build-corecrypto-14.py --namespace",
-  "build-arm-driver.py ArmDTPlatform",
-  "build-arm-driver.py ArmCpu",
-  "build-arm-driver.py NativeAES",
-  "build-native-aes-bindings.py",
+  "component:ArmDTPlatform",
+  "component:ArmCpu",
+  "component:SoftwareAES",
+  "build-software-aes-bindings.py",
   # Publishes the ApplePMGRNub the donor AMFI's ConfigurationSettings waits on
   # (30 s timeout, then panic "AMFI: No PMGR?" @ConfigurationSettings.cpp:235
   # — first observed on hardware 2026-10-25). Board-side ShengPlatformPower,
@@ -105,7 +74,7 @@ archives = [
   # (gdb-stop.json) we cannot produce; nx729j binds the same 190 slots from
   # the pre-measured prelink-storage-bindings.json instead.
   "build-storage-bindings.py",
-  "build-arm-driver.py NativeUfs",
+  "component:ShengUfs",
   # Refusing placeholders merged into libNativeUfs.a (policy count 0) —
   # skipped automatically when the real evidence is staged below.
   "build-verified-root-stub.py",
@@ -113,68 +82,20 @@ archives = [
   # staged in .cache/firmware (local owner lane); skipped on hosts without
   # evidence (CI), which stay on the stub and keep the flag off.
   "build-verified-root-if-evidenced.py",
+  "component:VirtioMmioBlock",
+  "component:RamBlock",
   # NativeUfs's weak boot_progress_poll reference still errors on this ld64;
   # no-op stub until the real BootProgress stage.
   "build-boot-progress-stub.py",
   "build-libpthread-kernel.py",
 ]
+# [kernel.prelink] inherits from the OS profile (kits/XnuPrelink/emit_prelink.py,
+# the 21H461 cache sha, slide -0x1000000, AMFI 0xfffffff005ab4ae0).
 
-[kernel.prelink]
-tool = "kits/NativePrelink/emit_prelink.py"
-kernel = "build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/mach.development.bcm2837.unstripped.noctf"
-# sha256 of the decompressed 21H461 arm64 kernelcache. Verified locally:
-# fetched via Apple CDN range requests and decompressed on Linux 2026-10-24,
-# sha matches the fuxi board pin exactly (f18b4df8…).
-kernelcache_sha256 = "f18b4df865405f2a287b84977d7aca745e056d656d9fc9df1662970ce2969de7"
-# AMFI early initializer, verified two ways on this kernelcache (2026-10-24):
-# the fuxi/nx729j on-device value, AND the sole hit of the three-build
-# function fingerprint inside this build's AMFI __TEXT_EXEC
-# (0xfffffff005aaa000 + 0xaae0). slide follows the upstream build convention
-# (-0x1000000, image-generation independent); the prelink pointer binding
-# check adjudicates it.
-slide = "-0x1000000"
-early_security_init = "com.apple.driver.AppleMobileFileIntegrity=0xfffffff005ab4ae0"
-roots = [
-  "com.apple.AppleFSCompression.AppleFSCompressionTypeZlib",
-  "com.apple.driver.AppleARMPlatform",
-  "com.apple.driver.AppleARMWatchdogTimer",
-  "com.apple.driver.AppleAudioClockLibs",
-  "com.apple.driver.AppleEffaceableStorage",
-  "com.apple.driver.AppleIISController",
-  "com.apple.driver.AppleM2ScalerCSCDriver",
-  "com.apple.driver.AppleMobileFileIntegrity",
-  "com.apple.driver.ApplePMGR",
-  "com.apple.driver.IODARTFamily",
-  "com.apple.filesystems.apfs",
-  "com.apple.iokit.CoreAnalyticsFamily",
-  "com.apple.iokit.IOAVFamily",
-  "com.apple.iokit.IOAudio2Family",
-  "com.apple.iokit.IOCECFamily",
-  "com.apple.iokit.IOCryptoAcceleratorFamily",
-  "com.apple.iokit.IOGPUFamily",
-  "com.apple.iokit.IOHDCPFamily",
-  "com.apple.iokit.IOMobileGraphicsFamily",
-  "com.apple.iokit.IOReportFamily",
-  "com.apple.iokit.IOSlowAdaptiveClockingFamily",
-  "com.apple.iokit.IOStorageFamily",
-  "com.apple.iokit.IOSurface",
-  "com.apple.kec.Libm",
-  "com.apple.kec.corecrypto",
-  "com.apple.kext.AppleMatch",
-  "com.apple.kext.CoreTrust",
-  "com.apple.security.AppleImage4",
-  "com.apple.security.sandbox",
-  "com.apple.iokit.IOHIDFamily",
-  "com.apple.iokit.IOHIDEventDriver",
-]
+[device_tree]
+source = "device:dts/m2381.dts"
+include_dirs = ["soc:dts"]
 
-# The UEFI firmware package for this phone is built on the shengPkg skeleton
-# (UniXNU/uefi-sheng shape) with the proven platform constants of the nura
-# Mu chain: FD at 0xA7100000+0x300000, BootShim with kernel header + Gunyah
-# watchdog disable, boot header v4, gzip, no appended DTB. See
-# docs/STATE.md §5-A3 for the base decision record. The uefi checkout is a
-# uefi-sheng clone with Platforms/Meizu/m2381Pkg and Resources/Configs/
-# m2381.toml overlaid from devices/m2381/uefi/.
 [firmware]
 config = "m2381"                   # Resources/Configs/m2381.toml in the Mu-Silicium checkout (--uefi)
 dsc = "Platforms/Meizu/m2381Pkg/m2381.dsc"
@@ -203,13 +124,9 @@ MEMORY_PROTECTION = "TRUE"
 SHIP_MODE = "FALSE"
 BUILDID_STRING = "m2381-research"
 
-# The payload volume: a FAT image with the UniXNU config, the kernel, the ADT
-# and the optional trust cache and Data seed, written to the recovery_a
-# partition (100 MiB; the volume must stay ≤ 96 MiB to fit with FAT slack).
-# DarwinBoot (in the firmware volume) reads it through the UFS driver.
 [payload]
 volume = "M2381ESP"
-size_mib = 100
+size_mib = 96
 loader = "firmware"
 title = "m2381 first boot: source 4K XNU to console"
 dram_size = "0x400000000"            # [DEVICE] 16 GiB LPDDR5X
@@ -219,14 +136,10 @@ panic_screen = false
 # kernel by absolute virtual address measured on sheng's kernel, and this
 # board's _panic address is unknown until a kernel exists (same refusal nx729j
 # recorded in its bring-up board).
-# sha256 of the two trust caches inside the 21H461 IPSW, computed from the
-# members fetched via Apple CDN range requests (CRC-32 verified, 2026-10-24).
 trust_cache_sha256 = [
   "4563bdbf6ed8f72237d45dbba3ccde432634338f95c10d79d5d4631678a97c7c",   # StaticTrustCache (044-76040-038.dmg.trustcache)
   "9742f3d566369e6c48f63b3dc0740b06c243d13c6650e25bbf44616e13d6d097",   # Cryptex1,SystemTrustCache (044-76034-038.dmg.trustcache)
-  # The flat two-module bundle made by scripts/make-m2381-trust-bundle.py from the two above
-  # (DarwinBoot/kernel need the bare container, not the IM4P files; modules unchanged).
-    "7416ca4f8377146626bb284e2133c76bee6cb4e3ee0af5d648b186235a7323a7",   # original-trust.bundle (reproduces the fuxi pin independently)
+  "7416ca4f8377146626bb284e2133c76bee6cb4e3ee0af5d648b186235a7323a7",   # original-trust.bundle (reproduces the fuxi pin independently)
 ]
 # First light keeps the command line to what this kernel actually links,
 # mirroring the nx729j bring-up discipline: every sheng-*/offline-* argument
@@ -250,31 +163,15 @@ kernel_args = [
   # read-only check stays in the history as the transport gate.
   "native-ufs-root=1",
 ]
-
-# text_fixups for the 21H461 shared caches (nx729j's set, byte-for-byte the
-# same donor build this board now uses); the kernel reaches them as
-# /chosen/text-fixups after signature validation.
-text_fixups = [
-  "dyld_shared_cache_arm64.15,421e8bc,28ad1bb0008544f9,c0035fd6008544f9",
-  "dyld_shared_cache_arm64.13,1b05bec,44008052,24008052",
-  "dyld_shared_cache_arm64.13,1b05b08,44008052,24008052",
-  "BTAudioHALPlugin,38bec,ffc300d1f44f01a9,000080d2c0035fd6",
-]
+# text_fixups inherit from the OS profile (same donor build).
 
 [payload.adt]
-tool = "scripts/make-m2381-adt.py"
 chip_id = "207"                     # [DTB] qcom,msm-id 0x207 (SM8550-AB) — same value sheng/nx729j use
 owned_memory_size = "0x130000000"
-# root_match_volume_uuid of the donor OS image's Data volume: the same value
-# fuxi/nx729j pin for this exact 21H461 build (same IPSW = same UUID), so the
-# 21H461 userdata build will carry it natively.
 root_match_volume_uuid = "04769D26-2CA0-4825-B443-E2E5F88300F2"   # the 21H461 OS image Data volume UUID (same value fuxi/nx729j pin for this build)
-cpu_regs = "0,0x100,0x200,0x300,0x400,0x500,0x600,0x700"   # [DTB] /cpus reg 0x00..0x700, 8 CPUs
 packed_data_ramdisk = true
 unique_chip_id = "required"          # the platform seed is not stored in any repository
 
-# No [[bootimg.dtb_node]] here, unlike sheng.
-#
-# [FW] The boot image carries no appended DTB at all (nura-proven on this
-# ABL: BootShim header + gzip kernel member only; the stock vendor_boot DTB
-# supplies the splash region and passes BoardDtMatch). Nothing to patch.
+# No [bootimg] table: the boot image carries no appended DTB at all
+# (nura-proven on this ABL: BootShim header + gzip kernel member only; the
+# stock vendor_boot DTB supplies the splash region and passes BoardDtMatch).

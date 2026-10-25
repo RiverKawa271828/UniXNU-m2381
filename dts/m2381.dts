@@ -1,0 +1,42 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Hardware description of the Meizu 20 Classic (m2381, SM8550) for the
+// schema v2 payload assembly: devicetree.compile_hardware compiles this with
+// dtc and devicetree.generate turns it into the ADT the kernel hands off
+// with. The values are the v1 make-m2381-adt.py constants, re-expressed as
+// the FDT the v2 generator consumes (all of them re-confirmed by this
+// phone's stock FDT, docs/hardware/stock-fdt.dts):
+//   * eight cores numbered 0x000..0x700 in Affinity1, all enabled (the v1
+//     board ran sheng-smp=1 with every core up; the per-core compatible
+//     strings come from the SoC DTSI now, not the uniform a715 stamp the v1
+//     generator wrote)
+//   * timebase 19200000 Hz (memtimer clock-frequency, from the SoC DTSI)
+//   * one contiguous DRAM window at 0x80000000 sized 16 GiB — the ADT
+//     handoff description; the low-4G carve-outs are DarwinBoot's problem
+//     and are covered by the owned (darwinboot-memory-size) window of
+//     0x130000000 in board.toml [payload.adt]
+//   * arm-io exports come from the SoC DTSI itself: sm8550.dtsi marks its
+//     GIC (intc), UFS host controller (ufshc) and UFS PHY (ufsphy) with
+//     unixnu,adt-name — the same exports sheng's ADT carries, so the v1
+//     stub nodes are gone (they would collide with the DTSI names). The
+//     v1 ADT's ufshc was a compatible-only stub; the DTSI export adds its
+//     reg and PHY sibling, which the drivers ignore (NativeUfs takes its
+//     windows from GccUfs.h) but ArmDTPlatform publishes as hardware.
+/dts-v1/;
+/include/ "sm8550.dtsi"
+
+/ {
+    model = "meizu,meizu-20";
+    compatible = "meizu,meizu-20", "qcom,sm8550";
+
+    memory@80000000 {
+        device_type = "memory";
+        reg = <0 0x80000000 0x4 0x0>;
+    };
+};
+
+// UFS root is this port's core function: enable the DTSI's ufshc and PHY
+// exports (sheng does the same). The GPU nodes stay disabled — the v1 ADT
+// carried no GPU exports either, and the Adreno740 archive links without
+// them, taking its windows from its own SM8550 constants.
+&ufs { status = "okay"; };
+&ufsphy { status = "okay"; };

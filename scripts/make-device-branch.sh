@@ -24,8 +24,8 @@ git -C "$ROOT" worktree add --detach "$WORK" >/dev/null 2>&1
   cd "$WORK"
   git checkout --orphan "$BRANCH" >/dev/null 2>&1
   git rm -rf --quiet . 2>/dev/null || true
-  rm -rf board.toml board.bringup.toml configs scripts drivers package kits unixnu.lock keys
-  cp -r "$DEV/configs" "$DEV/scripts" "$DEV/drivers" "$DEV/package" "$DEV/kits" "$DEV/unixnu.lock" . 2>/dev/null || cp -r "$DEV/configs" "$DEV/scripts" "$DEV/package" "$DEV/kits" "$DEV/unixnu.lock" .
+  rm -rf board.toml board.bringup.toml configs scripts drivers package kits unixnu.lock feeds.toml dts patches keys
+  cp -r "$DEV/configs" "$DEV/scripts" "$DEV/drivers" "$DEV/package" "$DEV/kits" "$DEV/unixnu.lock" "$DEV/feeds.toml" "$DEV/dts" "$DEV/patches" . 2>/dev/null || cp -r "$DEV/configs" "$DEV/scripts" "$DEV/package" "$DEV/kits" "$DEV/unixnu.lock" .
   # The policy anchor key rides with the device repository (private repo): the
   # two-volume bundle requires every run to sign under the same anchor.
   [ -d "$DEV/keys" ] && cp -r "$DEV/keys" .
