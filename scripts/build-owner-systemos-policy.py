@@ -14,6 +14,7 @@ import json
 import os
 from pathlib import Path
 import plistlib
+import re
 import stat
 import subprocess
 import uuid
@@ -47,8 +48,11 @@ found = [i for i in images if Path(i['image-path']).resolve() == source.resolve(
 if len(found) != 1:
     raise SystemExit('Require one existing exact read-only image attachment')
 entities = found[0]['system-entities']
+# The raw container carries a GPT (EFI + APFS slices), so entity content hints
+# are partition type GUIDs and the whole disk's hint is empty; select it by
+# device-name shape instead (a bare /dev/diskN, no slice suffix).
 whole = [e['dev-entry'] for e in entities
-         if e.get('content-hint') in ('GUID_partition_scheme', 'Apple ApfsMedia')]
+         if re.fullmatch(r'/dev/disk[0-9]+', e.get('dev-entry', ''))]
 if len(whole) != 1:
     raise SystemExit('Require one actual whole virtual media mapping: '
                      + repr([(e.get('content-hint'), e.get('dev-entry')) for e in entities]))
