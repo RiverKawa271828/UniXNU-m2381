@@ -108,21 +108,96 @@ UNIXNU_CHECKOUT="$PWD" python3 "$DEVICE_DIR/scripts/build-owner-systemos-policy.
 # scripts/build-verified-root-if-evidenced.py (--include-systemos).
 
 # Round 30 (stage 8): the RAM-backed Data seed. hdiutil formats a 32 MiB APFS
-# image seeded from the original private/var (macOS-only), the scratch volume
-# UUID is forced to the kernel-pinned OWNER_DATA value, and the raw image is
-# packed into the DBRDISK1 ramdisk the ESP carries (Payloads/scratch-data.img,
-# loaded via the unixnu.toml initrd line into /chosen/memory-map
-# PackedRAMDisk). The packed form travels in the same verified-root artifact.
+# image seeded from the original private/var (macOS-only). The scratch volume
+# UUID is then forced OFFLINE to the kernel-pinned OWNER_DATA value — APFS has
+# no public volume-UUID verb, so the patch walks the 4 KiB blocks, rewrites the
+# uuid field (offset 56) of every APSB volume superblock plus any other
+# occurrence of the generated UUID, and re-seals each modified block with the
+# Fletcher64 checksum (self-tested against an unmodified superblock first).
+# Finally the raw image is packed into the DBRDISK1 ramdisk the ESP carries
+# (Payloads/scratch-data.img, loaded via the unixnu.toml initrd line into
+# /chosen/memory-map PackedRAMDisk). Both forms travel in the same
+# verified-root artifact.
 echo "== Data seed (original var tree, pinned scratch volume UUID)"
-python3 scripts/prepare-owner-data-fixture.py \
-  --volume-uuid 18AB5557-DC2D-469B-8758-855E60F5B0DF
+python3 scripts/prepare-owner-data-fixture.py
 python3 - "$DEVICE_DIR" <<'PY'
+import hashlib
 import sys
+import uuid as uuidlib
+from pathlib import Path
+
 sys.path.insert(0, sys.argv[1] + '/scripts')
 import packed_ramdisk
-metadata = packed_ramdisk.pack('build/owner-data-fixture/owner-data-32.cdr',
-                               'build/owner-data-fixture/scratch-data.img')
-print('packed ramdisk:', metadata)
+
+image = Path('build/owner-data-fixture/owner-data-32.cdr')
+target = uuidlib.UUID('18AB5557-DC2D-469B-8758-855E60F5B0DF').bytes
+data = bytearray(image.read_bytes())
+BLOCK, HEADER, UUID_AT = 4096, 32, 56
+
+def fletcher64(block):
+    mod, a, b = 0xffffffff, 0, 0
+    words = memoryview(block).cast('I')
+    for word in words:
+        a = (a + word) % mod
+        b = (b + a) % mod
+    return (b << 32) | a
+
+def seal(block):
+    stored = int.from_bytes(block[0:8], 'little')
+    block[0:8] = b'\0' * 8
+    computed = fletcher64(block)
+    if stored not in (computed, 0):
+        raise SystemExit('Fletcher64 self-test failed: stored %#x computed %#x' % (stored, computed))
+    block[0:8] = computed.to_bytes(8, 'little')
+
+patched = 0
+current = None
+for base in range(0, len(data), BLOCK):
+    block = data[base:base + BLOCK]
+    if block[HEADER:HEADER + 4] != b'APSB':
+        continue
+    seal(block)                      # self-test the checksum math before touching anything
+    old = bytes(block[UUID_AT:UUID_AT + 16])
+    if current is None:
+        current = old
+        print('scratch volume superblock uuid:', uuidlib.UUID(bytes=old))
+    if old == target:
+        continue
+    block[UUID_AT:UUID_AT + 16] = target
+    patched += 1
+
+if current is None:
+    raise SystemExit('no APSB volume superblock found in the seed image')
+if current == target:
+    print('volume already carries the pinned UUID')
+else:
+    # Rewrite every remaining occurrence of the generated UUID (checkpoint
+    # copies keep their own APSB seal; other structures get re-sealed too).
+    forms = {current, current[::-1]}
+    for base in range(0, len(data), BLOCK):
+        block = data[base:base + BLOCK]
+        hit = False
+        for form in forms:
+            cursor = block.find(form)
+            while cursor != -1:
+                block[cursor:cursor + 16] = target
+                hit = True
+                cursor = block.find(form, cursor + 1)
+        if hit:
+            seal(block)
+            patched += 1
+
+for base in range(0, len(data), BLOCK):
+    block = data[base:base + BLOCK]
+    if block[HEADER:HEADER + 4] == b'APSB':
+        seal(block)  # verifies every superblock re-seals to its own stored checksum
+        if block[UUID_AT:UUID_AT + 16] != target:
+            raise SystemExit('post-patch check: an APSB superblock does not carry the pinned UUID')
+
+image.write_bytes(data)
+print('patched blocks:', patched)
+packed = packed_ramdisk.pack(str(image), 'build/owner-data-fixture/scratch-data.img')
+print('packed ramdisk:', packed)
 PY
 
 hdiutil detach "$(cat /tmp/detach-os-mount)" || true
