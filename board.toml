@@ -69,10 +69,13 @@ fetch = ["KernelCache", "DeviceTree", "StaticTrustCache", "Cryptex1,SystemTrustC
 first_lba = 0x238f68              # 2330472, 4 KiB sectors  [DEVICE]
 last_lba = 0x7621ffa              # 123871226               [DEVICE]
 lba_bytes = 4096
-# Bring-up order follows nx729j: mount the root "OS" window first; the
-# "SystemOS" cryptex window is added back at the userland stage (stage 7).
+# Stage 7 (2026-10-25): launchd exec'd but dyld had no libSystem and no dyld
+# cache — both live in the Cryptex1,SystemOS volume, so the cryptex window
+# returns now and the owner cache mount unions it over "/" (kern_exec
+# OWNER_CACHE_MOUNT/OWNER_UNION_SYSTEMOS, cache volume 8846FE78-…).
 windows = [
   { name = "OS", component = "OS" },
+  { name = "SystemOS", component = "Cryptex1,SystemOS" },
 ]
 
 [kernel]

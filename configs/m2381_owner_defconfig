@@ -84,9 +84,12 @@ CONFIG_XNU_SHENG_PMGR=y
 CONFIG_XNU_SOURCE_MOCKFS=n
 CONFIG_XNU_ARMVIRT_PLATFORM=n
 CONFIG_XNU_ZONE_PGZ_ALIGNMENT_PROBE=n
-# owner lane: needs the macOS-produced policy staged in .cache/firmware
+# owner lane: needs the macOS-produced policy staged in .cache/firmware.
+# Round 25: the two-volume bundle (OS + SystemOS, one committed anchor) —
+# ci-owner-policy.sh builds verified-root-os-xnu-bundle via
+# build-verified-root-probe.py --include-systemos.
 CONFIG_XNU_VERIFIED_ROOT_PROBE=y
-CONFIG_XNU_VERIFIED_ROOT_ARCHIVE="{tree}/build/verified-root-os-xnu/libVerifiedRootProbe.a"
+CONFIG_XNU_VERIFIED_ROOT_ARCHIVE="{tree}/build/verified-root-os-xnu-bundle/libVerifiedRootProbe.a"
 # The verified-block root authorizer (native_verified_block_root_authorized in
 # bsd_init's root authentication); single-policy bundle mode matches the
 # single-window OS image. Round 23: root mounted, bsd_init.c:1100
@@ -94,11 +97,19 @@ CONFIG_XNU_VERIFIED_ROOT_ARCHIVE="{tree}/build/verified-root-os-xnu/libVerifiedR
 CONFIG_XNU_NATIVE_VIRTIO_BLOCK_ARCHIVE="{tree}/build/native-virtio-block-verified-bundle/libNativeVirtioBlock.a"
 CONFIG_XNU_OWNER_ROOT_AUDIT=y
 CONFIG_XNU_OWNER_ROOT_TRUST=y
-CONFIG_XNU_OWNER_CACHE_MOUNT=n
-CONFIG_XNU_OWNER_CACHE_STARTUP=n
-CONFIG_XNU_OWNER_BOOT_MANIFEST=n
+# Round 25 (stage 7): launchd exec'd, dyld died on "Library not loaded:
+# /usr/lib/libSystem.B.dylib (no dyld cache)" — the cryptex SystemOS volume
+# is the second window and the owner cache mount unions it over "/". The
+# cache volume UUID is the donor cryptex volume (fuxi's kern_exec default,
+# pinned here because ci-owner-policy.sh signs exactly this volume).
+# OWNER_DATA_MOUNT stays off: no Data seed yet; the expected stage-7 end
+# state is launchd alive without /private/var.
+CONFIG_XNU_OWNER_CACHE_VOLUME_UUID="8846FE78-2910-4297-AF97-D59BB6F8FC16"
+CONFIG_XNU_OWNER_CACHE_MOUNT=y
+CONFIG_XNU_OWNER_CACHE_STARTUP=y
+CONFIG_XNU_OWNER_BOOT_MANIFEST=y
+CONFIG_XNU_OWNER_UNION_SYSTEMOS=y
 CONFIG_XNU_OWNER_DATA_MOUNT=n
-CONFIG_XNU_OWNER_UNION_SYSTEMOS=n
 CONFIG_XNU_BOOT_PROGRESS=n
 
 # Kept because the patch guards read it even when OWNER_DATA_MOUNT is off.
