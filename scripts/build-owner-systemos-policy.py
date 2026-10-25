@@ -109,8 +109,9 @@ complete = hashlib.sha256()
 indices = [0, 1, view.block_count // 2, view.block_count - 1]
 samples, lengths = [], []
 with disk.open('rb', buffering = 1024 * 1024) as stream:
+    block_bytes = record['block_bytes']
     for index in range(view.block_count):
-        block = stream.read(min(4096, view.image_bytes - index * 4096))
+        block = stream.read(min(block_bytes, view.image_bytes - index * block_bytes))
         if native.vr_host_block(ctypes.byref(view), index, block, len(block)) != 0:
             raise SystemExit('Actual C block verification failed at ' + str(index))
         complete.update(block)
