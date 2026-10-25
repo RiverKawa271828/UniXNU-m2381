@@ -77,7 +77,10 @@ CONFIG_XNU_NATIVE_MOBILE_DISPLAY=n
 CONFIG_XNU_NATIVE_ADRENO=n
 CONFIG_XNU_NATIVE_VIRTIO_BLOCK=y
 CONFIG_XNU_NATIVE_UFS=y
-CONFIG_XNU_NATIVE_RAM_BLOCK=n
+# Round 30: the RAM-backed Data volume imports the DarwinBoot scratch-data
+# handoff (/chosen/memory-map PackedRAMDisk) and publishes the scratch volume;
+# builds like the other storage drivers from storage-abi/include.
+CONFIG_XNU_NATIVE_RAM_BLOCK=y
 CONFIG_XNU_NATIVE_VIRTIO_CONSOLE=n
 CONFIG_XNU_NATIVE_OFFLINE_GPU=n
 CONFIG_XNU_SHENG_PMGR=y
@@ -102,18 +105,18 @@ CONFIG_XNU_OWNER_ROOT_TRUST=y
 # is the second window and the owner cache mount unions it over "/". The
 # cache volume UUID is the donor cryptex volume (fuxi's kern_exec default,
 # pinned here because ci-owner-policy.sh signs exactly this volume).
-# OWNER_DATA_MOUNT stays off: no Data seed yet; the expected stage-7 end
-# state is launchd alive without /private/var.
+# Round 30 (stage 8): tzinit exits 30 on the /var/db/timezone/zoneinfo
+# symlink (EROFS — no Data volume); the RAM-backed Data seed arrives via the
+# ESP scratch-data.img handoff (DarwinBoot PackedRAMDisk → NativeRamBlock),
+# so the Data mount turns on against the seeded scratch volume.
 CONFIG_XNU_OWNER_CACHE_VOLUME_UUID="8846FE78-2910-4297-AF97-D59BB6F8FC16"
 CONFIG_XNU_OWNER_CACHE_MOUNT=y
 CONFIG_XNU_OWNER_CACHE_STARTUP=y
 CONFIG_XNU_OWNER_BOOT_MANIFEST=y
 CONFIG_XNU_OWNER_UNION_SYSTEMOS=y
-CONFIG_XNU_OWNER_DATA_MOUNT=n
+CONFIG_XNU_OWNER_DATA_MOUNT=y
 CONFIG_XNU_BOOT_PROGRESS=n
 
-# Kept because the patch guards read it even when OWNER_DATA_MOUNT is off.
-# Zero placeholder, as nx729j_bringup_defconfig runs for this donor; the
-# owner stage fills the 21H461 Data volume UUID (18AB5557…) when userdata
-# joins the bring-up lane.
-CONFIG_XNU_OWNER_DATA_VOLUME_UUID="00000000-0000-0000-0000-000000000000"
+# The Data volume UUID the OWNER_DATA_MOUNT path matches; ci-owner-policy.sh
+# forces the same UUID into the generated Data seed (diskutil changeVolumeUUID).
+CONFIG_XNU_OWNER_DATA_VOLUME_UUID="18AB5557-DC2D-469B-8758-855E60F5B0DF"

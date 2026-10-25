@@ -107,6 +107,24 @@ UNIXNU_CHECKOUT="$PWD" python3 "$DEVICE_DIR/scripts/build-owner-systemos-policy.
 # maintainer's local kernel build produces the bundle via
 # scripts/build-verified-root-if-evidenced.py (--include-systemos).
 
+# Round 30 (stage 8): the RAM-backed Data seed. hdiutil formats a 32 MiB APFS
+# image seeded from the original private/var (macOS-only), the scratch volume
+# UUID is forced to the kernel-pinned OWNER_DATA value, and the raw image is
+# packed into the DBRDISK1 ramdisk the ESP carries (Payloads/scratch-data.img,
+# loaded via the unixnu.toml initrd line into /chosen/memory-map
+# PackedRAMDisk). The packed form travels in the same verified-root artifact.
+echo "== Data seed (original var tree, pinned scratch volume UUID)"
+python3 scripts/prepare-owner-data-fixture.py \
+  --volume-uuid 18AB5557-DC2D-469B-8758-855E60F5B0DF
+python3 - "$DEVICE_DIR" <<'PY'
+import sys
+sys.path.insert(0, sys.argv[1] + '/scripts')
+import packed_ramdisk
+metadata = packed_ramdisk.pack('build/owner-data-fixture/owner-data-32.cdr',
+                               'build/owner-data-fixture/scratch-data.img')
+print('packed ramdisk:', metadata)
+PY
+
 hdiutil detach "$(cat /tmp/detach-os-mount)" || true
 hdiutil detach "$(cat /tmp/detach-systemos-mount)" || true
 echo "== ci-owner-policy: done"
