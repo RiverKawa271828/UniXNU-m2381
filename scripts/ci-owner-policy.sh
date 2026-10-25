@@ -97,10 +97,13 @@ attach_volume "$TV/044-76034-038.dmg" 8846FE78-2910-4297-AF97-D59BB6F8FC16 syste
 echo "== SystemOS policy (same committed anchor, full block verification)"
 UNIXNU_CHECKOUT="$PWD" python3 "$DEVICE_DIR/scripts/build-owner-systemos-policy.py"
 
-echo "== cross-build two-volume probe bundle (OS + SystemOS, one anchor)"
-python3 scripts/build-verified-root-probe.py --component os --include-systemos
+# The two-volume probe bundle is NOT built here: scripts/build-verified-root-probe.py
+# compiles with the kernel's own compile recipe (build/xnu/ios-obj/...), which
+# only exists after a kernel build. The artifact carries both policies; the
+# maintainer's local kernel build produces the bundle via
+# scripts/build-verified-root-if-evidenced.py (--include-systemos).
 
 hdiutil detach "$(cat /tmp/detach-os-mount)" || true
 hdiutil detach "$(cat /tmp/detach-systemos-mount)" || true
 echo "== ci-owner-policy: done"
-ls -la build/verified-root-os build/verified-root-systemos build/verified-root-os-xnu-bundle
+ls -la build/verified-root-os build/verified-root-systemos
