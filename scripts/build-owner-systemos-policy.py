@@ -35,9 +35,11 @@ digest = hashlib.sha256()
 with source.open('rb') as stream:
     for chunk in iter(lambda: stream.read(1024 * 1024), b''):
         digest.update(chunk)
-    stream.seek(-512, 2)
-    if stream.read(4) != b'koly':
-        raise SystemExit('Expected the actual original UDIF trailer')
+# The SystemOS member is a raw APFS container (no UDIF koly trailer): the
+# attached device presents exactly these bytes, which is why the upstream
+# bundle expects image_sha256 == the member digest. The digest check above is
+# the identity proof; the volume UUID and size checks below bind it to the
+# attached media.
 if digest.hexdigest() != expected_compressed:
     raise SystemExit('The compressed image must be the exact supplied iPad7,1 SystemOS member')
 images = plistlib.loads(subprocess.check_output(['hdiutil', 'info', '-plist']))['images']
@@ -45,9 +47,11 @@ found = [i for i in images if Path(i['image-path']).resolve() == source.resolve(
 if len(found) != 1:
     raise SystemExit('Require one existing exact read-only image attachment')
 entities = found[0]['system-entities']
-whole = [e['dev-entry'] for e in entities if e.get('content-hint') == 'GUID_partition_scheme']
+whole = [e['dev-entry'] for e in entities
+         if e.get('content-hint') in ('GUID_partition_scheme', 'Apple ApfsMedia')]
 if len(whole) != 1:
-    raise SystemExit('Require one actual whole virtual media mapping')
+    raise SystemExit('Require one actual whole virtual media mapping: '
+                     + repr([(e.get('content-hint'), e.get('dev-entry')) for e in entities]))
 info = plistlib.loads(subprocess.check_output(['diskutil', 'info', '-plist', whole[0]]))
 volume_info = plistlib.loads(subprocess.check_output(['diskutil', 'info', '-plist', volume]))
 if (info.get('BusProtocol') != 'Disk Image' or info.get('Writable') is not False or
