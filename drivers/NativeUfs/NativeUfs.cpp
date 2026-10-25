@@ -1502,7 +1502,12 @@ IOReturn NativeUfsBlock::doAsyncReadWrite (IOMemoryDescriptor *buffer, UInt64 bl
     , &verified
 #endif
   };
-  UfsWindowResult outcome = ufsReadWindow (operations, absolute, bytes, block, count, bounce);
+#if defined(NATIVE_VERIFIED_BLOCK) && NATIVE_VERIFIED_BLOCK
+  constexpr uint64_t verifiedStride = VR_BLOCK_BYTES;
+#else
+  constexpr uint64_t verifiedStride = 4096;
+#endif
+  UfsWindowResult outcome = ufsReadWindow (operations, absolute, bytes, block, count, bounce, verifiedStride);
   IOReturn result = outcome.status;
   uint64_t done = outcome.done;
   if (result != kIOReturnSuccess) {

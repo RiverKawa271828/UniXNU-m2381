@@ -63,30 +63,30 @@ int main() {
   assert(!ufsWindowGeometry(uint64_t(UINT32_MAX)*4096,4608));
   // Every 512-byte offset within a 4K block, spanning two 128K commands.
   for(unsigned offset=0;offset<8;++offset) {
-    Ops o(s); auto r=ufsReadWindow(o,0,o.disk.size(),offset,257,s.bounce);
+    Ops o(s); auto r=ufsReadWindow(o,0,o.disk.size(),offset,257,s.bounce,4096);
     assert(r.status==0 && r.done==257*512 && o.reads==2 && !o.held);
     assert(!memcmp(o.output.data(),o.disk.data()+offset*512,r.done));
   }
-  { Ops o(s); auto r=ufsReadWindow(o,0,4096+512,8,1,s.bounce);
+  { Ops o(s); auto r=ufsReadWindow(o,0,4096+512,8,1,s.bounce,4096);
     assert(r.status==0 && r.done==512 && o.checks==1); }
-  { Ops o(s); o.badVerify=32; auto r=ufsReadWindow(o,0,o.disk.size(),0,256,s.bounce);
+  { Ops o(s); o.badVerify=32; auto r=ufsReadWindow(o,0,o.disk.size(),0,256,s.bounce,4096);
     assert(r.status==3 && !r.done && !o.copies && o.output[0]==0xa5 && !o.held); }
-  { Ops o(s); o.badVerify=33; auto r=ufsReadWindow(o,0,o.disk.size(),0,257,s.bounce);
+  { Ops o(s); o.badVerify=33; auto r=ufsReadWindow(o,0,o.disk.size(),0,257,s.bounce,4096);
     assert(r.status==3 && r.done==131072 && o.copies==1 && o.output[r.done]==0xa5); }
-  { Ops o(s); o.badRead=2; auto r=ufsReadWindow(o,0,o.disk.size(),0,257,s.bounce);
+  { Ops o(s); o.badRead=2; auto r=ufsReadWindow(o,0,o.disk.size(),0,257,s.bounce,4096);
     assert(r.status==2 && r.done==131072 && !o.held); }
-  { Ops o(s); o.shortCopy=17; auto r=ufsReadWindow(o,0,o.disk.size(),0,8,s.bounce);
+  { Ops o(s); o.shortCopy=17; auto r=ufsReadWindow(o,0,o.disk.size(),0,8,s.bounce,4096);
     assert(r.status==2 && r.done==17 && !o.held && o.output[17]==0xa5); }
-  { Ops o(s); for(auto count:{0ULL,UINT64_MAX}) {
-      auto r=ufsReadWindow(o,0,o.disk.size(),0,count,s.bounce); assert(r.status==1 && !o.reads); }
-    auto r=ufsReadWindow(o,0,o.disk.size(),o.disk.size()/512,1,s.bounce); assert(r.status==1 && !o.reads); }
+  { Ops o(s); for(auto count:{0ULL,~0ULL}) {
+      auto r=ufsReadWindow(o,0,o.disk.size(),0,count,s.bounce,4096); assert(r.status==1 && !o.reads); }
+    auto r=ufsReadWindow(o,0,o.disk.size(),o.disk.size()/512,1,s.bounce,4096); assert(r.status==1 && !o.reads); }
   // First reader pauses inside verification until a second request has tried
   // to acquire the SAME window lock. Both must retain their own read snapshot.
   s.attempts=0; s.concurrent=true;
   Ops first(s), second(s); UfsWindowResult a{},b{};
-  std::thread one([&]{ a=ufsReadWindow(first,0,first.disk.size(),0,8,s.bounce); });
+  std::thread one([&]{ a=ufsReadWindow(first,0,first.disk.size(),0,8,s.bounce,4096); });
   { std::unique_lock<std::mutex> guard(s.control); s.changed.wait(guard,[&]{return s.attempts==1;}); }
-  std::thread two([&]{ b=ufsReadWindow(second,0,second.disk.size(),8,8,s.bounce); });
+  std::thread two([&]{ b=ufsReadWindow(second,0,second.disk.size(),8,8,s.bounce,4096); });
   one.join(); two.join();
   assert(a.status==0 && b.status==0);
   assert(!memcmp(first.output.data(),first.disk.data(),4096));

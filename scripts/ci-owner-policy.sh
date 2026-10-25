@@ -19,8 +19,12 @@
 set -euo pipefail
 echo "== ci-owner-policy: resolve inputs"
 # The rewritten workflow checks out without submodules; the kernel step fetches
-# its own references later. The evidence build needs these two kits now.
-git submodule update --init kits/VerifiedRoot kits/NativePrelink
+# its own references later. NativePrelink stays a submodule; VerifiedRoot is
+# REPLACED by the device fork (16 KiB verification blocks - the 100 MiB
+# recovery_a payload cannot hold the 4 KiB manifests of both windows).
+git submodule update --init kits/NativePrelink
+rm -rf kits/VerifiedRoot
+cp -r "$DEVICE_DIR/kits/VerifiedRoot" kits/VerifiedRoot
 IPSW_URL=$(python3 - "$DEVICE_DIR/board.toml" <<'PY'
 import sys, tomllib, pathlib
 print(tomllib.loads(pathlib.Path(sys.argv[1]).read_text())['ipsw']['url'])

@@ -49,7 +49,7 @@ uint32_t ufs_path_read(uint64_t block,uint64_t count,uint8_t *out,uint64_t capac
     uint64_t copy(uint64_t offset,const void *data,uint64_t length) { memcpy(out+offset,data,length); return length; }
   } ops{out};
   auto result=ufsReadWindow(ops,layout.userdataFirst*4096+layout.window[selected].offset,
-                             layout.window[selected].size,block,count,bounce);
+                             layout.window[selected].size,block,count,bounce,4096);
   *done=result.done; return result.status;
 }
 }
