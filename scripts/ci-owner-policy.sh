@@ -25,6 +25,10 @@ echo "== ci-owner-policy: resolve inputs"
 git submodule update --init kits/NativePrelink
 rm -rf kits/VerifiedRoot
 cp -r "$DEVICE_DIR/kits/VerifiedRoot" kits/VerifiedRoot
+# The 16 KiB device fork now sits where the checkout's gitlink points at
+# upstream; unregister it so the kernel step's submodule pass does not try to
+# re-clone UniXNU/VerifiedRoot over the fork and abort the build.
+git rm --cached -q kits/VerifiedRoot
 IPSW_URL=$(python3 - "$DEVICE_DIR/board.toml" <<'PY'
 import sys, tomllib, pathlib
 print(tomllib.loads(pathlib.Path(sys.argv[1]).read_text())['ipsw']['url'])
