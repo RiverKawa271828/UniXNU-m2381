@@ -81,7 +81,6 @@ include = [
   "ShengUfs",
   "VirtioMmioBlock",
   "RamBlock",
-  "Adreno740",
   "XnuPrelink",
   "DarwinBoot",
   "VerifiedRoot",
@@ -122,13 +121,29 @@ archives = [
   "component:VirtioMmioBlock",
   # The verified-block root authorizer bundle (single policy per device);
   # needs the signed policies ci-owner-policy.sh stages in .cache/firmware.
-  "build-arm-driver.py VirtioMmioBlock --verified-root-bundle",
+  "build-arm-driver.py VirtioMmioBlock --verified-root --verified-root-bundle",
+  # The kernel link cross-checks the two transports against bindings.json
+  # records (build-xnu-4k-baseline.sh PY_BINDINGS); this lane writes them
+  # from the static prelink-storage-bindings.json pin instead of the
+  # upstream live-device interface audit.
+  "build-storage-transport-record.py NativeVirtioBlock --archive build/virtio-mmio-block-verified-bundle",
   "component:RamBlock",
+  "build-storage-transport-record.py NativeRamBlock --archive build/ram-block",
   "build-mockfs-fixture.py",
-  "build-boot-progress.py",
+  # NativeUfs/ShengUfs null-guard boot_progress_poll, and this ld64 errors on
+  # weak undefined references (Apple's binds them to zero — how the upstream
+  # sheng board links the full diagnostic). The no-op stub satisfies the
+  # driver reference; the full BootProgress diagnostic (whose 122 telemetry
+  # weak externals assume the Apple-linker semantics and the sheng-side
+  # monitor surfaces) returns with the progress-UI topic.
+  "build-boot-progress-stub.py",
   "build-libpthread-kernel.py",
-  "component:Adreno740",
-  "build-adreno740-kits.py",
+  # Adreno740 (component + build-adreno740-kits.py) is deferred: the kit
+  # embeds the board-local GPU inputs that upstream keeps out of git
+  # (ShengGmu*Source.h OPP/bandwidth policy per docs/porting/gpu.md, plus the
+  # .cache/firmware/sheng-gpu pinned blobs) and CONFIG_XNU_NATIVE_ADRENO=n
+  # skips the libAdreno740.a link requirement. Bring-up to launchd needs no
+  # GPU; the chain returns with its own topic once those inputs are ported.
 ]
 # [kernel.prelink] is inherited from the OS profile: tool kits/XnuPrelink/
 # emit_prelink.py (the kits/XnuPrelink fork of this repository shadows the

@@ -31,9 +31,17 @@ CONFIG_XNU_DT_PANIC_REGION=y
 CONFIG_XNU_ZONE_PGZ_ALIGNMENT_PROBE=y
 CONFIG_XNU_NATIVE_ARCH_TIMER=y
 CONFIG_XNU_NATIVE_PAN=y
-CONFIG_XNU_BOOT_PROGRESS=y
+# n while the full BootProgress diagnostic is out of the archive plan: its
+# boot_progress_* call sites are strong references into libBootProgress.a.
+# The no-op stub archive (force_loaded below) satisfies ShengUfs's weak
+# boot_progress_poll — this ld64 errors on weak undefineds, unlike Apple's.
+CONFIG_XNU_BOOT_PROGRESS=n
 CONFIG_XNU_NATIVE_LEGACY_DISPLAY=n
-CONFIG_XNU_NATIVE_ADRENO=y
+# n until the board-local GPU inputs exist: libAdreno740.a needs the
+# ShengGmu*Source.h OPP/bandwidth policy (docs/porting/gpu.md; kept out of
+# git upstream too) plus the .cache/firmware/sheng-gpu pinned blobs. Flip
+# with the Adreno740 component/archive entries in one GPU topic.
+CONFIG_XNU_NATIVE_ADRENO=n
 
 CONFIG_XNU_CRYPTO_BOOTSTRAP="prelinked"
 # The 21H461 donor image Data volume UUID - the same value fuxi/nx729j run
@@ -44,6 +52,6 @@ CONFIG_XNU_NATIVE_VIRTIO_BLOCK_ARCHIVE="{tree}/build/virtio-mmio-block-verified-
 CONFIG_XNU_VERIFIED_ROOT_ARCHIVE="{tree}/build/verified-root-os-xnu-bundle/libVerifiedRootProbe.a"
 # The static storage ABI archive: absolute symbols for IOBlockStorageDevice's
 # 190 dispatch slots, force-loaded next to the drivers that subclass it.
-CONFIG_XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,{tree}/build/io-storage-family/libStorageBindings.a"
+CONFIG_XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,{tree}/build/io-storage-family/libStorageBindings.a -Wl,-force_load,{tree}/build/boot-progress-stub/libBootProgressStub.a"
 CONFIG_XNU_NATIVE_MOBILE_DISPLAY=n
 CONFIG_XNU_ARMVIRT_PLATFORM=n

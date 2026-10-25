@@ -20,6 +20,23 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+
+# The staging convention (this file's docstring, the CI pre_build and the
+# r30 artifact layout): policies live in the device repository's
+# .cache/firmware/verified-root-{os,systemos}/, which the assembled tree
+# links at .cache/firmware (tree.py). Stage them into the tree build/ where
+# build-verified-root-probe.py and the defconfig archive path read them.
+import shutil
+
+for name in ('verified-root-os', 'verified-root-systemos'):
+    staged = ROOT / '.cache/firmware' / name
+    target = ROOT / 'build' / name
+    if staged.is_dir() and not (target / 'verification.json').is_file():
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if target.exists():
+            shutil.rmtree(target)
+        shutil.copytree(staged, target)
+
 os_policy = ROOT / 'build/verified-root-os/verification.json'
 systemos_policy = ROOT / 'build/verified-root-systemos/verification.json'
 

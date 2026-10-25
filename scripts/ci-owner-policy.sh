@@ -229,5 +229,19 @@ PY
 
 hdiutil detach "$(cat /tmp/detach-os-mount)" || true
 hdiutil detach "$(cat /tmp/detach-systemos-mount)" || true
+
+# The kernel step reads the tree-relative paths (the schema v2 tree lives at
+# out/<os-profile>/<board>/tree/ and tree/.cache/firmware symlinks into the
+# device repository), so stage everything where the assembled tree will link
+# it: the two policies via the device cache and the IPSW member volumes by a
+# same-filesystem rename into the device repository.
+echo "== ci-owner-policy: stage into the device repository"
+mkdir -p "$DEVICE_DIR/.cache/firmware"
+rm -rf "$DEVICE_DIR/.cache/firmware/verified-root-os" \
+       "$DEVICE_DIR/.cache/firmware/verified-root-systemos" \
+       "$DEVICE_DIR/.cache/firmware/target-volumes"
+cp -r build/verified-root-os build/verified-root-systemos "$DEVICE_DIR/.cache/firmware/"
+mv "$TV" "$DEVICE_DIR/.cache/firmware/target-volumes"
+
 echo "== ci-owner-policy: done"
 ls -la build/verified-root-os build/verified-root-systemos

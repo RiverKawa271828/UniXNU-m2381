@@ -26,6 +26,13 @@ out = args.archive.resolve()
 obj = out / (args.component + '.o')
 if not obj.is_file():
     raise SystemExit(f'missing compiled transport object: {obj}')
+# The link audit derives the audited object from the archive file name
+# (libVirtioMmioBlock.a -> VirtioMmioBlock.o) while build-arm-driver writes
+# the runtime identifier (NativeVirtioBlock.o); alias it in place.
+for archive in out.glob('lib*.a'):
+    audit_obj = out / (archive.stem.removeprefix('lib') + '.o')
+    if not audit_obj.exists():
+        audit_obj.hardlink_to(obj)
 source = ROOT / 'build/io-storage-family/bindings.json'
 if not source.is_file():
     raise SystemExit('run build-storage-bindings.py first: ' + str(source))
