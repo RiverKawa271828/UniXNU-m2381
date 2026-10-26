@@ -227,6 +227,20 @@ packed = packed_ramdisk.pack(image, Path('build/owner-data-fixture/scratch-data.
 print('packed ramdisk:', packed)
 PY
 
+# Round 42 (STATE 0.23): the 32 MiB seed cannot hold the sheng-staged-apps copy
+# (31 MiB and unfinished, so it refloods and ENOSPCs the boot policy every
+# boot). Upstream pairs sheng-staged-apps=1 with seed-data-grow.py; the seed
+# carries its store geometry and the kernel adapts (sparse-packed, sparse
+# RAM), so growing here needs no kernel or board change. The grown seed
+# replaces the base in build/owner-data-fixture/ and rides the verified-root
+# artifact home for the local payload assembly (the payload itself never
+# leaves the runner).
+git submodule update --init --depth 1 drivers/DarwinBoot
+python3 scripts/seed-data-grow.py --gib 16 \
+  build/owner-data-fixture/scratch-data.img build/owner-data-fixture/scratch-data-16g.img
+mv build/owner-data-fixture/scratch-data-16g.img build/owner-data-fixture/scratch-data.img
+echo "== Data seed grown to 16 GiB: $(ls -l build/owner-data-fixture/scratch-data.img | awk '{print $5}') bytes packed"
+
 hdiutil detach "$(cat /tmp/detach-os-mount)" || true
 hdiutil detach "$(cat /tmp/detach-systemos-mount)" || true
 
