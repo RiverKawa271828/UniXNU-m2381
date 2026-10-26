@@ -15,6 +15,11 @@
 // callers on their NULL-guard paths. boot_log_tick is NOT stubbed here: the
 // real BootLog.o (the sheng-log=1 writer, compiled into libBootProgress.a
 // since 2026-10-26) provides it — a stub here would collide with it.
+// The same rule covers the legacy-display blocks below: when the qualified
+// display lane lands (XNU_NATIVE_LEGACY_DISPLAY=1, build-boot-progress-telemetry
+// defines XNU_NATIVE_LEGACY_DISPLAY_QUALIFIED), libNativeLegacyDisplay.late.a
+// carries the real providers and drivers, and these zeros must not also
+// define them (duplicate symbols at force_load).
 void boot_process_capture(void) {}
 void boot_process_snapshot(void) {}
 void boot_ui_trace_snapshot(unsigned phase) { (void)phase; }
@@ -30,11 +35,13 @@ unsigned boot_ui_trace_hot_rows(char rows[][120], unsigned cap) {
     (void)rows; (void)cap; return 0;
 }
 int native_ufs_extra_fault(uint32_t *fault) { (void)fault; return 0; }
+#ifndef XNU_NATIVE_LEGACY_DISPLAY_QUALIFIED
 unsigned native_legacy_properties_now(char *out, unsigned cap) { (void)out; (void)cap; return 0; }
 unsigned native_legacy_clients_dump(char *out, unsigned cap) { (void)out; (void)cap; return 0; }
 unsigned native_legacy_swap_timeline(char *out, unsigned cap) { (void)out; (void)cap; return 0; }
 unsigned native_legacy_prepare_report(char *out, unsigned cap) { (void)out; (void)cap; return 0; }
 unsigned native_legacy_state_words(char *out, unsigned cap) { (void)out; (void)cap; return 0; }
+#endif
 // The fastboot reset kit (BootReset.c) is not compiled on this board; a
 // refused probe keeps every sheng-autoreset path on its "skipped" branch.
 int boot_reset_probe(char *out, unsigned cap) { (void)out; (void)cap; return -1; }
@@ -69,18 +76,24 @@ volatile uint32_t native_adreno_wc_distrusted = 0;
 char native_cpufreq_row[120] = {0};
 volatile uint32_t native_cpufreq_stage = 0;
 
-// GOP GPU hand-off counters (sheng-fb-gpu off)
+// GOP GPU hand-off counters (sheng-fb-gpu off; NativeGOPPresenter.cpp defines
+// them when the display topic lands)
+#ifndef XNU_NATIVE_LEGACY_DISPLAY_QUALIFIED
 volatile uint64_t native_gop_gpu_offers = 0;
 volatile uint64_t native_gop_gpu_completions = 0;
 volatile uint64_t native_gop_gpu_failures = 0;
 volatile uint64_t native_gop_gpu_abandoned = 0;
 volatile uint64_t native_gop_virtual = 0;
+#endif
 
 // HID input (offline-hid off)
 volatile uint32_t native_hid_input_events[8] = {0};
 volatile int native_hid_input_results[8] = {0};
 
-// Legacy display client (NATIVE_LEGACY_DISPLAY=n)
+// Legacy display client (NATIVE_LEGACY_DISPLAY=n; the qualified lane's
+// NativeLegacyDisplay.cpp / NativeGOPPresenter.cpp / LegacyDisplayProbe.cpp
+// define every one of these when the display topic lands)
+#ifndef XNU_NATIVE_LEGACY_DISPLAY_QUALIFIED
 volatile uint32_t native_legacy_client_calls = 0;
 char native_legacy_client_class[64] = {0};
 volatile int native_legacy_client_pid = 0;
@@ -129,6 +142,7 @@ volatile uint32_t native_legacy_swap_validation_result = 0;
 volatile uint64_t native_legacy_transfer_bytes = 0;
 volatile uint32_t native_legacy_transfer_calls = 0;
 volatile int native_legacy_transfer_status = 0;
+#endif
 
 // Touch (sheng-touch off; the touch lane provides these when it lands)
 volatile uint32_t native_touch_seq = 0;
@@ -144,12 +158,11 @@ volatile int native_touch_ys[12] = {0};
 // these when its topic lands). Types match BootLog.c's extern declarations
 // byte for byte — the consumers index these arrays.
 
-// kern_exec-side counters this lane's patches never added (guarded sections
-// of the log's compose(); zeros mean the section never ran).
-volatile int native_cryptex_os_stage = 0;
-volatile int native_cryptex_os_status = 0;
-volatile int native_gestalt_cache_status = 0;
-volatile int native_ls_store_status = 0;
+// kern_exec-side counters: the zzyb-native-cryptex-os-view patch (upstream
+// f6e4012, Safari WebKit extensions from the OS cryptex) defines
+// native_cryptex_os_stage/status, native_gestalt_cache_status and
+// native_ls_store_status in kern_exec.c itself — no zeros to stub here any
+// more.
 
 // Buttons and backlight (no ButtonProbe/AppleARMBacklight bring-up lane)
 volatile int32_t native_buttons_stats[10] = {0};
@@ -247,5 +260,8 @@ volatile uint64_t native_adreno_import_fail_offset = 0;
 int (*native_adreno_dram_read32)(uint64_t, uint32_t *) = 0;
 int (*native_adreno_cached_read32)(uint64_t, uint32_t *) = 0;
 
-// Scanout-copy wait statistics (no GOP presenter lane)
+// Scanout-copy wait statistics (no GOP presenter lane; NativeGOPPresenter.cpp
+// defines this when the display topic lands)
+#ifndef XNU_NATIVE_LEGACY_DISPLAY_QUALIFIED
 volatile uint64_t native_gop_wait_stats[7] = {0};
+#endif

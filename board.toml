@@ -81,6 +81,11 @@ include = [
   "ShengUfs",
   "VirtioMmioBlock",
   "RamBlock",
+  # The display lane (CONFIG_XNU_NATIVE_LEGACY_DISPLAY=y): the component's
+  # NativeLegacyDisplay.cpp/NativeGOPPresenter.cpp compile through
+  # build-arm-driver.py inside build-native-legacy-display.py — no component:
+  # archive entry (its recipe is empty; the qualified archive is hand-built).
+  "GopFramebuffer",
   "XnuPrelink",
   "DarwinBoot",
   "VerifiedRoot",
@@ -137,6 +142,14 @@ archives = [
   # binds them to zero. BootProgressTelemetryDefs.c links those zeros
   # explicitly; the qualified providers replace them with their topics.
   "build-boot-progress-telemetry.py",
+  # The display lane (CONFIG_XNU_NATIVE_LEGACY_DISPLAY=y, 2026-10-27): the
+  # owned IOMobileFramebufferLegacy backend over the UEFI GOP framebuffer.
+  # Qualifies the 358-slot vtable + original-code byte gates against the
+  # donor candidate, stages the runtime-pinned audit product, and archives
+  # libNativeLegacyDisplay.late.a (force_loaded by the baseline). The
+  # displayless assert war (r43-r50) had no mechanism alternative — every
+  # SpringBoard-reaching board runs this lane (PLAN-display-lane.md).
+  "build-native-legacy-display.py",
   "build-libpthread-kernel.py",
   # Adreno740 (component + build-adreno740-kits.py) is deferred: the kit
   # embeds the board-local GPU inputs that upstream keeps out of git

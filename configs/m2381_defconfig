@@ -1,10 +1,10 @@
 # Kernel configuration of the m2381 image. CONFIG_XNU_<NAME> becomes XNU_<NAME> for the kernel build.
 # Schema v2 (2026-10-26): archive paths use the upstream component names
 # (VirtioMmioBlock), the storage ABI comes from the static nx729j binding
-# (build-storage-bindings.py → libStorageBindings.a, force-loaded below), and
-# NATIVE_LEGACY_DISPLAY is off until the IOMobileFramebufferLegacy evidence
-# stage exists (the v1 builder needed a staged display-analysis ABI audit;
-# the display path runs through the UEFI GOP offline-legacy-* arguments).
+# (build-storage-bindings.py → libStorageBindings.a, force-loaded below).
+# 2026-10-27: NATIVE_LEGACY_DISPLAY=y — the display-analysis ABI audit is
+# staged from the device repository pin and the display path runs through
+# the UEFI GOP offline-legacy-* arguments (PLAN-display-lane.md).
 
 CONFIG_XNU_BUILD_ARCHIVES=y
 CONFIG_XNU_SOURCE_CORECRYPTO14=y
@@ -38,10 +38,17 @@ CONFIG_XNU_NATIVE_PAN=y
 # launchd into a kernel panic (observed on hardware 2026-10-26). This ld64
 # errors on unresolved weak references (Apple's binds them to zero), so the
 # diagnostic's telemetry providers are linked as explicit zeros from
-# build-boot-progress-telemetry.py (force_loaded below); NATIVE_LEGACY_DISPLAY
-# stays off until its qualification topic lands.
+# build-boot-progress-telemetry.py (force_loaded below) minus the
+# legacy-display block, which the qualified lane provides for real.
 CONFIG_XNU_BOOT_PROGRESS=y
-CONFIG_XNU_NATIVE_LEGACY_DISPLAY=n
+# The display lane (2026-10-27, displayless 断言墙的机制解): the original
+# IOMobileFramebufferLegacy ABI is bound by build-native-legacy-display.py
+# (audit + 358-slot vtable + byte gates, same donor constants sheng runs),
+# the CPU presentation publishes displayConfiguration from the UEFI GOP
+# framebuffer, and SpringBoard's display-assert family stops firing. The
+# displayless fixup war (r43-r50) has no upstream mechanism alternative:
+# every SpringBoard-reaching board runs this lane.
+CONFIG_XNU_NATIVE_LEGACY_DISPLAY=y
 # n until the board-local GPU inputs exist: libAdreno740.a needs the
 # ShengGmu*Source.h OPP/bandwidth policy (docs/porting/gpu.md; kept out of
 # git upstream too) plus the .cache/firmware/sheng-gpu pinned blobs. Flip

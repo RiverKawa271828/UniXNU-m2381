@@ -72,9 +72,11 @@ CONFIG_XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,{tree}/build/io-storage-family/lib
 #   OWNER_*                the original-userland mount chain; it needs
 #                          VERIFIED_ROOT_PROBE and NATIVE_VIRTIO_BLOCK
 #   BOOT_PROGRESS          needs NATIVE_VIRTIO_BLOCK and OWNER_ROOT_AUDIT
-# NATIVE_LEGACY_DISPLAY stays n until its qualification topic lands; the
-# BootProgress telemetry zeros cover the display-side surfaces meanwhile.
-CONFIG_XNU_NATIVE_LEGACY_DISPLAY=n
+# NATIVE_LEGACY_DISPLAY=y (2026-10-27): the qualification topic landed —
+# build-native-legacy-display.py qualifies the owned display archive against
+# the donor original class, and the BootProgress telemetry drops its
+# legacy-display zeros for the real providers (same kernel as m2381_defconfig).
+CONFIG_XNU_NATIVE_LEGACY_DISPLAY=y
 CONFIG_XNU_NATIVE_MOBILE_DISPLAY=n
 CONFIG_XNU_NATIVE_ADRENO=n
 CONFIG_XNU_NATIVE_VIRTIO_BLOCK=y
