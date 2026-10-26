@@ -251,6 +251,12 @@ kernel_args = [
   # findmydeviced/assistantd SIGABRT, biomed exit 100 — that churned launchd
   # without reaching the UI stage).
   "sheng-lite=1",
+  # On top of lite (both lists combine in disabled.plist): the 61ef9181 boot
+  # showed transparencyd respawning ~3x/s at exit 100 (its transparency data
+  # store does not exist on the 32 MiB RAM seed), pinning launchd's bootstrap
+  # queue so the UI never started — 549 nonzero exits by t=404s. assistantd
+  # SIGABRT (Siri support, no accounts) and biomed (exit 100) churn alongside.
+  "sheng-disable-jobs=com.apple.transparencyd,com.apple.assistantd,com.apple.biomed",
   "boot-ui-focus3=Preferences",
   "boot-ui-focus4=SpringBoard",
   "sheng-smp=1",
