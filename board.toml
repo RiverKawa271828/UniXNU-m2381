@@ -274,6 +274,13 @@ kernel_args = [
   "ml-timeout-lock-panic-scale=40",
   "sheng-touch-hid=1",
   "sheng-data-persist=2",
+  # The UFS diagnostic log (BootLog.c): every 2 s the full diagnostic page,
+  # the kernel message buffer and the exec census (per process name, starts/
+  # exits, first-start second) go into the last 32 MiB of userdata (the
+  # default 1 GiB tail reserve, clear of the root image and the Data store).
+  # The r40 boot could only be read from photographs; this makes the queue
+  # pacing record survive power-off and read back over nura-min (NCM dd).
+  "sheng-log=1",
   # The seed excludes staged_system_apps by design (the fixture walk drops it);
   # SpringBoard without staged apps is the sheng production answer, and the
   # implementation ships in every kernel build (baseline late patch).

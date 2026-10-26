@@ -35,8 +35,23 @@ static unsigned seconds(void);
 enum {BpCensus = 448};   // every process name of a boot (int-213: 389 names, 56 kept)
 static struct {char name[24];unsigned short started,exited,first;} census[BpCensus];
 static unsigned census_count,census_lock,census_dropped;
+// Queue pacing meter (r40: ~1 spawn/s kept the boot queue crawling at 12+
+// minutes with no UI): every exec'd process bumps the total and the per-second
+// accumulator before the census lock, so no spawn is lost to contention.
+// spawn_prev is the completed previous second's count; two photographs then
+// give both the average and the instantaneous rate.
+static unsigned spawn_total,spawn_second=~0U,spawn_this,spawn_prev;
+static void spawn_note(void) {
+  __atomic_fetch_add(&spawn_total,1,__ATOMIC_RELAXED);
+  unsigned now=seconds();
+  unsigned previous=__atomic_load_n(&spawn_second,__ATOMIC_RELAXED);
+  if(now!=previous && __atomic_compare_exchange_n(&spawn_second,&previous,now,0,__ATOMIC_RELAXED,__ATOMIC_RELAXED))
+    __atomic_store_n(&spawn_prev,__atomic_exchange_n(&spawn_this,0,__ATOMIC_RELAXED),__ATOMIC_RELAXED);
+  __atomic_fetch_add(&spawn_this,1,__ATOMIC_RELAXED);
+}
 static void census_note(const char *name,int exited) {
   if(!name || !name[0])return;
+  if(!exited)spawn_note();
   if(__atomic_exchange_n(&census_lock,1,__ATOMIC_ACQUIRE)) {__atomic_fetch_add(&census_dropped,1,__ATOMIC_RELAXED);return;}
   unsigned i=0;
   while(i<census_count && strncmp(census[i].name,name,sizeof census[i].name-1))++i;
@@ -265,9 +280,11 @@ static void draw(unsigned now) {
   // Session/build label from the sheng-build-tag boot argument (e.g. ks-001, gpu-003), so a photograph says which image it is.
   if(build_tag[0]) snprintf(b,sizeof(b)," [%s] %s",build_tag,title); else snprintf(b,sizeof(b)," %s",title);
   bar(0, b, 0xffffffff, visible->reason && !visible->continuous ? BP_BAR_STOP : BP_BAR_LIVE);
-  snprintf(b,sizeof(b),"time=%us idle=%us IRQ=%llu monitor=%llu lost=%u root=%d procs=%d free=%u",
+  snprintf(b,sizeof(b),"time=%us idle=%us IRQ=%llu monitor=%llu lost=%u root=%d procs=%d free=%u spawn=%u %u/s",
     now, now-visible->activity_at, irq_count, thread_count, visible->dropped,
-    native_owner_root_accepted, nprocs, vm_page_free_count); line(1,b,0xffffffff);
+    native_owner_root_accepted, nprocs, vm_page_free_count,
+    __atomic_load_n(&spawn_total,__ATOMIC_RELAXED),
+    __atomic_load_n(&spawn_prev,__ATOMIC_RELAXED)); line(1,b,0xffffffff);
   snprintf(b,sizeof(b),"%s requests=%llu verified4K=%llu failures=%llu integrity=%u published=%u",
     native_virtio_ready && !native_ufs_blocks_published ? "OFFLINE VIRTIO" : "UFS",
     visible->reads,visible->verified,visible->failures,native_ufs_integrity_failures,native_ufs_blocks_published);
@@ -281,7 +298,10 @@ static void draw(unsigned now) {
   snprintf(b,sizeof(b),"TCR=%llx TTBR0=%llx TTBR1=%llx SCTLR=%llx",tcr,ttbr0,ttbr1,sctlr); line(3,b,0xffffffff);
   snprintf(b,sizeof(b),"last IRQ PC=%llx PSR=%llx SP=%llx (sample, not a fault diagnosis)",last_pc,last_psr,last_sp); line(4,b,0xffffffff);
   unsigned latest = visible->history_count ? (visible->history_count-1)%BP_HISTORY : 0;
-  snprintf(b,sizeof(b),"stage: %.106s",visible->history[latest].text); line(5,b,0xff00ffff);
+  // The age is the time since the last stage line went up (each exec attempt
+  // makes one): a growing age with healthy UFS/IIRQ numbers is a hung spawn,
+  // the blind spot the exit rows cannot show (a hung job never FAILs).
+  snprintf(b,sizeof(b),"stage +%us: %.94s",now-visible->history[latest].seconds,visible->history[latest].text); line(5,b,0xff00ffff);
   if(!__atomic_exchange_n(&exit_lock,1,__ATOMIC_ACQUIRE)) {
     exit_snapshot=exit_records;
     __atomic_store_n(&exit_lock,0,__ATOMIC_RELEASE);

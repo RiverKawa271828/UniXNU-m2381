@@ -68,14 +68,24 @@ fw_source = ROOT / 'kits/sheng/AdspFirmware.c'
 fw_obj = OUT / 'AdspFirmware.o'
 fw_command = [str(fw_source) if arg == str(policy_source) else str(fw_obj) if arg == str(policy_obj) else arg for arg in policy_command]
 subprocess.run(fw_command, cwd=policy_record['directory'], check=True, timeout=90)
+# The UFS diagnostic log writer (sheng-log=1, BootLog.c): its boot_log_tick is
+# what BootProgress.o's weak reference reaches, so it must be in this archive
+# and NOT stubbed in BootProgressTelemetryDefs.c. The osfmk-side template
+# (startup.o.json, like BootProgress.o above) is the one that carries the
+# private kern/ headers BootLog.c includes; the bsd template does not.
+log_source = ROOT / 'kits/sheng/BootLog.c'
+log_obj = OUT / 'BootLog.o'
+log_command = [str(log_source) if arg == str(fault_source) else str(log_obj) if arg == str(fault_obj) else arg for arg in fault_command]
+subprocess.run(log_command, cwd=record['directory'], check=True, timeout=90)
 
 archive = OUT / 'libBootProgress.a'
 archive.unlink(missing_ok=True)
-subprocess.run(['xcrun', 'ar', 'rcs', str(archive), str(obj), str(fault_obj), str(policy_obj), str(diag_obj), str(fw_obj)], check=True, timeout=30)
+subprocess.run(['xcrun', 'ar', 'rcs', str(archive), str(obj), str(fault_obj), str(policy_obj), str(diag_obj), str(fw_obj), str(log_obj)], check=True, timeout=30)
 (OUT / 'build-report.json').write_text(json.dumps({
     'watchdog_policy_sha256': hashlib.sha256(policy_source.read_bytes()).hexdigest(),
     'diag_sha256': hashlib.sha256(diag_source.read_bytes()).hexdigest(),
     'fault_sha256': hashlib.sha256(fault_source.read_bytes()).hexdigest(),
+    'log_sha256': hashlib.sha256(log_source.read_bytes()).hexdigest(),
     'source_sha256': hashlib.sha256(source.read_bytes()).hexdigest(),
     'lifecycle_sha256': hashlib.sha256((source.parent / 'BootProgressLifecycle.h').read_bytes()).hexdigest(),
     'core_sha256': hashlib.sha256((source.parent / 'BootProgressCore.h').read_bytes()).hexdigest(),
