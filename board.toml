@@ -274,6 +274,10 @@ kernel_args = [
   "ml-timeout-lock-panic-scale=40",
   "sheng-touch-hid=1",
   "sheng-data-persist=2",
+  # The seed excludes staged_system_apps by design (the fixture walk drops it);
+  # SpringBoard without staged apps is the sheng production answer, and the
+  # implementation ships in every kernel build (baseline late patch).
+  "sheng-staged-apps=1",
 ]
 
 [payload.adt]
