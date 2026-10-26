@@ -31,11 +31,16 @@ CONFIG_XNU_DT_PANIC_REGION=y
 CONFIG_XNU_ZONE_PGZ_ALIGNMENT_PROBE=y
 CONFIG_XNU_NATIVE_ARCH_TIMER=y
 CONFIG_XNU_NATIVE_PAN=y
-# n while the full BootProgress diagnostic is out of the archive plan: its
-# boot_progress_* call sites are strong references into libBootProgress.a.
-# The no-op stub archive (force_loaded below) satisfies ShengUfs's weak
-# boot_progress_poll — this ld64 errors on weak undefineds, unlike Apple's.
-CONFIG_XNU_BOOT_PROGRESS=n
+# The full BootProgress diagnostic: the kern_exec hook (XNU_OWNER_DATA_MOUNT
+# path) calls sheng_boot_watchdog_policy — BootWatchdogPolicy.c, which writes
+# launchd's disabled.plist so the unavailable watchdogd cannot panic the
+# kernel. Without the flag the hook compiles out and watchdogd SIGTRAPs
+# launchd into a kernel panic (observed on hardware 2026-10-26). This ld64
+# errors on unresolved weak references (Apple's binds them to zero), so the
+# diagnostic's telemetry providers are linked as explicit zeros from
+# build-boot-progress-telemetry.py (force_loaded below); NATIVE_LEGACY_DISPLAY
+# stays off until its qualification topic lands.
+CONFIG_XNU_BOOT_PROGRESS=y
 CONFIG_XNU_NATIVE_LEGACY_DISPLAY=n
 # n until the board-local GPU inputs exist: libAdreno740.a needs the
 # ShengGmu*Source.h OPP/bandwidth policy (docs/porting/gpu.md; kept out of
@@ -52,6 +57,6 @@ CONFIG_XNU_NATIVE_VIRTIO_BLOCK_ARCHIVE="{tree}/build/virtio-mmio-block-verified-
 CONFIG_XNU_VERIFIED_ROOT_ARCHIVE="{tree}/build/verified-root-os-xnu-bundle/libVerifiedRootProbe.a"
 # The static storage ABI archive: absolute symbols for IOBlockStorageDevice's
 # 190 dispatch slots, force-loaded next to the drivers that subclass it.
-CONFIG_XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,{tree}/build/io-storage-family/libStorageBindings.a -Wl,-force_load,{tree}/build/boot-progress-stub/libBootProgressStub.a"
+CONFIG_XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,{tree}/build/io-storage-family/libStorageBindings.a -Wl,-force_load,{tree}/build/boot-progress-telemetry/libBootProgressTelemetry.a"
 CONFIG_XNU_NATIVE_MOBILE_DISPLAY=n
 CONFIG_XNU_ARMVIRT_PLATFORM=n

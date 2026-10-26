@@ -45,7 +45,7 @@ CONFIG_XNU_TRUST_CACHE_RUNTIME=y
 CONFIG_XNU_NATIVE_CS_HASH_CACHE=y
 
 CONFIG_XNU_CRYPTO_BOOTSTRAP="prelinked"
-CONFIG_XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,{tree}/build/io-storage-family/libStorageBindings.a -Wl,-force_load,{tree}/build/boot-progress-stub/libBootProgressStub.a"
+CONFIG_XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,{tree}/build/io-storage-family/libStorageBindings.a -Wl,-force_load,{tree}/build/boot-progress-telemetry/libBootProgressTelemetry.a"
 
 # Off for this pass. Each line names what it would require:
 #
@@ -72,6 +72,8 @@ CONFIG_XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,{tree}/build/io-storage-family/lib
 #   OWNER_*                the original-userland mount chain; it needs
 #                          VERIFIED_ROOT_PROBE and NATIVE_VIRTIO_BLOCK
 #   BOOT_PROGRESS          needs NATIVE_VIRTIO_BLOCK and OWNER_ROOT_AUDIT
+# NATIVE_LEGACY_DISPLAY stays n until its qualification topic lands; the
+# BootProgress telemetry zeros cover the display-side surfaces meanwhile.
 CONFIG_XNU_NATIVE_LEGACY_DISPLAY=n
 CONFIG_XNU_NATIVE_MOBILE_DISPLAY=n
 CONFIG_XNU_NATIVE_ADRENO=n
@@ -115,7 +117,11 @@ CONFIG_XNU_OWNER_CACHE_STARTUP=y
 CONFIG_XNU_OWNER_BOOT_MANIFEST=y
 CONFIG_XNU_OWNER_UNION_SYSTEMOS=y
 CONFIG_XNU_OWNER_DATA_MOUNT=y
-CONFIG_XNU_BOOT_PROGRESS=n
+# Same rationale as m2381_defconfig: the kern_exec hook needs
+# XNU_BOOT_PROGRESS=1 so BootWatchdogPolicy stops the watchdogd panic, and
+# the telemetry zeros from build-boot-progress-telemetry.py satisfy this
+# ld64's unresolved-weak-reference error.
+CONFIG_XNU_BOOT_PROGRESS=y
 
 # The Data volume UUID the OWNER_DATA_MOUNT path matches; ci-owner-policy.sh
 # forces the same UUID into the generated Data seed (diskutil changeVolumeUUID).

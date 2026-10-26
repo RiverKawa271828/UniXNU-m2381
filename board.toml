@@ -130,13 +130,13 @@ archives = [
   "component:RamBlock",
   "build-storage-transport-record.py NativeRamBlock --archive build/ram-block",
   "build-mockfs-fixture.py",
-  # NativeUfs/ShengUfs null-guard boot_progress_poll, and this ld64 errors on
-  # weak undefined references (Apple's binds them to zero — how the upstream
-  # sheng board links the full diagnostic). The no-op stub satisfies the
-  # driver reference; the full BootProgress diagnostic (whose 122 telemetry
-  # weak externals assume the Apple-linker semantics and the sheng-side
-  # monitor surfaces) returns with the progress-UI topic.
-  "build-boot-progress-stub.py",
+  # The real BootProgress diagnostic (XNU_BOOT_PROGRESS=1: BootWatchdogPolicy
+  # answers launchd's watchdogd panic-on-crash) reads the sheng monitor
+  # surfaces this board leaves off (legacy display, touch, Adreno, cpufreq,
+  # Wi-Fi), and this ld64 errors on unresolved weak references where Apple's
+  # binds them to zero. BootProgressTelemetryDefs.c links those zeros
+  # explicitly; the qualified providers replace them with their topics.
+  "build-boot-progress-telemetry.py",
   "build-libpthread-kernel.py",
   # Adreno740 (component + build-adreno740-kits.py) is deferred: the kit
   # embeds the board-local GPU inputs that upstream keeps out of git
