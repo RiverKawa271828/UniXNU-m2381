@@ -239,14 +239,18 @@ kernel_args = [
   "offline-mobile-graphics-client=1",
   "offline-mobile-graphics-load=1",
   "offline-apfs-load=1",
-  "boot-progress=1",                 # diagnostics page during bring-up; bump to 2 at stage 7
+  "boot-progress=2",                 # diagnostics page at the sheng/fuxi production level
   "-apfs_shared_datavolume",
   "offline-key-events=1",
   "native-ufs-root=1",
   "sheng-pmgr=2",
   "armcpu-diagnostics=1",
   "sheng-disable-watchdogd=1",
-  "sheng-disable-jobs=com.apple.identityservicesd,com.apple.locationd,com.apple.CommCenter,com.apple.bluetoothd",
+  # The sheng production disable set (the lite list's first four are these same
+  # jobs; the rest are the crash/XPC-wait loops — on hardware 2026-10-26:
+  # findmydeviced/assistantd SIGABRT, biomed exit 100 — that churned launchd
+  # without reaching the UI stage).
+  "sheng-lite=1",
   "boot-ui-focus3=Preferences",
   "boot-ui-focus4=SpringBoard",
   "sheng-smp=1",
