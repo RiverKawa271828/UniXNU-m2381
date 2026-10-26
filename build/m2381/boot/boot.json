@@ -1,7 +1,7 @@
 {
-  "kernel_sha256": "308518eff6a224186af83458de80a1ee6cea598a059cc4c786149b33ca6cec7c",
-  "fd_sha256": "201a2c87828e8e186051f0e081d2b84eea21b9ce65b646293dbe15bf99ef0486",
-  "image_sha256": "40f2a1996cb84e5010796efff20e8baa06802d6b4b6ca53ad962f9da50025bf1",
+  "kernel_sha256": "6692ec7aae92b5bf0f192b1757c70635576dc1f913690636de01d72f0a5d3005",
+  "fd_sha256": "daad477fefd81c0cad453b21432da5d3730d98d9c00d9fc3c69a97a9346ae5f5",
+  "image_sha256": "a1d51f048bd206b342a19f8faba9173a980a5b84a72dcdab776a8fd3ea9ef4dc",
   "image_bytes": 1662976,
   "header_version": 4,
   "os_version": "15.0.0",

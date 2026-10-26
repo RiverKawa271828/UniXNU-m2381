@@ -256,7 +256,13 @@ kernel_args = [
   # store does not exist on the 32 MiB RAM seed), pinning launchd's bootstrap
   # queue so the UI never started — 549 nonzero exits by t=404s. assistantd
   # SIGABRT (Siri support, no accounts) and biomed (exit 100) churn alongside.
-  "sheng-disable-jobs=com.apple.transparencyd,com.apple.assistantd,com.apple.biomed",
+  # liveactivitiesd joined from the 764539c9 boots on: its SessionSyncEngine
+  # Keybag init fatals without SEP-backed AppleKeyStore keys (sheng never hits
+  # this because its LEGACY_DISPLAY lane compiles KeyStoreProbe + the arg
+  # works). Until the AppleKeyStoreState component + KeyStoreProbe are wired
+  # into the =n lane, disabling is the upstream bring-up-isolation answer
+  # (Mach lookups fail fast instead of the ~1/s respawn treadmill).
+  "sheng-disable-jobs=com.apple.transparencyd,com.apple.assistantd,com.apple.biomed,com.apple.liveactivitiesd",
   "boot-ui-focus3=Preferences",
   "boot-ui-focus4=SpringBoard",
   "sheng-smp=1",
