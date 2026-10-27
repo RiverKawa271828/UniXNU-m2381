@@ -106,9 +106,19 @@ static int capture(proc_t p, void *arg)
     snprintf(buf, sizeof buf, "UKC k%u st%u +%llx n%u g%u",
              probe_ticks, probe_status, slide, nonzero, garbage);
     put(4, buf, sizeof buf);
-    snprintf(buf, sizeof buf, "M%llx B%llx",
-             window_cur[(SLOT_MAINSCREEN + slide - UK_DIRTY_BASE) / 8],
-             window_cur[(SLOT_BGTC + slide - UK_DIRTY_BASE) / 8]);
+    // r64 postmortem: the slide was added here a second time (the read above
+    // already started at UK_DIRTY_BASE + slide), indexing ~45M slots past the
+    // buffer — the one and only r64 capture died at this load and the t-series
+    // was lost. window_cur is indexed by offset FROM UK_DIRTY_BASE, no slide.
+    if (SLOT_MAINSCREEN >= UK_DIRTY_BASE && SLOT_BGTC >= UK_DIRTY_BASE &&
+        SLOT_MAINSCREEN < UK_DIRTY_BASE + UK_DIRTY_SIZE &&
+        SLOT_BGTC < UK_DIRTY_BASE + UK_DIRTY_SIZE) {
+        snprintf(buf, sizeof buf, "M%llx B%llx",
+                 window_cur[(SLOT_MAINSCREEN - UK_DIRTY_BASE) / 8],
+                 window_cur[(SLOT_BGTC - UK_DIRTY_BASE) / 8]);
+    } else {
+        snprintf(buf, sizeof buf, "M- B-");
+    }
     put(5, buf, sizeof buf);
     snprintf(buf, sizeof buf, "G k%u +%llx v%llx",
              first_garbage_tick, first_garbage_off, first_garbage_val);
