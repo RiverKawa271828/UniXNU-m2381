@@ -1,4 +1,4 @@
-# Round index (r51-r58, workspace commits carry the full detail)
+# Round index (r51-r59, workspace commits carry the full detail)
 
 Round naming: rNN = one payload image + one device verdict. Images land
 at `out/m2381/payload-rNN-<sha8>.img` (flat path mandatory, r49).
@@ -14,11 +14,12 @@ at `out/m2381/payload-rNN-<sha8>.img` (flat path mandatory, r49).
 | r55e | b060b512 | Reader channel live (1d6b:0104, magic=SHLOG001); in-shell flash readback closed; first full iOS judgment: applied=7, real swaps W1-W3, wall = displayIdentity assert |
 | r56 | db3a7392 | WASTED ROUND: build missing --data-ramdisk/--trust-cache -> ESP without Data seed/initrd line/trustcache -> Data mount ENOENT panic (t=1s), applied=0; recipe red line entered (three flags mandatory, ESP four-item check) |
 | r57 | 1e7ea60b | displayIdentity wall BROKEN: applied=8 (fixup 9 executed), real swaps W1-W3 pulled forward to t=85s, 178 procs / 907 spawns, SpringBoard drew the boot-progress flower on the panel; new wall = XBApplicationController.m:120 assert 'invalid mainDisplay configuration' (SIGABRT x560 from t=66s, isMainDisplay==0 -> cbz/cbnz pair into handleFailureInMethod); in-reader flash readback == image sha | flashed + judged 2026-10-27 |
-| r58 | d27c4f36 | fixup 10a/10b (NOP the cbz/cbnz pair @ .37,2526b84/2526b90, VA 0x2028d6b84/0x2028d6b90) -> 18 fixups; full-table expected-byte validation vs cache, ADT 630455ac with PackedRAMDisk, ESP four-item check all green; NOT YET FLASHED (recovery_a only + set_active b) | built 2026-10-27 |
+| r58 | d27c4f36 | XB assert wall BROKEN (applied=11, SpringBoard sig6 = 0); SB started loading the application library (SBApplicationController init -> launch-image ingestion); new wall = SIGSEGV x588 at +[UIScreen _mainScreenThreadSafeTraitCollection]+0x2c derefing garbage x19=0xf00 (FAR 0xfe0; 12-frame bl-target-verified chain); in-reader flash readback == image sha | flashed + judged 2026-10-27 |
+| r59 | a9144765 | fixup 13a/13b: +[UIScreen mainScreen] entry + _mainScreenThreadSafeTraitCollection entry both mov x0,#0;ret (return nil, r49 getter shape; .03,3255d40/341e6d8; 13a takes over the dormant r46 fixup 7 semantics) -> 20 fixups; full-table validation, ADT f60ecf0c, ESP four-item check all green; NOT YET FLASHED (recovery_a only + set_active b) | built 2026-10-27 |
 
-Current resident set: boot_b 289614ba + recovery_a = r57 1e7ea60b
-(readback verified) + userdata fd43e70 (CI iOS root); next flash = r58
-d27c4f36 recovery_a only. Rollback images live only in
+Current resident set: boot_b 289614ba + recovery_a = r58 d27c4f36
+(readback verified) + userdata fd43e70 (CI iOS root); next flash = r59
+a9144765 recovery_a only. Rollback images live only in
 the nura repository (workspace red line 6).
 
 ABL facts (r55d/r55e): same-slot consecutive boot failures exhaust the
