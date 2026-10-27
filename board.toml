@@ -305,12 +305,18 @@ kernel_args = [
   # reconsidered once the AKS diagnostics row shows real opens/calls; kept
   # disabled one more round for change attribution.
   "sheng-disable-jobs=com.apple.transparencyd,com.apple.assistantd,com.apple.biomed,com.apple.liveactivitiesd",
-  "boot-ui-focus3=Preferences",
+  # boot-ui-focus3=Preferences dropped in r64: the command line hit its 1000-byte
+  # limit when uikit-cache-probe=1 joined (r45-era diagnostic focus; judgments
+  # since r58 read the SpringBoard slot only, which focus4 keeps tracing).
   "boot-ui-focus4=SpringBoard",
   "sheng-smp=1",
   "sheng-cpufreq=3",
   "sheng-touch=4",
   "sheng-aks=1",
+  # r64 cache-global audit: the UIKitCore __DATA_DIRTY watcher (ext rows 4-7,
+  # 2 s t-series over the bgTC/mainScreen singleton slots; display archive,
+  # uikit-cache-proc=<name> retargets, default SpringBoard).
+  "uikit-cache-probe=1",
   "sheng-gpu-power=9",
   "sheng-gpu-metal=1",
   "sheng-fb-gpu=1",

@@ -484,10 +484,13 @@ void native_legacy_display_probe(void) {
 }
 void native_legacy_display_late_probe(void);
 extern void native_keystore_probe(void);
+extern void native_uikit_cache_probe_start(void);
 void native_legacy_display_late_probe(void) {
     // The AppleKeyStore stand-in (sheng's board integration: the offline-key-events
     // + sheng-aks gates live inside the probe) publishes before SB's keybag stage.
     native_keystore_probe();
+    // r64 cache-global audit: the UIKitCore __DATA_DIRTY watcher (uikit-cache-probe=1).
+    native_uikit_cache_probe_start();
     IOService *display=pendingLegacyDisplay;if(!display)return;pendingLegacyDisplay=nullptr;
     native_legacy_surface_status=OSKextLoadKextWithIdentifier("com.apple.iokit.IOSurface");
     OSDictionary *matching=IOService::nameMatching("IOCoreSurfaceRoot");

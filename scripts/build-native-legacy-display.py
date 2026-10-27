@@ -349,6 +349,33 @@ keystore_cmd = [str(ROOT / 'kits/sheng/KeyStoreProbe.cpp') if str(arg) == str(so
                 else str(OUT / 'KeyStoreProbe.o') if str(arg) == str(OUT / 'LegacyDisplayProbe.o')
                 else arg for arg in cmd]
 run(keystore_cmd, cwd=r['directory'])
+# r64 cache-global audit: the UIKitCore __DATA_DIRTY watcher (uikit-cache-probe=1;
+# started from native_legacy_display_late_probe, publishes ext rows 4-7). It
+# reads the private task/vm_map ABI of this exact kernel source, so it compiles
+# through the kernel's own startup.o command record (the BootProgress/
+# BootFaultProbe lane's derivation), not through the IOKit display command above.
+uikit_record_path = ROOT / 'build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/osfmk/DEVELOPMENT/startup.o.json'
+require(uikit_record_path.is_file(), 'startup.o compile record missing (kernel build must have run in this tree)')
+uikit_record = json.loads(uikit_record_path.read_text().strip().rstrip(','))
+uikit_src = ROOT / 'package/UIKitCacheProbe.c'
+uikit_obj = OUT / 'UIKitCacheProbe.o'
+uikit_cmd = []
+args = uikit_record['arguments']
+i = 0
+while i < len(args):
+    arg = args[i]
+    if arg == uikit_record['file']:
+        uikit_cmd.append(str(uikit_src))
+    elif arg in ('-o', '-MF', '-MT', '-MJ'):
+        if arg == '-o':
+            uikit_cmd += ['-o', str(uikit_obj)]
+        i += 1
+    elif not arg.startswith(('-W',)):
+        uikit_cmd.append(arg)
+    i += 1
+uikit_cmd += ['-mgeneral-regs-only', '-Wno-unused-parameter',
+              '-I', str(ROOT / '.cache/xnu-work/osfmk')]
+run(uikit_cmd, cwd=uikit_record['directory'])
 print(run(['python3', ROOT / 'scripts/build-arm-driver.py', 'AppleKeyStoreState'], text=True), end='')
 keystore_dir = ROOT / 'build/apple-key-store-state'
 # The recipe names the object by the component's legacy runtime name (the
@@ -372,11 +399,12 @@ require(code((gop / 'NativeGOPPresenter.o').read_bytes(), macho((gop / 'NativeGO
         code(gop_late.read_bytes(), macho(gop_late.read_bytes())),
         'Owned presenter instructions unchanged by late init staging')
 run(['xcrun', 'ar', 'rcs', archive, late, OUT / 'original-bindings.o', OUT / 'LegacyDisplayProbe.o',
-     OUT / 'KeyStoreProbe.o', OUT / 'LegacyDisplayDPUSubstitute.o', keystore_late, gop_late])
+     OUT / 'KeyStoreProbe.o', OUT / 'UIKitCacheProbe.o', OUT / 'LegacyDisplayDPUSubstitute.o', keystore_late, gop_late])
 sources = [ROOT / 'drivers/GopFramebuffer/NativeLegacyDisplay.cpp',
            ROOT / 'drivers/GopFramebuffer/NativeLegacyRequest.h',
            source,
            ROOT / 'kits/sheng/KeyStoreProbe.cpp',
+           ROOT / 'package/UIKitCacheProbe.c',
            ROOT / 'drivers/AppleKeyStoreState/NativeKeyStoreEvents.cpp',
            dpu,
            ROOT / 'kits/sheng/OriginalLegacyFramebufferABI.h',
@@ -393,5 +421,5 @@ sources = [ROOT / 'drivers/GopFramebuffer/NativeLegacyDisplay.cpp',
     virtual_entries=358, owned_entries=owned, inherited_native_entries=native,
     guarded_backend_leaves=[i for i in pure if i not in (213, 337)],
     original_instructions_modified=False, driver_initialized=False, display_presented=False,
-    desktop=False, probe_fleet='m2381-trimmed+keystore'), indent=2) + '\n')
+    desktop=False, probe_fleet='m2381-trimmed+keystore+uikitcache'), indent=2) + '\n')
 print('Built genuine original Legacy inheritance/dispatch; seven backend leaves still guarded, runtime lifecycle unqualified')
