@@ -84,8 +84,18 @@ def main():
     if not args.page and not args.spawn and not args.all:
         args.all = True  # default: every slot, chronological
 
+    # BootLog.c (sheng) writes the header last in each round, so a reader must
+    # never trust a slot the header does not count yet: each boot restarts the
+    # ring at slot 0, and slots at or past slots_written are residue from a
+    # previous boot (the window survives power-off and is never cleared).
+    counted = h["slots_written"]
+    truncated = counted <= h["slot_count"]
+    if truncated:
+        print(f"# truncating to the {counted} slots the header counts "
+              f"(slots {counted}..{h['slot_count'] - 1} are residue from a previous boot)",
+              file=sys.stderr)
     slots = []
-    for index in range(h["slot_count"]):
+    for index in range(h["slot_count"] if not truncated else counted):
         at = (h["slot_first"] + index * h["slot_blocks"]) * BLOCK
         raw = data[at:at + h["slot_blocks"] * BLOCK]
         text = raw.decode("ascii", "replace")
