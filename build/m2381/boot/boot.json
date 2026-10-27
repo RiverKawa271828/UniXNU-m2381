@@ -1,8 +1,8 @@
 {
-  "kernel_sha256": "6692ec7aae92b5bf0f192b1757c70635576dc1f913690636de01d72f0a5d3005",
-  "fd_sha256": "daad477fefd81c0cad453b21432da5d3730d98d9c00d9fc3c69a97a9346ae5f5",
-  "image_sha256": "a1d51f048bd206b342a19f8faba9173a980a5b84a72dcdab776a8fd3ea9ef4dc",
-  "image_bytes": 1662976,
+  "kernel_sha256": "c2ca64860aeef3f2c34ede28641f5e9aac955a38e199101eddd1d3d327a93842",
+  "fd_sha256": "7237ea09d0c7b9a9b1f6bd584cb93b4982e0dac0b2c7aa6e3c320367a4c55da4",
+  "image_sha256": "289614baa5257cde89ad0cc2578f61688b0d7585ab80a4e515730719497226bf",
+  "image_bytes": 1269760,
   "header_version": 4,
   "os_version": "15.0.0",
   "os_patch_level": "2025-11",

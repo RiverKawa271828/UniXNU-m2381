@@ -198,7 +198,12 @@ packages = [
 ]
 
 [firmware.defines]
-ENABLE_SECUREBOOT = "1"
+# Secure Boot is OFF: the forensic log reader is an unsigned Linux PE loaded
+# with LoadImage from the payload volume (FLASHING.md §7); the iOS chain does
+# not depend on it — kernel.macho is not a PE and its trust travels in the
+# trust cache / AMFI, and every module the firmware itself runs lives in the
+# FV, which never goes through the LoadImage verification path.
+ENABLE_SECUREBOOT = "0"
 DEVICE_MODEL = "m2381"
 MEMORY_PROTECTION = "TRUE"
 SHIP_MODE = "FALSE"
