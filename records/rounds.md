@@ -1,4 +1,4 @@
-# Round index (r51-r60, workspace commits carry the full detail)
+# Round index (r51-r61, workspace commits carry the full detail)
 
 Round naming: rNN = one payload image + one device verdict. Images land
 at `out/m2381/payload-rNN-<sha8>.img` (flat path mandatory, r49).
@@ -16,11 +16,12 @@ at `out/m2381/payload-rNN-<sha8>.img` (flat path mandatory, r49).
 | r57 | 1e7ea60b | displayIdentity wall BROKEN: applied=8 (fixup 9 executed), real swaps W1-W3 pulled forward to t=85s, 178 procs / 907 spawns, SpringBoard drew the boot-progress flower on the panel; new wall = XBApplicationController.m:120 assert 'invalid mainDisplay configuration' (SIGABRT x560 from t=66s, isMainDisplay==0 -> cbz/cbnz pair into handleFailureInMethod); in-reader flash readback == image sha | flashed + judged 2026-10-27 |
 | r58 | d27c4f36 | XB assert wall BROKEN (applied=11, SpringBoard sig6 = 0); SB started loading the application library (SBApplicationController init -> launch-image ingestion); new wall = SIGSEGV x588 at +[UIScreen _mainScreenThreadSafeTraitCollection]+0x2c derefing garbage x19=0xf00 (FAR 0xfe0; 12-frame bl-target-verified chain); in-reader flash readback == image sha | flashed + judged 2026-10-27 |
 | r59 | a9144765 | UIScreen SIGSEGV wall SEALED (applied=13, sig11 = 0); new wall = traitCollection-nil assert x573 (__UIGetCurrentFallbackTraitCollection line 117; REASON string -> CFString slot -> sole xref pinned the raiser; SBCoverSheetPresentationManager/SBWallpaperController chain bl-target verified); in-reader flash readback == image sha | flashed + judged 2026-10-27 |
-| r60 | edabbafd | fixup 14: redirect the fetch pair at __UIGetCurrentFallbackTraitCollection+0xa8 (.03,3261c50, VA 0x18a00dc50) to bl +[UITraitCollection _backgroundThreadFallbackTraitCollection]; mov x19,x0 — UIKit's own lazily-constructed display-independent fallback TC, heals the whole fallback-trait family -> 21 fixups; full-table validation, ADT 1dd13c1b, ESP four-item check all green; NOT YET FLASHED (recovery_a only + set_active b) | built 2026-10-27 |
+| r60 | edabbafd | traitCollection-nil wall BROKEN (applied=14, 'returned nil' zero occurrences); new wall = same getter's second raise block (+0x124): "unspecified values" x758 — fixup 14's _backgroundThreadFallbackTraitCollection is deliberately all-unspecified (scale 0.0); in-reader flash readback == image sha | flashed + judged 2026-10-27 |
+| r61 | 169f160c | fixup 15a/15b: rewrite both scale-check branches to unconditional success (.03,3261c8c cbz/b.gt -> b success/nop; .03,3261cec b.le -> b success keeps ldr) — getter returns the real background TC, all three raise blocks unreachable -> 23 fixups; full-table validation, ADT f6dba410, ESP four-item check all green; NOT YET FLASHED (recovery_a only + set_active b) | built 2026-10-27 |
 
-Current resident set: boot_b 289614ba + recovery_a = r59 a9144765
-(readback verified) + userdata fd43e70 (CI iOS root); next flash = r60
-edabbafd recovery_a only. Rollback images live only in
+Current resident set: boot_b 289614ba + recovery_a = r60 edabbafd
+(readback verified) + userdata fd43e70 (CI iOS root); next flash = r61
+169f160c recovery_a only. Rollback images live only in
 the nura repository (workspace red line 6).
 
 ABL facts (r55d/r55e): same-slot consecutive boot failures exhaust the
