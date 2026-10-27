@@ -220,6 +220,11 @@ title = "m2381 first boot: source 4K XNU to console"
 dram_size = "0x400000000"            # [DEVICE] 16 GiB LPDDR5X
 skip_setup_tool = "scripts/seed-data-skip-setup.py"   # used by --skip-setup
 panic_screen = true
+# The forensic log reader (FLASHING.md §7): a type="linux" entry that boots
+# the SHLOG-window reader (Linux EFI-stub kernel + busybox initramfs) from
+# the payload volume; files live in .cache/forensic (build with
+# forensic/build-forensic-reader.py).
+forensic = true
 # sha256 of the trust caches of this 21H461 build: the two IM4P members
 # (computed from the IPSW members fetched via Apple CDN range requests,
 # CRC-32 verified, 2026-10-24) and the flat two-module bundle made by

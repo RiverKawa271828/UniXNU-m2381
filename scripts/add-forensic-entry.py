@@ -6,6 +6,13 @@ every ./unixnu payload; then copy the image to the flat payload-rNN-<sha>.img
 name as usual. The entry sits behind "xnu" in the menu; booting it runs the
 reader, exiting it (or /bin/rebootbl) returns to the UniXNU menu.
 
+r55 lesson (do not regress): overwriting unixnu.toml through its 8.3 short
+name (UNIXNU~1.TOM) destroys the LFN entry — Mu's FAT driver then cannot
+open \EFI\UniXNU\unixnu.toml, drops the whole config and the menu falls
+back to the built-in action list ("no boot entry found"). Always mdel the
+old file and mcopy the new one under the LONG name; verify by reading the
+file back through the LFN path before publishing.
+
 usage: add-forensic-entry.py <payload.img> [--kernel FILE] [--initrd FILE]
        (defaults: temp/forensic-esp/forensic-{kernel.efi,initrd.img})
 """
@@ -15,6 +22,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+IMAGE_TOML = '::/EFI/UniXNU/unixnu.toml'
 ENTRY = (
     '\n[[entry]]\nid = "forensic"\ntitle = "m2381 forensic log reader"\n'
     'type = "linux"\npath = "Payloads/forensic-kernel.efi"\n'
@@ -23,9 +31,14 @@ ENTRY = (
 )
 
 
-def mcopy(image, local, target):
-    subprocess.run(['mcopy', '-i', str(image), '-o', str(local), target],
-                   check=True)
+def run(*argv):
+    subprocess.run(list(argv), check=True)
+
+
+def read_toml(image):
+    out = subprocess.run(['mcopy', '-i', str(image), '-s', IMAGE_TOML, '-'],
+                         capture_output=True, check=True)
+    return out.stdout.decode()
 
 
 def main():
@@ -45,18 +58,25 @@ def main():
 
     with tempfile.TemporaryDirectory() as td:
         toml = Path(td) / 'unixnu.toml'
-        subprocess.run(['mcopy', '-i', str(a.image),
-                        '-s', '::/EFI/UNIXNU/UNIXNU~1.TOM', str(toml)],
-                       check=True)
-        text = toml.read_text()
-        if 'id = "forensic"' in text:
-            print('forensic entry already present; replacing files only')
+        toml.write_text(read_toml(a.image))
+        if 'id = "forensic"' in toml.read_text():
+            print('forensic entry already present; rewriting files only')
         else:
-            toml.write_text(text + ENTRY)
-            mcopy(a.image, toml, '::/EFI/UNIXNU/UNIXNU~1.TOM')
-        mcopy(a.image, a.kernel, '::/EFI/UNIXNU/PAYLOADS/FORENSIC~1.EFI')
-        mcopy(a.image, a.initrd, '::/EFI/UNIXNU/PAYLOADS/FORENSIC~1.IMG')
-    print(f'forensic entry added to {a.image}')
+            # mdel first, then mcopy under the LONG name: overwriting in place
+            # keeps the stale 8.3 entry and loses the LFN (r55 boot failure).
+            run('mdel', '-i', str(a.image), IMAGE_TOML)
+            run('mcopy', '-i', str(a.image), str(toml), IMAGE_TOML)
+        # new files: LFN entries are created by mcopy automatically
+        run('mcopy', '-i', str(a.image), '-o', str(a.kernel),
+            '::/EFI/UniXNU/Payloads/forensic-kernel.efi')
+        run('mcopy', '-i', str(a.image), '-o', str(a.initrd),
+            '::/EFI/UniXNU/Payloads/forensic-initrd.img')
+
+    # post-verify the way the boot manager reads it: LFN path
+    text = read_toml(a.image)
+    if 'id = "forensic"' not in text:
+        sys.exit('post-verify failed: unixnu.toml not readable via LFN')
+    print(f'forensic entry added to {a.image} (LFN read-back OK)')
 
 
 if __name__ == '__main__':
