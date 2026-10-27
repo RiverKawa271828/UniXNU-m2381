@@ -99,11 +99,17 @@ static int capture(proc_t p, void *arg)
     if (probe_target[0] && strcmp(name, probe_target) != 0) return PROC_RETURNED;
     task_t task = proc_task(p);
     if (!task) return PROC_RETURNED;
-    task_lock(task);
-    uint64_t slide = (uint64_t)task->task_shared_region_slide;
+    // get_task_map_reference takes the task lock ITSELF (bsd_kern.c:386) —
+    // r65a held task_lock across it and recursive-acquired the mutex into
+    // "unexpectedly owned" panic @lock_mtx.c:175 on the first capture. No
+    // explicit task lock here: the map reference handles !active, and
+    // task_shared_region_slide is written once when the shared region is
+    // mapped and read-only afterwards, so an unlocked aligned read is fine.
     vm_map_t map = get_task_map_reference(task);
-    task_unlock(task);
-    if (!map || !slide) return PROC_RETURNED;  // no shared cache = no UIKit window
+    if (!map) return PROC_RETURNED;
+    uint64_t slide = (uint64_t)task->task_shared_region_slide;
+    vm_map_deallocate(map);
+    if (!slide) return PROC_RETURNED;  // no shared cache = no UIKit window
 
     kern_return_t kr = vm_map_read_user(map, (vm_map_offset_t)(UK_DIRTY_BASE + slide),
                                         window_cur, UK_DIRTY_SIZE);
