@@ -29,14 +29,22 @@ CMDLINE = ('earlycon=efifb console=tty1 loglevel=4 consoleblank=0 '
 
 
 def cpio(entries):
-    """newc archive; entries are (path, mode, data) with directories first."""
+    """newc archive; entries are (path, mode, data) with directories first.
+
+    The kernel's initramfs parser reads exactly 13 hex fields (a 110-byte
+    header: ino..namesize+check, namesize includes the NUL). r55d shipped a
+    12-field header (no check, namesize one short) and every name after the
+    first was misaligned; the kernel rejected it with "Initramfs unpacking
+    failed: damaged header" and the boot fell to a root-mount panic.
+    """
     out = bytearray()
     ino = 0
     for name, mode, data in entries + [('TRAILER!!!', 0, b'')]:
         ino += 1
         path = name.encode() + b'\0'
-        fields = [ino, mode, 0, 0, 1, 0, len(data), 0, 0, 0, 0, len(path) - 1]
-        out += b'070701' + b''.join(b'%08X' % v for v in fields) + path
+        out += b'070701' + b''.join(
+            b'%08x' % v for v in
+            (ino, mode, 0, 0, 1, 0, len(data), 0, 0, 0, 0, len(path), 0)) + path
         out += b'\0' * (-len(out) % 4) + data
         out += b'\0' * (-len(out) % 4)
     return bytes(out)
