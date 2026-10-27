@@ -5,10 +5,14 @@ Forked from sheng's scripts/build-native-legacy-display.py for the same 21H461
 donor (the original IOMobileGraphicsFamily executable and every original-code
 VA below are donor constants, re-verified by the byte gates each build).
 
-Trimmed against sheng: the sheng probe fleet (HID, KeyStore, touch, cpufreq,
+Trimmed against sheng: the sheng probe fleet (HID, touch, cpufreq,
 GpuPower, BootLog, BootReset, BootProcess/BootUiTrace) is neither built nor
 archived — this board reaches SpringBoard through the display lane alone
 (NATIVE_HID_INPUT=n, no touch/GPU topic; BootLog lives in libBootProgress.a).
+Restored 2026-10-27 (r62): KeyStoreProbe + the AppleKeyStoreState component —
+every board past the SpringBoard wall on this donor (sheng, asteroids,
+oneplus13t) carries the AppleKeyStore stand-in; without it SpringBoard never
+finishes booting (asteroids T20-T29).
 Kept: the audit, the ABI header (drift-checked against the committed
 package copy), the 358-entry vtable qualification, the original-code byte
 gates, the bindings assembly, the late-init staging and the GOP presenter.
@@ -337,6 +341,26 @@ dpu = ROOT / 'kits/sheng/LegacyDisplayDPUSubstitute.cpp'
 dpu_cmd = [str(dpu) if str(arg) == str(source) else str(OUT / 'LegacyDisplayDPUSubstitute.o')
            if str(arg) == str(OUT / 'LegacyDisplayProbe.o') else arg for arg in cmd]
 run(dpu_cmd, cwd=r['directory'])
+# The AppleKeyStore stand-in (the sheng board integration this board's
+# SpringBoard-finishes-boot path was missing: the component answers libaks/
+# MobileKeyBag truthfully, the probe publishes it when offline-key-events=1
+# and sheng-aks=1 over a persistent Data store).
+keystore_cmd = [str(ROOT / 'kits/sheng/KeyStoreProbe.cpp') if str(arg) == str(source)
+                else str(OUT / 'KeyStoreProbe.o') if str(arg) == str(OUT / 'LegacyDisplayProbe.o')
+                else arg for arg in cmd]
+run(keystore_cmd, cwd=r['directory'])
+print(run(['python3', ROOT / 'scripts/build-arm-driver.py', 'AppleKeyStoreState'], text=True), end='')
+keystore_dir = ROOT / 'build/apple-key-store-state'
+# The recipe names the object by the component's legacy runtime name (the
+# file, and therefore the static-initializer symbol, stayed NativeKeyStoreEvents).
+keystore_raw = keystore_dir / 'NativeKeyStoreEvents.o'
+keystore_late = keystore_dir / 'NativeKeyStoreEvents.late.o'
+run([objcopy, '--remove-section=__DATA,__mod_init_func',
+     '--globalize-symbol=__GLOBAL__sub_I_NativeKeyStoreEvents.cpp',
+     keystore_raw, keystore_late])
+require(code(keystore_raw.read_bytes(), macho(keystore_raw.read_bytes())) ==
+        code(keystore_late.read_bytes(), macho(keystore_late.read_bytes())),
+        'Owned event-service instructions unchanged by late init staging')
 archive = OUT / 'libNativeLegacyDisplay.late.a'
 archive.unlink(missing_ok=True)
 print(run(['python3', ROOT / 'scripts/build-arm-driver.py', 'NativeGOPPresenter'], text=True), end='')
@@ -348,10 +372,12 @@ require(code((gop / 'NativeGOPPresenter.o').read_bytes(), macho((gop / 'NativeGO
         code(gop_late.read_bytes(), macho(gop_late.read_bytes())),
         'Owned presenter instructions unchanged by late init staging')
 run(['xcrun', 'ar', 'rcs', archive, late, OUT / 'original-bindings.o', OUT / 'LegacyDisplayProbe.o',
-     OUT / 'LegacyDisplayDPUSubstitute.o', gop_late])
+     OUT / 'KeyStoreProbe.o', OUT / 'LegacyDisplayDPUSubstitute.o', keystore_late, gop_late])
 sources = [ROOT / 'drivers/GopFramebuffer/NativeLegacyDisplay.cpp',
            ROOT / 'drivers/GopFramebuffer/NativeLegacyRequest.h',
            source,
+           ROOT / 'kits/sheng/KeyStoreProbe.cpp',
+           ROOT / 'drivers/AppleKeyStoreState/NativeKeyStoreEvents.cpp',
            dpu,
            ROOT / 'kits/sheng/OriginalLegacyFramebufferABI.h',
            ROOT / 'scripts/build-native-legacy-display.py']
@@ -367,5 +393,5 @@ sources = [ROOT / 'drivers/GopFramebuffer/NativeLegacyDisplay.cpp',
     virtual_entries=358, owned_entries=owned, inherited_native_entries=native,
     guarded_backend_leaves=[i for i in pure if i not in (213, 337)],
     original_instructions_modified=False, driver_initialized=False, display_presented=False,
-    desktop=False, probe_fleet='m2381-trimmed'), indent=2) + '\n')
+    desktop=False, probe_fleet='m2381-trimmed+keystore'), indent=2) + '\n')
 print('Built genuine original Legacy inheritance/dispatch; seven backend leaves still guarded, runtime lifecycle unqualified')

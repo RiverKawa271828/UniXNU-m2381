@@ -86,6 +86,11 @@ include = [
   # build-arm-driver.py inside build-native-legacy-display.py — no component:
   # archive entry (its recipe is empty; the qualified archive is hand-built).
   "GopFramebuffer",
+  # The AppleKeyStore stand-in (r62): materialized so the display pipeline can
+  # build it into the late display archive (the asteroid/sheng/oneplus13t
+  # template). The baseline link never links its archive directly, so there is
+  # no double-link with the archive member.
+  "AppleKeyStoreState",
   "XnuPrelink",
   "DarwinBoot",
   "VerifiedRoot",
@@ -149,6 +154,11 @@ archives = [
   # libNativeLegacyDisplay.late.a (force_loaded by the baseline). The
   # displayless assert war (r43-r50) had no mechanism alternative — every
   # SpringBoard-reaching board runs this lane (PLAN-display-lane.md).
+  # The AppleKeyStoreState component recipe (the v2 archive contract for the
+  # include above): produces build/apple-key-store-state/{AppleKeyStoreState.o,
+  # libAppleKeyStoreState.a}. The late-staged object rides in the display
+  # archive below; the baseline link has no direct keystore gate.
+  "component:AppleKeyStoreState",
   "build-native-legacy-display.py",
   "build-libpthread-kernel.py",
   # Adreno740 (component + build-adreno740-kits.py) is deferred: the kit
@@ -259,10 +269,19 @@ kernel_args = [
   "offline-hid-home=1",
   "offline-hid-input=1",
   "offline-legacy-phase=4",
-  "offline-mobile-graphics-client=1",
+  "offline-mobile-graphics-client=0",
+  # The kernel-side IOMFB client probe is diagnostic-only; the boards past the
+  # SpringBoard wall run it off (asteroids sets 0, sheng/oneplus13t omit it).
+  # The r52 "[mfb clients] C0 sel6 fails" was this probe's own client, not a
+  # real consumer.
   "offline-mobile-graphics-load=1",
   "offline-apfs-load=1",
   "boot-progress=2",                 # diagnostics page at the sheng/fuxi production level
+  # Board display timing (the sheng-template arg every SB-wall-crossing board
+  # carries: sheng=144, asteroids=120, oneplus13t=60): arms the work-loop
+  # vsync stand-in for the render server and, above 60, publishes
+  # IOMFBDisplayRefresh at registerService. The m2381 panel is 120 Hz.
+  "sheng-vsync=120",
   "-apfs_shared_datavolume",
   "offline-key-events=1",
   "native-ufs-root=1",
@@ -280,11 +299,11 @@ kernel_args = [
   # queue so the UI never started — 549 nonzero exits by t=404s. assistantd
   # SIGABRT (Siri support, no accounts) and biomed (exit 100) churn alongside.
   # liveactivitiesd joined from the 764539c9 boots on: its SessionSyncEngine
-  # Keybag init fatals without SEP-backed AppleKeyStore keys (sheng never hits
-  # this because its LEGACY_DISPLAY lane compiles KeyStoreProbe + the arg
-  # works). Until the AppleKeyStoreState component + KeyStoreProbe are wired
-  # into the =n lane, disabling is the upstream bring-up-isolation answer
-  # (Mach lookups fail fast instead of the ~1/s respawn treadmill).
+  # Keybag init fatals without SEP-backed AppleKeyStore keys. The r62 display
+  # archive carries KeyStoreProbe + AppleKeyStoreState (the sheng-template
+  # stand-in answers "no keybag, nothing locked"), so this entry can be
+  # reconsidered once the AKS diagnostics row shows real opens/calls; kept
+  # disabled one more round for change attribution.
   "sheng-disable-jobs=com.apple.transparencyd,com.apple.assistantd,com.apple.biomed,com.apple.liveactivitiesd",
   "boot-ui-focus3=Preferences",
   "boot-ui-focus4=SpringBoard",

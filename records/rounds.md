@@ -1,4 +1,4 @@
-# Round index (r51-r61, workspace commits carry the full detail)
+# Round index (r51-r62, workspace commits carry the full detail)
 
 Round naming: rNN = one payload image + one device verdict. Images land
 at `out/m2381/payload-rNN-<sha8>.img` (flat path mandatory, r49).
@@ -18,10 +18,12 @@ at `out/m2381/payload-rNN-<sha8>.img` (flat path mandatory, r49).
 | r59 | a9144765 | UIScreen SIGSEGV wall SEALED (applied=13, sig11 = 0); new wall = traitCollection-nil assert x573 (__UIGetCurrentFallbackTraitCollection line 117; REASON string -> CFString slot -> sole xref pinned the raiser; SBCoverSheetPresentationManager/SBWallpaperController chain bl-target verified); in-reader flash readback == image sha | flashed + judged 2026-10-27 |
 | r60 | edabbafd | traitCollection-nil wall BROKEN (applied=14, 'returned nil' zero occurrences); new wall = same getter's second raise block (+0x124): "unspecified values" x758 — fixup 14's _backgroundThreadFallbackTraitCollection is deliberately all-unspecified (scale 0.0); in-reader flash readback == image sha | flashed + judged 2026-10-27 |
 | r61 | 169f160c | fixup 15a/15b effective (applied=70, 'unspecified' assert zero occurrences, all scale raise blocks dead); SB advanced deep into wallpaper UI construction; new wall = SIGSEGV garbage-pointer family x684 (retain fast-path FAR=0xf1 inside bgTC, same disease as r58's 0xf00 — UIKit cached-singleton globals go garbage in displayless env); **USER VERDICT: stop per-site fixups, switch to the systematic route — next session researches upstream (sheng/fuxi fixup lists) and other forks first** | flashed + judged 2026-10-27 |
+| r62 | 0854ea5e | **Research verdict + systematic round built (NOT yet flashed)**: upstream device catalog surveyed (f85b5a6->0fc0fc1); wall-crossing boards carry NO display-family fixups (sheng 4 baseline entries, fuxi 0). The template: (a) AppleKeyStore stand-in — asteroids T20-T29: SpringBoard never finishes booting without it (component AppleKeyStoreState / legacy name NativeKeyStoreEvents); (b) sheng-vsync (144/120/60 on sheng/asteroids/oneplus13t); (c) offline-mobile-graphics-client off (asteroids =0; the r52 "mfb C0 sel6" suspect was this kernel probe client, NOT backboardd). oneplus13t reached the LOCK SCREEN GPU-less on the CPU framebuffer. Gaps closed: KeyStoreProbe.cpp (sheng verbatim) + AppleKeyStoreState compiled into the display archive (b6daee99, seven members; probe call restored in native_legacy_display_late_probe; gates offline-key-events=1 + sheng-aks=1 + persistent Data pre-existing), sheng-vsync=120 (publishes IOMFBDisplayRefresh above 60), client 1->0; all 23 fixups kept as safety net + laziness oracle (applied expected to drop below 14 if the environment heals). kernel 542300ca / probe-patched 158adedb / trust 7416ca4f / seed d04a0153; ADT b5b4a172 (same 23 fixups; sha moved = per-build random-seed, byte-diff verified against the r58 image); ESP four-item check passed | built 2026-10-28, awaiting flash |
 
 Current resident set: boot_b 289614ba + recovery_a = r61 169f160c
-(readback verified) + userdata fd43e70 (CI iOS root); next flash = r62
-(systematic route, pending upstream/fork research). Rollback images live only in
+(readback verified) + userdata fd43e70 (CI iOS root); next flash = **r62
+0854ea5e** (systematic round; flash recovery_a only — the iOS chain has
+not been nura-covered). Rollback images live only in
 the nura repository (workspace red line 6).
 
 ABL facts (r55d/r55e): same-slot consecutive boot failures exhaust the
