@@ -1,0 +1,53 @@
+#!/bin/busybox sh
+# m2381 forensic log reader (fork of upstream uefi-fuxi package/linux-log/init):
+# copies the UniXNU diagnostic log window (package/BootLog.c, sheng-log=1) — the
+# last 32 MiB of the userdata partition — into RAM and serves it on a USB CDC ACM
+# shell, where scripts/read-m2381-ufs-log.py's fetcher takes it; /bin/rebootbl
+# returns the board to fastboot. Booted as the initrd of a type="linux" entry in
+# the payload's unixnu.toml (UniXNUPkg Boot.c publishes the initrd on LoadFile2
+# media). Nothing on UFS is mounted or written; block devices are read-only.
+/bin/busybox --install -s /bin
+mkdir -p /proc /sys /dev /run /tmp
+mount -t proc proc /proc
+mount -t sysfs sys /sys
+mount -t devtmpfs dev /dev
+mount -t configfs configfs /sys/kernel/config
+mount -t tmpfs tmpfs /run
+L=/run/reader.log
+O=${logout:-/dev/tty0}
+T=${logshell:-/dev/ttyGS0}
+say() { echo "$*" | tee -a $L > $O; }
+say "m2381 forensic log reader $(uname -r)"
+
+gadget() {
+    for r in /sys/class/usb_role/*/role; do [ -e "$r" ] && echo device > "$r"; done
+    G=/sys/kernel/config/usb_gadget/log
+    mkdir -p $G/strings/0x409 $G/configs/c.1 $G/functions/acm.usb0 || return
+    echo 0x1d6b > $G/idVendor; echo 0x0104 > $G/idProduct
+    echo m2381log > $G/strings/0x409/serialnumber; echo m2381-forensic-reader > $G/strings/0x409/product
+    ln -s $G/functions/acm.usb0 $G/configs/c.1/
+    for i in $(seq 1 20); do U=$(ls /sys/class/udc 2>/dev/null | head -n1); [ -n "$U" ] && break; sleep 1; done
+    [ -n "$U" ] && echo "$U" > $G/UDC && say "usb: acm on $U" || say "usb: no udc"
+}
+gadget
+
+# userdata: the partition whose uevent names it; the log window is its last
+# 65536 512-byte sectors (32 MiB; see read-m2381-ufs-log.py and FLASHING.md).
+P=
+for i in $(seq 1 30); do
+    for u in /sys/class/block/*/uevent; do grep -q '^PARTNAME=userdata$' "$u" && P=$(basename $(dirname "$u")) && break; done
+    [ -n "$P" ] && break; sleep 1
+done
+if [ -n "$P" ]; then
+    S=$(cat /sys/class/block/$P/size)              # 512-byte sectors
+    dd if=/dev/$P of=/run/log.bin bs=512 skip=$((S - 65536)) count=65536 2>>$L
+    say "userdata=$P sectors=$S log=$(wc -c < /run/log.bin) bytes magic=$(dd if=/run/log.bin bs=8 count=1 2>/dev/null)"
+else
+    say "userdata not found"
+fi
+say "ready: shell on USB serial; run /bin/rebootbl to return to fastboot"
+
+while true; do
+    if [ -e $T ]; then setsid sh -c "exec sh -i <$T >$T 2>&1"; fi
+    sleep 1
+done
