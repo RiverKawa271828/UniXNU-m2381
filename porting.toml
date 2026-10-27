@@ -1,0 +1,222 @@
+schema_version = 1
+
+[device]
+name = "m2381"
+soc = "SM8550"
+os_profile = "ipados-17.7.11-21H461"
+summary = "Meizu 20 Classic (SM8550 phone, 16 GB LPDDR5X, 1080x2400 BOE AMOLED cmd-mode DSC, UFS 4.0 512 GB). Full iOS chain boots on device: UEFI -> XNU -> launchd -> 173-process userland with real IOMFB swaps on the panel; SpringBoard is in a known displayIdentity assert loop under active fixup iteration (r56)."
+
+[[area]]
+id = "configuration"
+status = "device-verified"
+components = ["ArmDTPlatform", "ArmCpu", "SoftwareAES", "XnuPrelink", "DarwinBoot"]
+paths = ["board.toml", "feeds.toml", "configs/**", "dts/**", "patches/**", "unixnu.lock"]
+inputs = ["Upstream UniXNU main (pin 16e592a) with the m2381 branch carried as workspace commits", "Donor iPad7,1 iPadOS 17.7.11 21H461 (same donor as sheng/fuxi; kernelcache + OS assets)", "UniXNU-sm8550-common feed pin 43da0d56 for sm8550 dts/configs", "Stock FDT/DTS dumps in the workspace docs/hardware/ for constants"]
+configuration = ["board.toml schema v2: soc_source = sm8550 pin 23b2049f, os_profile = ipados-17.7.11-21H461", "defconfig = m2381_defconfig derived from sheng; fragments arch:common soc:sm8550 os:ipados", "ADT generated from dts/m2381.dts + the v2 generator (sm8550.dtsi exports intc/ufshc/ufsphy; 16 GiB reg split as two cells; ufs/ufsphy okay; GPU disabled)", "Kernel args: -v serial=3 debug=0x14e kt_fixed_zones=120 offline-legacy-* set, boot-progress=2, native-ufs-root=1, sheng-pmgr=2, sheng-lite=1 plus the sheng production disable set, sheng-smp=1 sheng-cpufreq=3 sheng-touch=4, boot-ui-focus4=SpringBoard"]
+procedure = ["UNIXNU_UNIQUE_CHIP_ID=3645ad55d47e77c1 ./unixnu payload (Linux lane)", "python3 devices/m2381/unixnu-m2381/scripts/add-forensic-entry.py out/m2381/ipados-17.7.11-21H461/m2381/payload/payload.img", "copy to the flat out/m2381/payload-rNN-<sha8>.img name"]
+findings = ["Donor pairing must be same-generation: the xnu-10063.141.1 source against a 16-gen donor failed everywhere (entropy, AppleImage4); the 17.7 21H461 donor cleared those walls", "text fixups are inherited from the OS profile (the nx729j set for the same donor build) and are applied lazily at page-in, so the applied counter doubles as an execution oracle", "OS profile text_fixups grew from 13 to 16 entries during the =y lane (fixups 8a/8b/11/12/9 in r47-r56)"]
+completion = ["All source pins resolve; the payload builds on Linux and boots the full chain on device; every selected component has a record"]
+limits = ["CI kernel lane is still macos.yml (Linux kernel build proven locally, CI wiring pending)", "fileset-KC rebinding (XS donors) out of scope for this donor"]
+next_action = ["Keep the board profile synced on upstream rebase; re-derive nothing per round unless the donor changes"]
+evidence = [
+  { kind = "device", reference = "records/rounds.md", command = "fastboot getvar current-slot && sha256sum out/m2381/payload-r56-db3a7392.img && fastboot flash recovery_a out/m2381/payload-r56-db3a7392.img", revision = "926f084602ebf21a0f66bbe216e5d5f2edd2ed29", result = "r51-r56 payloads all built from this board config and booted the full chain on device; r56 flashed OKAY 2026-10-27" },
+  { kind = "source", reference = "board.toml", result = "schema v2 board: soc_source sm8550 pin 23b2049f, os_profile ipados-17.7.11-21H461, measured userdata LBA geometry from the device GPT" },
+]
+
+[[area]]
+id = "firmware"
+status = "device-verified"
+components = []
+paths = ["package/**", "records/rounds.md"]
+inputs = ["Mu-Silicium UEFI base (m2381Pkg, shengPkg skeleton + mars blob 036ba9f7) in the workspace devices/m2381/uefi/m2381Pkg", "ABL v4 behavior RE: gunzip to 0x80080000, ~83.5 MB decompress cap, ignores boot.img ramdisk, no CmdBoot, validates image_size/appended DTB", "OEM DXE blobs (UFSDxe etc.) in workspace artifacts/vendor/", "FD 0xA7100000+0x300000; kernel window 0xA8000000+0x10000000; SimpleFbDxe on ABL framebuffer 0xb8000000"]
+configuration = ["boot_b = boot.img v4 (no appended DTB, Gunyah off) packaging the UEFI FD; payload lives on recovery_a as a 96 MiB FAT ESP", "ENABLE_SECUREBOOT=0 on the resident boot_b (289614ba): with =1 LoadImage rejects the unsigned forensic kernel PE", "UniXNU menu: xnu default with a 3 s timeout; forensic reader as a type=linux entry behind it"]
+procedure = ["package-m2381-boot.py produces the deterministic boot.img", "./unixnu payload + add-forensic-entry.py for the ESP payload", "fastboot --set-active=b (resets the ABL retry budget) then fastboot flash recovery_a; fastboot boot is dead (Meizu ABL strips CmdBoot)"]
+findings = ["M2381ESP mounts every round; the fallback of squeezing the payload into the ABL gunzip window was never needed", "Payload unixnu.toml must be replaced under its LFN long name: overwriting through the 8.3 short name (UNIXNU~1.TOM) destroys the LFN entry and Mu then drops the whole config (r55a)", "The linux menu entry needs dtb = Payloads/forensic.dtb or it exits instantly (r55b)", "ABL drops to fastboot by itself once the same-slot retry budget is exhausted; fastboot --set-active=b resets it (r55d, measured retry-count 7)", "rebootbl inside the reader reboots but does not land in ABL fastboot on this chain; manual route is power+vol-down"]
+completion = ["Firmware builds, enters UniXNU, publishes the framebuffer, boots both menu entries, and preserves the documented memory reservations"]
+limits = ["BootSlotReset DXE (auto reset of the GPT boot-slot retry bits) designed, not implemented yet"]
+next_action = ["Implement BootSlotReset DXE in m2381Pkg plus the XNU-side GPT-property exemption in the BootLog check"]
+evidence = [
+  { kind = "device", reference = "records/rounds.md", command = "fastboot getvar current-slot && fastboot reboot", revision = "95deb657b419a28418940bf76940399d688a85eb", result = "r55e: set-active=b OKAY (retry-count 7), flash recovery_a OKAY, reboot; menu presented xnu + reader entries; both entries booted on device" },
+  { kind = "device", reference = "records/rounds.md", command = "python3 devices/m2381/unixnu-m2381/scripts/acm-reader.py cmd 'grep PARTNAME=recovery_a /sys/class/block/*/uevent && dd if=/dev/sde27 bs=1M count=96 2>/dev/null | sha256sum'", revision = "95deb657b419a28418940bf76940399d688a85eb", result = "in-reader readback of recovery_a (first 96 MiB) sha256 == payload image sha b060b512..., byte for byte" },
+]
+
+[[area]]
+id = "cpu"
+status = "device-verified"
+components = ["ArmCpu"]
+paths = ["configs/**", "dts/**", "records/r55e-judgment.md"]
+inputs = ["SM8550 kalama: 1x X3 + 2x A715 + 2x A710 + 3x A510", "GICD 0x17100000, GICR 0x17180000 stride 0x40000 region 0x200000, vtimer 27 / ptimer 28, DS=1; SGI page: set GICD_CTLR.bit8 before priority writes", "armcpu-spi-ipi=1 kernel arg"]
+configuration = ["sheng-smp=1 enables the SMP lane; sheng-cpufreq=3 the cpufreq lane; armcpu-diagnostics=1 the cpu diagnostics page"]
+procedure = ["boot the xnu entry, read the SHLOG slots: SMP/CPU/CLK lines carry the live counters"]
+findings = ["r55e slot 313: SMP req=1 run=7 (all 8 CPUs up) with c1..c7=step7 cpufreq states; GIC stride=40000 redistributor read offset=1c0000 typer.lo=711; CLK cntfrq=19200000 dt-timebase equal", "PC sampler runs on every CPU (last IRQ PC lines per slot)"]
+completion = ["Every enabled CPU reaches its entry checkpoint and timer/IPI handling works on each enabled CPU"]
+limits = ["Deep PSCI/sleep transitions out of scope for the bring-up lane"]
+next_action = ["Keep the counters in the slot format; no near-term cpu work"]
+evidence = [
+  { kind = "device", reference = "records/r55e-judgment.md", command = "python3 devices/m2381/unixnu-m2381/scripts/read-m2381-ufs-log.py out/m2381/reader-r55e-log.bin --all", revision = "926f084602ebf21a0f66bbe216e5d5f2edd2ed29", result = "slot 313 t=628s: SMP req=1 run=7 | c1..c7=step7; GIC stride=40000 last redistributor offset=1c0000; CLK cntfrq=19200000 equal timebase" },
+]
+
+[[area]]
+id = "memory"
+status = "device-verified"
+components = []
+paths = ["dts/**", "configs/**", "records/r55e-judgment.md"]
+inputs = ["16 GB LPDDR5X; heavy ABL carve-outs in the low 4 GB; 13 GB contiguous from 0x8c0000000 added to the GCD (sheng-aligned)", "FD/carve constants: FD 0xA7100000+0x300000, kernel window 0xA8000000+0x10000000, display 0xB8000000+0x2B00000, bootloader log 0xA7605000+0x8000"]
+configuration = ["kt_fixed_zones=120 kernel arg; TCR/TTBR dumps live in every slot line"]
+procedure = ["read [display state]/MEM/TCR lines from the SHLOG slots after any boot"]
+findings = ["r55e slot 313: MEM totalMiB=4864 with free4K~588k pages, wired~92k, speculative~302k; TCR=22a51a251a TTBR0/1=8c5624000/8c5625000; GOP maps b8000000 (10,368,000 bytes)", "DarwinBoot 32 MiB congruence patch is in the workspace tree (upstream driver)"]
+completion = ["All handoff regions are accounted for and each enabled DMA engine accesses its allocated range"]
+limits = ["xnu sees a ~4.75 GiB window in this lane; full 16 GiB population and the high-window stress test are not done yet", "SMMU ownership asserted per the sm8550-common feed, not stress-tested"]
+next_action = ["Grow the visible window or verify the high-window map once the SpringBoard wall clears"]
+evidence = [
+  { kind = "device", reference = "records/r55e-judgment.md", command = "python3 devices/m2381/unixnu-m2381/scripts/read-m2381-ufs-log.py out/m2381/reader-r55e-log.bin --all", revision = "926f084602ebf21a0f66bbe216e5d5f2edd2ed29", result = "MEM totalMiB=4864 free4K=588284 wired=92063 speculative=302489; TCR=22a51a251a TTBR0=8c5624000 TTBR1=8c5625000; GOP physical=b8000000 bytes=10368000" },
+]
+
+[[area]]
+id = "storage"
+status = "device-verified"
+components = ["ShengUfs", "VirtioMmioBlock", "RamBlock", "VerifiedRoot"]
+paths = ["drivers/ShengUfs", "kits/**", "records/r55e-judgment.md", "records/reader-channel.md"]
+inputs = ["UFS 4.0 controller 0x1d84000, PHY 0x1d80000, ICE 0x1d88000; Samsung KLUFG8RHHD-B0G1 512 GB", "Measured GPT geometry (three-source cross-check) baked into board.toml [userdata]", "Donor trust-cache trio values in board.toml; verified-root stub refuses placeholders without staged policy evidence"]
+configuration = ["native-ufs-root=1 (launchd boots off the native UFS root); ShengUfs driver via kits fork; prelink binding = nx729j static binding (build-storage-bindings.py + prelink-storage-bindings.json, 190 IOBlockStorageDevice slots of the same donor kernelcache); sheng-data-persist=2"]
+procedure = ["flash userdata = CI-built iOS root (fd43e70) once; per-round work only touches recovery_a", "read [data]/UFS lines in the SHLOG slots for live counters"]
+findings = ["r55e: UFS requests=236660 verified4K=413320 failures=0 integrity=0; TIME verify=5404ms read=26864ms; [data] wr=9707 cm=2320 er=0; SWAP COPY calls=3 status=0 bytes=10368000 retired=3 (swap works on device)", "launchd pid=1 execs from the userdata root every round since r44; cryptex OS stage=5 status=0", "The reader reads userdata raw (sda22) with zero writes and zero mounts — flash readback closure needs no adb"]
+completion = ["Root: the configured volume mounts and launchd starts; persistence: writes survive reboot within the allocated Data region"]
+limits = ["Explicit across-reboot Data persistence measurement not yet taken (swap + live writes observed instead)", "ICE inline-crypto path unexercised"]
+next_action = ["One persistence probe: boot twice on the same Data and diff a marker file through the reader"]
+evidence = [
+  { kind = "device", reference = "records/r55e-judgment.md", command = "python3 devices/m2381/unixnu-m2381/scripts/read-m2381-ufs-log.py out/m2381/reader-r55e-log.bin --all", revision = "926f084602ebf21a0f66bbe216e5d5f2edd2ed29", result = "UFS requests=236660 verified4K=413320 failures=0; [data] wr=9707 cm=2320 er=0 pages=4194304; SWAP COPY status=0 bytes=10368000 retired=3; cryptex os stage=5 status=0; launchd pid=1" },
+  { kind = "device", reference = "records/reader-channel.md", command = "python3 devices/m2381/unixnu-m2381/scripts/acm-reader.py cmd 'dd if=/dev/sde27 bs=1M count=96 2>/dev/null | sha256sum'", revision = "95deb657b419a28418940bf76940399d688a85eb", result = "raw userdata tail read (32 MiB SHLOG window) with no writes/mounts; recovery_a readback sha == image sha" },
+]
+
+[[area]]
+id = "display"
+status = "device-verified"
+components = ["GopFramebuffer"]
+paths = ["package/**", "configs/**", "records/r55e-judgment.md"]
+inputs = ["1080x2400 BOE AMOLED cmd-mode DSC panel; ABL framebuffer 0xb8000000 size 0x2b00000 stride 4320 (UEFI SimpleFbDxe consumes it)", "=y display lane: CONFIG_XNU_NATIVE_LEGACY_DISPLAY=y with NativeLegacyDisplay/NativeGOPPresenter (hand-built qualified archive; the component recipe is deliberately empty)", "OriginalLegacyFramebufferABI.h shipped in the device package (component compile without a staged candidate)"]
+configuration = ["offline-legacy-gop=1 offline-legacy-unit-scale=2 offline-legacy-pm=1 offline-legacy-transfer=1 offline-mobile-graphics-client=1 offline-mobile-graphics-load=1; boot-progress=2 (sheng/fuxi production diagnostics page); sheng-fb-gpu=1"]
+procedure = ["boot the xnu entry; read DISPLAY/GOP/[swap timeline]/[display state] slot lines; confirm the on-panel shape"]
+findings = ["r55e: DISPLAY stage=10 PM=4 calls=4 callbacks=1 owned=1; GOP actual mapping physical=b8000000; three real swaps W1/W2/W3 at t=243-245s (done=1410/188/207 ms); panel shows diagnostics page then a steady Apple logo", "Backlight-domain fixups (8a/8b/12) all apply since r53; the r55e wall moved past backlight into the displayIdentity assert of the system-gesture manager singleton", "fixup 9 (r56) returns self from SBSystemGestureManager _initWithDisplayIdentity: because FBDisplayManager mainIdentity (ivar@8) is never registered on a displayless lane; SBMainDisplay's same-named init is an 'unallowed initializer' trap that sharedInstance deliberately bypasses via super — patch the base class, never the trap"]
+completion = ["A known frame appears with correct geometry and colors, then userland presentation and backlight controls work"]
+limits = ["SpringBoard UI and userland backlight control sit behind the displayIdentity/SpringBoard fixup iteration; panel is fed by GOP/IOMFB swaps only", "DSI/panel probe ordering under fw_devlink=off occasionally loses the display (3/5 dark boots candidate) — not blocking the reader loop"]
+next_action = ["r56 run: judge applied=8 and whether the displayIdentity wall breaks; iterate the next fixup from the new crash chain"]
+evidence = [
+  { kind = "device", reference = "records/r55e-judgment.md", command = "python3 devices/m2381/unixnu-m2381/scripts/read-m2381-ufs-log.py out/m2381/reader-r55e-log.bin --all", revision = "926f084602ebf21a0f66bbe216e5d5f2edd2ed29", result = "W1 t=243.275s done=1410ms, W2 t=244.712s, W3 t=245.286s; GOP physical=b8000000 bytes=10368000 (1080x2400 ARGB); [text fixup] parsed=15 applied=7" },
+  { kind = "source", reference = "configs/m2381_defconfig", result = "LEGACY_DISPLAY=y lane with the offline-legacy/offline-mobile-graphics arg set; sheng-fb-gpu=1" },
+]
+
+[[area]]
+id = "input"
+status = "planned"
+components = []
+paths = ["configs/**", "dts/**"]
+inputs = ["Goodix GT9916 (berlin family) touch: GENI I2C4 0xa90000 400 kHz, addr 0x5d, irq tlmm25 edge-falling, reset tlmm24 active-low, avdd l14b_3p2 / vddio l12b_1p8", "Buttons: PMK8550 PON pwrkey + resin (vol-down) via SPMI", "Upstream sheng touch lanes (ShengHidInput/ShengNovatekTouch pattern; sheng-touch=4 sheng-touch-hid=1 args reserved)"]
+configuration = ["No touch driver wired yet on m2381; args reserved for the sheng lane"]
+procedure = ["Inventory the GT9916 firmware and bring-up order from the nura/linux-mobile-ports references, then adapt the sheng touch lane"]
+findings = ["UEFI-level buttons verified in normal operation: vol-down enters fastboot, power selects in the menu; r55e slot lines [touch edge]/[touch multi] stay at zero (driver not yet attached)"]
+completion = ["Touches map to the display, simultaneous contacts keep stable IDs, release events arrive, and buttons produce expected HID reports"]
+limits = ["Touch unexercised on iOS; only the hardware constants and the UEFI button path are established"]
+next_action = ["After the SpringBoard wall clears: adapt the sheng touch lane to GT9916 (I2C4/0x5d) with the documented pins"]
+evidence = [
+  { kind = "source", reference = "dts/m2381.dts", result = "touch/button hardware constants carried in the board DTS source" },
+]
+
+[[area]]
+id = "gpu"
+status = "planned"
+components = []
+paths = ["configs/**"]
+inputs = ["Adreno 740; upstream Adreno740/AdrenoMetal components (removed from this board's build: needs board-local ShengGmu*Source.h plus a pinned, hash-checked GMU firmware that must not enter git per upstream gpu.md)", "Precedents: tb128fu renders Metal frames with Adreno 610; negroni/pong reach SpringBoard with partial GPU"]
+configuration = ["ADRENO=n (deliberate) for the bring-up lane; sheng-gpu-power=9 sheng-gpu-metal=1 sheng-gpu-perf=8 sheng-gpu-addon=1 args reserved"]
+procedure = ["After the SpringBoard wall: stage the GMU firmware + board-local source headers, flip ADRENO=y, run the sheng GPU bring-up checklist"]
+findings = ["r55e slot lines show the GPU bookkeeping scaffolding alive at zero ([gpu methods]/[bo pool]/[gpu clients]/[gpu ibs]) — the instrumentation lane is ready", "mfb clients section already records IOMFB client calls (C1 pid=85 calls=32 fails=19) so partial GPU failure will be visible"]
+completion = ["GPU submissions complete, mapping/fence handling is correct, a known image renders, and the selected Metal client presents it"]
+limits = ["No GPU work started; CPU rendering only until ADRENO=y"]
+next_action = ["Queue the ADRENO=y staging (GMU firmware pin + ShengGmu source headers) behind the SpringBoard fixup iteration"]
+evidence = [
+  { kind = "source", reference = "configs/m2381_defconfig", result = "ADRENO disabled with the reserved sheng GPU arg set documented" },
+]
+
+[[area]]
+id = "network"
+status = "planned"
+components = []
+paths = ["configs/**", "dts/**"]
+inputs = ["SM8550 family WiFi/BT (WCN785x class); upstream Ath12kWifi component exists", "No board-level WiFi/BT inventory taken yet (chip, bus, firmware pin, interrupts)"]
+configuration = ["Nothing wired"]
+procedure = ["Inventory the WiFi/BT hardware from the stock FDT and the nura pmOS references, then map the Ath12kWifi lane"]
+findings = ["m2381 knows the OEM Android WiFi works; no UniXNU-side observation yet"]
+completion = ["Scanning, association, address configuration and sustained receive/transmit traffic pass with the selected firmware"]
+limits = ["Fully unexplored on this board"]
+next_action = ["Hardware inventory from stock FDT (workspace docs/hardware/) before any implementation"]
+evidence = [
+  { kind = "source", reference = "records/rounds.md", result = "network untouched through r56; recorded as planned with inventory pending" },
+]
+
+[[area]]
+id = "audio"
+status = "planned"
+components = []
+paths = ["configs/**", "dts/**"]
+inputs = ["SM8550 ADSP audio stack (GPR/GLINK/SMEM/SMP2P lanes upstream); codec inventory not taken (m2381 uses the kalama reference-class audio layout, details unconfirmed)"]
+configuration = ["Nothing wired"]
+procedure = ["Inventory the codec/DSP from the stock FDT, then map the upstream audio lane"]
+findings = ["None yet on this board"]
+completion = ["Each declared route carries the selected audio format through playback or capture and handles start/stop correctly"]
+limits = ["Fully unexplored on this board"]
+next_action = ["Codec/DSP inventory from stock FDT"]
+evidence = [
+  { kind = "source", reference = "records/rounds.md", result = "audio untouched through r56; recorded as planned with inventory pending" },
+]
+
+[[area]]
+id = "power"
+status = "implemented"
+components = []
+paths = ["configs/**"]
+inputs = ["sheng platform-power lane (sheng-pmgr=2) adapted for SM8550; PMK8550 PON pwrkey/resin verified at the UEFI level", "CPU freq states observed live via sheng-cpufreq=3"]
+configuration = ["sheng-pmgr=2 sheng-cpufreq=3 sheng-gpu-power=9 (reserved) kernel args; sleep-disabled=1 for the bring-up lane"]
+procedure = ["read the SMP/CPU slot lines (per-core cpufreq states) and UEFI button behavior"]
+findings = ["r55e slot 313: c1..c7=step7 — cpufreq scaling live on all performance cores; sleep-disabled=1 keeps the bring-up lane awake by design", "Battery/regulator inventory not taken; no sleep/resume testing in this lane"]
+completion = ["Declared power controls and battery readings match observations; each claimed sleep/resume transition restores its dependent peripherals"]
+limits = ["Battery gauge, charging and suspend/resume are out of scope for the bring-up lane"]
+next_action = ["Keep pmgr at the sheng-adapted level; battery/sleep inventory after userland is interactive"]
+evidence = [
+  { kind = "device", reference = "records/r55e-judgment.md", command = "python3 devices/m2381/unixnu-m2381/scripts/read-m2381-ufs-log.py out/m2381/reader-r55e-log.bin --all", revision = "926f084602ebf21a0f66bbe216e5d5f2edd2ed29", result = "SMP req=1 run=7 | c1=step7 c2=step7 c3=step7 c4=step7 c5=step7 c6=step7 c7=step7 (cpufreq live); CPU sleep-disabled=1 by lane design" },
+  { kind = "source", reference = "configs/m2381_defconfig", result = "sheng-pmgr=2/sheng-cpufreq=3 wired in the board kernel args" },
+]
+
+[[area]]
+id = "packaging"
+status = "device-verified"
+components = []
+paths = ["board.toml", "scripts/**", "forensic/**", "records/rounds.md"]
+inputs = ["ABL constraints (RE'd): gunzip to 0x80080000 with a ~83.5 MB cap, boot.img ramdisk ignored, no CmdBoot; recovery_a 100 MiB carries the 96 MiB ESP payload", "boot.img v4 form (upstream bootimg does not emit the m2381 shape; package-m2381-boot.py is deterministic)", "Forensic reader artifacts: nura pmOS kernel PE 4aad92b3 + 13-field newc initrd 402fb431 (12-field hand-written cpio = the r55d root cause)"]
+configuration = ["Payload flat-name contract out/m2381/payload-rNN-<sha8>.img (r49: --out double-path ambiguity retired)", "userdata LBA geometry measured from the device GPT into board.toml"]
+procedure = ["UNIXNU_UNIQUE_CHIP_ID=3645ad55d47e77c1 ./unixnu payload; add-forensic-entry.py; flatten; sha256 gate on the flash card; fastboot --set-active=b; flash recovery_a; in-reader dd readback == image sha"]
+findings = ["Per-round disk policy: only recovery_a while the iOS chain is resident; three-partition flash returns only after nura covers the chain", "Flash verification is the in-reader dd|sha256sum closure — flash duration is never evidence", "Deterministic builds: identical inputs reproduce identical payload images (r55e surgery kept toml byte-identical)"]
+completion = ["Kernel and prelink succeed, payload contains all declared inputs, and the boot image matches the bootloader format and size limit"]
+limits = ["userdata (12 GB iOS root) built on CI; local Linux hdiutil-equivalent for scratch-data growth not wired"]
+next_action = ["Keep the loop; BootSlotReset DXE is the next packaging-adjacent item (budget auto-reset)"]
+evidence = [
+  { kind = "device", reference = "records/rounds.md", command = "sha256sum out/m2381/payload-r56-db3a7392.img && fastboot flash recovery_a out/m2381/payload-r56-db3a7392.img", revision = "926f084602ebf21a0f66bbe216e5d5f2edd2ed29", result = "r56 flash 2026-10-27: sha gate db3a7392... passed, Sending/Writing OKAY (98304 KB)" },
+  { kind = "device", reference = "records/reader-channel.md", command = "python3 devices/m2381/unixnu-m2381/scripts/acm-reader.py cmd 'grep PARTNAME=recovery_a /sys/class/block/*/uevent'", revision = "95deb657b419a28418940bf76940399d688a85eb", result = "recovery_a = /dev/sde27 on the nura-kernel reader; dd readback closed the §2 discipline without adb" },
+]
+
+[[area]]
+id = "diagnostics"
+status = "device-verified"
+components = []
+paths = ["scripts/**", "forensic/**", "records/**"]
+inputs = ["SHLOG: BootLog.c writes one 8 KiB slot every 2 s into a 32 MiB tail window of userdata (slot_count~=509 -> ~17 min wraparound); the window survives reboots (header rounds counter)", "Forensic reader entry in the payload (type=linux, pmOS EFI-stub kernel + busybox initrd + rebootbl) serving a USB CDC ACM shell", "Host tools: acm-reader.py (probe/cmd/fetch/fetchchunk) + read-m2381-ufs-log.py (header slots_written contract, wraparound-safe truncation)"]
+configuration = ["sheng-log=1 kernel arg; boot-progress=2 diagnostics page (deadline exit -> OS continues)"]
+procedure = ["run xnu 8-15 min (never >~17 min), hard power-off, reboot into the reader, fetchchunk the window, parse --all"]
+findings = ["r55e window: rounds=314 slots=314/509 uptime=628s write_errors=0 — full userland judgment (applied=7, swaps, crash loops with PC/LR/bt) from one pull", "REASON/CRASH lines carry the dyld slide (+a57c000) enabling full userland symbolication against the donor local symbol table; SIGABRT judging = read REASON first, verify LR-4 bl at every frame", "Reader channel gotchas are fixed and documented: base64 line filter kept dropping + and / lines; single-stream fetch stalls ~13 MiB -> fetchchunk (16/16 chunks, SHA MATCH, 31 s)", "Screen state is never the verdict: black/dark boots do not block the reader (lsusb 1d6b:0104 is the channel criterion); the diagnostics page exits at its deadline by design"]
+completion = ["Each claimed milestone has a reproducible command, a matching source/image revision and an accessible result"]
+limits = ["17-minute wraparound bounds a single-run evidence window; multi-run sweeps need a round-marker scheme (sheng-build-tag candidate)"]
+next_action = ["Fetchchunk is the default pull; keep per-round window files under out/m2381/reader-<round>-log.bin"]
+evidence = [
+  { kind = "device", reference = "records/reader-channel.md", command = "python3 devices/m2381/unixnu-m2381/scripts/acm-reader.py fetchchunk out/m2381/reader-r55e-log.bin", revision = "926f084602ebf21a0f66bbe216e5d5f2edd2ed29", result = "chunked pull 16/16 chunks + SHA MATCH in 31 s after two single-stream stalls at ~13 MiB; device sha 3c29c83f... matched host" },
+  { kind = "device", reference = "records/r55e-judgment.md", command = "python3 devices/m2381/unixnu-m2381/scripts/acm-reader.py probe", revision = "95deb657b419a28418940bf76940399d688a85eb", result = "probe: m2381 forensic log reader 7.3.0 / acm on a600000.usb / userdata=sda22 magic=SHLOG001 log=33554432 bytes" },
+]

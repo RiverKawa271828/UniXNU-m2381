@@ -24,8 +24,14 @@ git -C "$ROOT" worktree add --detach "$WORK" >/dev/null 2>&1
   cd "$WORK"
   git checkout --orphan "$BRANCH" >/dev/null 2>&1
   git rm -rf --quiet . 2>/dev/null || true
-  rm -rf board.toml board.bringup.toml configs scripts drivers package kits unixnu.lock feeds.toml dts patches keys
+  rm -rf board.toml board.bringup.toml configs scripts drivers package kits unixnu.lock feeds.toml dts patches keys records forensic ci .github
   cp -r "$DEV/configs" "$DEV/scripts" "$DEV/drivers" "$DEV/package" "$DEV/kits" "$DEV/unixnu.lock" "$DEV/feeds.toml" "$DEV/dts" "$DEV/patches" . 2>/dev/null || cp -r "$DEV/configs" "$DEV/scripts" "$DEV/package" "$DEV/kits" "$DEV/unixnu.lock" .
+  # Porting record + evidence ride with the mirror so the porting-record
+  # workflow validates porting.toml on the branch itself (upstream records spec).
+  cp "$DEV/porting.toml" "$DEV/README.md" .
+  [ -d "$DEV/records" ] && cp -r "$DEV/records" .
+  [ -d "$DEV/forensic" ] && cp -r "$DEV/forensic" .
+  [ -d "$DEV/ci" ] && mkdir -p .github/workflows && cp "$DEV/ci/"*.yml .github/workflows/
   # The policy anchor key rides with the device repository (private repo): the
   # two-volume bundle requires every run to sign under the same anchor.
   [ -d "$DEV/keys" ] && cp -r "$DEV/keys" .
