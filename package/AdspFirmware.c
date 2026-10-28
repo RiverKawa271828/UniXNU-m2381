@@ -55,3 +55,34 @@ void sheng_fw_close(void *handle)
 {
     if (handle) vnode_close((vnode_t)handle, FREAD, vfs_context_kernel());
 }
+
+// ---- the embedded form (m2381): scripts/make-adsp-firmware.py squashes the device's own split ADSP images
+// (modem_a image/ .mdt + .bNN, harvested from the stock firmware) into two blobs and the boot-progress build
+// stages AdspFirmwareBlob.c from .cache/firmware/adsp; the vendor firmware never enters git. A zero-size blob
+// (nothing staged) makes the probe fall back to the VFS sources above.
+struct ShengFwMem {const uint8_t *data; uint64_t size;};
+
+int sheng_fw_mem_open(const void *data, uint64_t size, void **handle, uint64_t *out_size)
+{
+    if (!data || !size) return ENOENT;
+    struct ShengFwMem *m = (struct ShengFwMem *)IOMalloc(sizeof *m);
+    if (!m) return ENOMEM;
+    m->data = (const uint8_t *)data;
+    m->size = size;
+    *handle = m;
+    *out_size = size;
+    return 0;
+}
+
+int sheng_fw_mem_read(void *handle, uint64_t offset, void *to, size_t length)
+{
+    const struct ShengFwMem *m = (const struct ShengFwMem *)handle;
+    if (!m || offset > m->size || length > m->size - offset) return EIO;
+    memcpy(to, m->data + offset, length);
+    return 0;
+}
+
+void sheng_fw_mem_close(void *handle)
+{
+    if (handle) IOFree(handle, sizeof(struct ShengFwMem));
+}
