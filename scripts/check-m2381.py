@@ -51,7 +51,14 @@ def load_merged_board(board_path):
             root = ancestor
             break
     if root is None:
-        record(WARN, 'upstream checkout', 'no profiles/ ancestor found: checking the device board alone')
+        # Standalone checkout: the build tree may live beside this repository
+        # (the CI workflow also checks the device out beside the UniXNU tree).
+        for sibling in sorted(Path(board_path).resolve().parent.parent.iterdir()):
+            if (sibling / 'profiles/os').is_dir():
+                root = sibling
+                break
+    if root is None:
+        record(WARN, 'upstream checkout', 'no profiles/ ancestor or sibling found: checking the device board alone')
         return board
 
     def deep_merge(base, overlay):
@@ -107,8 +114,10 @@ def main():
     board = load_merged_board(board_path)
 
     # --- identity -----------------------------------------------------------
-    ipsw = board['ipsw']
-    if (ipsw['product'], ipsw['build'], ipsw['device_class']) != ('iPad7,1', '21H461', 'j120ap'):
+    ipsw = board.get('ipsw')
+    if ipsw is None:
+        record(WARN, 'ipsw identity', 'no [ipsw] visible: OS profile not merged (standalone board) — identity check skipped')
+    elif (ipsw['product'], ipsw['build'], ipsw['device_class']) != ('iPad7,1', '21H461', 'j120ap'):
         record(FAIL, 'ipsw identity', 'm2381 targets iPad7,1 / 21H461 / j120ap (user decision 2026-10-24: fuxi-proven same-train donor while the fileset-KC rebinder is pending)')
     elif ipsw.get('chip_id') != 0x8011 or ipsw.get('board_id') != 12:
         record(FAIL, 'ipsw chip/board id', f"expected 0x8011/12 (j120ap BuildManifest), got {ipsw.get('chip_id')}/{ipsw.get('board_id')}")
