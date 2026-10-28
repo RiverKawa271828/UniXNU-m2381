@@ -53,15 +53,18 @@ void boot_progress_exit_fault(int pid,unsigned signal,char *out,unsigned long ca
    f.valid=1;f.pid=pid;proc_selfname(f.name,sizeof(f.name));
    f.pc=(uint64_t)get_saved_state_pc(state);f.lr=(uint64_t)get_saved_state_lr(state);
    f.sp=(uint64_t)get_saved_state_sp(state);f.fp=(uint64_t)get_saved_state_fp(state);
+   for(unsigned i=0;i<29;++i)f.x[i]=(uint64_t)get_saved_state_reg(state,i);
    f.slide=current_task()->task_shared_region_slide;
   }
  }
  if(!f.valid)return;
- unsigned long n=snprintf(out,capacity,"p%d %.20s sig%u PC%llx LR%llx E%llx F%llx +%llx bt",
-  f.pid,f.name,signal,f.pc,f.lr,f.esr,f.far,f.slide);
+ // X0/X1/X16/X17: the msgSend receiver/SEL and the class/IMP the fast path loaded
+ // from __DATA_CONST slots — the transient the three-window scan cannot see.
+ unsigned long n=snprintf(out,capacity,"p%d %.20s sig%u PC%llx LR%llx E%llx F%llx +%llx X0%llx X1%llx X16%llx X17%llx bt",
+  f.pid,f.name,signal,f.pc,f.lr,f.esr,f.far,f.slide,f.x[0],f.x[1],f.x[16],f.x[17]);
  if(pid==proc_selfpid()) {
   uint64_t frame=f.fp;
-  for(unsigned depth=0;depth<12 && frame && !(frame&15) && n+16<capacity;++depth) {
+  for(unsigned depth=0;depth<8 && frame && !(frame&15) && n+16<capacity;++depth) {
    uint64_t pair[2];
    if(copyin(frame,pair,sizeof(pair)))break;
    n+=snprintf(out+n,capacity-n," %llx",pair[1]);
