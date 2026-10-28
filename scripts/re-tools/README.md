@@ -33,6 +33,16 @@ in the OS profile `text_fixups` (workspace
 file_offset(va)` gives the file/offset pair; lazy page-in application
 makes the `applied` counter an execution oracle.
 
+**Runtime vs build state (r69 lesson):** the kernel overlays these
+patches at boot, so raw `read_va` shows the un-patched file. Anything
+that informs a crash-chain judgment — `disasm.py`, `verifychain.py` —
+reads through `Cache.read_run()`, which applies every profile fixup;
+`Cache.profile_fixups()` returns the resolved VA table (24/25 in-cache;
+BTAudioHALPlugin is its own driver file). `disasm.py` prints
+`; <<< FIXUP` markers on patched words. Analyzing raw bytes cost us a
+wrong root-cause candidate: `+[UIScreen mainScreen]` is patched to
+`mov x0,#0; ret` at runtime but looks live in the file.
+
 ## Pitfalls (all paid for in r52-r56)
 
 - Nearest-symbol-below hits on sparsely-symbolized regions (SpringBoard

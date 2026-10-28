@@ -21,8 +21,9 @@ def main():
     va = int(sys.argv[2], 16)
     n = int(sys.argv[3]) if len(sys.argv) > 3 else 160
     c = Cache()
-    print(f'=== {label} {va:#x} ({c.sym(va)}) ===')
-    code = c.read_va(va, n * 4)
+    fixups = [f for f in c.profile_fixups() if f['va'] is not None]
+    print(f'=== {label} {va:#x} ({c.sym(va)}) [runtime: fixups applied] ===')
+    code = c.read_run(va, n * 4)
     if code is None:
         print('  <unmapped>')
         return
@@ -47,6 +48,9 @@ def main():
         elif ins.mnemonic == 'bl':
             imm = int(ins.op_str.split('#')[1], 0)
             extra = f'   ; -> {c.sym(imm)}'
+        for f in fixups:
+            if f['va'] <= ins.address < f['va'] + f['size']:
+                extra += f'   ; <<< FIXUP {f["where"]}'
         print(f'  {ins.address:#x}: {ins.mnemonic:8s} {ins.op_str}{extra}')
 
 

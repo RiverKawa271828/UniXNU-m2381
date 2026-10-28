@@ -103,6 +103,57 @@ class Cache:
         TAG = 0x40000000000
         return stored & ~TAG
 
+    def profile_fixups(self):
+        """The OS profile's text_fixups resolved to unslid VAs.
+
+        Returns dicts {va, size, expected, replacement, where}; va is None
+        for fixups outside the cache (BTAudioHALPlugin lives in its own
+        driver file). The kernel overlays expected with replacement at
+        boot, so raw read_va is the BUILD state — any crash-chain
+        disassembly must read through read_run instead (r69: 6 of 25
+        fixups sat inside the functions being analyzed, and the applied
+        patch at +[UIScreen mainScreen] flipped the whole judgment).
+        """
+        import re
+        ws = self.cache_dir.parents[1]
+        out = []
+        for prof in sorted(ws.glob('profiles/os/*/profile.toml')):
+            text = prof.read_text()
+            m = re.search(r'"text_fixups"\s*=\s*\[(.*?)\]\n', text, re.S)
+            if not m:
+                continue
+            for item in re.findall(r'"([^"]+)"', m.group(1)):
+                where, off, expected, replacement = item.split(',')
+                off = int(off, 16)
+                exp = bytes.fromhex(expected)
+                rep = bytes.fromhex(replacement)
+                va = None
+                for addr, size, foff, path in self.mappings:
+                    if path.name == where and foff <= off < foff + size:
+                        va = addr + (off - foff)
+                        break
+                out.append({'va': va, 'size': len(exp), 'expected': exp,
+                            'replacement': rep, 'where': f'{where}+{off:x}'})
+            break
+        return out
+
+    def read_run(self, va, n):
+        """read_va with the applied text_fixups overlaid (the RUN state)."""
+        data = self.read_va(va, n)
+        if data is None:
+            return None
+        buf = bytearray(data)
+        for f in self.profile_fixups():
+            if f['va'] is None:
+                continue
+            s, e = f['va'], f['va'] + f['size']
+            if e > va and s < va + n:
+                for i in range(min(f['size'], len(f['replacement']))):
+                    pos = s + i - va
+                    if 0 <= pos < len(buf):
+                        buf[pos] = f['replacement'][i]
+        return bytes(buf)
+
 
 def main():
     c = Cache(sys.argv[1] if len(sys.argv) > 1 else None)

@@ -28,7 +28,7 @@ def main():
     print('=== per-frame bl verification (inner -> outer) ===')
     for i, va in enumerate(vas):
         line = f'{labels[i]:>4} {va:#x} {c.sym(va)}'
-        raw = c.read_va(va - 4, 4) if i >= 1 else None
+        raw = c.read_run(va - 4, 4) if i >= 1 else None  # runtime: fixups applied
         if raw:
             ins = struct.unpack('<I', raw)[0]
             if (ins >> 26) == 0b100101:  # bl
