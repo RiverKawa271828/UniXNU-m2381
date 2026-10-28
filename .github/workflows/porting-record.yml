@@ -1,0 +1,13 @@
+name: Device documentation
+
+# sheng-同款薄壳：直接复用上游可复用 workflow，validate 逻辑零维护
+# （原 ci/porting-record.yml 是孤儿分支时代的自带副本，随拆分退役）。
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  porting-record:
+    uses: UniXNU/UniXNU/.github/workflows/porting-record.yml@main
