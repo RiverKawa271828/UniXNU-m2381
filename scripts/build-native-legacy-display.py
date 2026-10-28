@@ -349,6 +349,24 @@ keystore_cmd = [str(ROOT / 'kits/sheng/KeyStoreProbe.cpp') if str(arg) == str(so
                 else str(OUT / 'KeyStoreProbe.o') if str(arg) == str(OUT / 'LegacyDisplayProbe.o')
                 else arg for arg in cmd]
 run(keystore_cmd, cwd=r['directory'])
+# The charging lane (r80, sheng-adsp=2/sheng-battery=1): the audio DSP driver and
+# the battery power source compile through the IOKit display command (they carry
+# IOService state and the battery class registers from its static initializer,
+# staged late below like the other owned initializers). AdspFirmware.c is BSD/VFS
+# code and rides the boot progress archive instead (build-boot-progress.py).
+adsp_cpp = ROOT / 'kits/sheng/AdspProbe.cpp'
+adsp_obj = OUT / 'AdspProbe.o'
+battery_cpp = ROOT / 'kits/sheng/BatteryProbe.cpp'
+battery_obj = OUT / 'BatteryProbe.o'
+battery_class_cpp = ROOT / 'kits/sheng/ShengBattery.cpp'
+battery_class_obj = OUT / 'ShengBattery.o'
+battery_class_late = OUT / 'ShengBattery.late.o'
+run([str(adsp_cpp) if str(arg) == str(source) else str(adsp_obj) if str(arg) == str(OUT / 'LegacyDisplayProbe.o') else arg
+     for arg in cmd], cwd=r['directory'])
+run([str(battery_cpp) if str(arg) == str(source) else str(battery_obj) if str(arg) == str(OUT / 'LegacyDisplayProbe.o') else arg
+     for arg in cmd], cwd=r['directory'])
+run([str(battery_class_cpp) if str(arg) == str(source) else str(battery_class_obj) if str(arg) == str(OUT / 'LegacyDisplayProbe.o') else arg
+     for arg in cmd], cwd=r['directory'])
 # r64 cache-global audit: the UIKitCore __DATA_DIRTY watcher (uikit-cache-probe=1;
 # started from native_legacy_display_late_probe, publishes ext rows 4-7). It
 # reads the private task/vm_map ABI of this exact kernel source, so it compiles
@@ -376,6 +394,35 @@ while i < len(args):
 uikit_cmd += ['-mgeneral-regs-only', '-Wno-unused-parameter',
               '-I', str(ROOT / '.cache/xnu-work/osfmk')]
 run(uikit_cmd, cwd=uikit_record['directory'])
+# The nine ADSP protocol cores (sheng's charging stack, minus the FAT reader and
+# the audio-lane files this board never builds): plain kernel C, compiled through
+# the startup.o record with its own flags (the sheng process lane keeps them).
+adsp_c = [ROOT / 'kits/sheng' / (name + '.c')
+          for name in ('QcomMdt', 'QcomQrtr', 'ShengQrtr', 'QcomSmem', 'QcomSmp2p',
+                       'QcomGlink', 'QcomQmp', 'QcomRpmh', 'ShengBattmgr')]
+adsp_objs = []
+for core_src in adsp_c:
+    core_obj = OUT / (core_src.stem + '.o')
+    adsp_objs.append(core_obj)
+    core_cmd = []
+    core_args = uikit_record['arguments']
+    i = 0
+    while i < len(core_args):
+        arg = core_args[i]
+        if arg == uikit_record['file']:
+            core_cmd.append(str(core_src))
+        elif arg in ('-o', '-MF', '-MT', '-MJ'):
+            if arg == '-o':
+                core_cmd += ['-o', str(core_obj)]
+            i += 1
+        elif not arg.startswith(('-W',)):
+            core_cmd.append(arg)
+        i += 1
+    core_cmd += ['-mgeneral-regs-only', '-Wno-unused-parameter',
+                 '-I', str(ROOT / '.cache/xnu-work/osfmk'), '-I', str(ROOT / 'kits/sheng')]
+    run(core_cmd, cwd=uikit_record['directory'])
+run([objcopy, '--remove-section=__DATA,__mod_init_func',
+     '--globalize-symbol=__GLOBAL__sub_I_ShengBattery.cpp', battery_class_obj, battery_class_late])
 print(run(['python3', ROOT / 'scripts/build-arm-driver.py', 'AppleKeyStoreState'], text=True), end='')
 keystore_dir = ROOT / 'build/apple-key-store-state'
 # The recipe names the object by the component's legacy runtime name (the
@@ -399,7 +446,8 @@ require(code((gop / 'NativeGOPPresenter.o').read_bytes(), macho((gop / 'NativeGO
         code(gop_late.read_bytes(), macho(gop_late.read_bytes())),
         'Owned presenter instructions unchanged by late init staging')
 run(['xcrun', 'ar', 'rcs', archive, late, OUT / 'original-bindings.o', OUT / 'LegacyDisplayProbe.o',
-     OUT / 'KeyStoreProbe.o', OUT / 'UIKitCacheProbe.o', OUT / 'LegacyDisplayDPUSubstitute.o', keystore_late, gop_late])
+     OUT / 'KeyStoreProbe.o', OUT / 'UIKitCacheProbe.o', OUT / 'LegacyDisplayDPUSubstitute.o', keystore_late, gop_late,
+     adsp_obj, battery_obj, battery_class_late, *adsp_objs])
 sources = [ROOT / 'drivers/GopFramebuffer/NativeLegacyDisplay.cpp',
            ROOT / 'drivers/GopFramebuffer/NativeLegacyRequest.h',
            source,
@@ -408,7 +456,8 @@ sources = [ROOT / 'drivers/GopFramebuffer/NativeLegacyDisplay.cpp',
            ROOT / 'drivers/AppleKeyStoreState/NativeKeyStoreEvents.cpp',
            dpu,
            ROOT / 'kits/sheng/OriginalLegacyFramebufferABI.h',
-           ROOT / 'scripts/build-native-legacy-display.py']
+           ROOT / 'scripts/build-native-legacy-display.py',
+           adsp_cpp, battery_cpp, battery_class_cpp, *adsp_c]
 (OUT / 'build-report.json').write_text(json.dumps(dict(
     source_sha256={str(p.relative_to(ROOT)): sha(p) for p in sources},
     generated_abi_sha256=sha(OUT / 'OriginalLegacyFramebufferABI.h'),
@@ -421,5 +470,5 @@ sources = [ROOT / 'drivers/GopFramebuffer/NativeLegacyDisplay.cpp',
     virtual_entries=358, owned_entries=owned, inherited_native_entries=native,
     guarded_backend_leaves=[i for i in pure if i not in (213, 337)],
     original_instructions_modified=False, driver_initialized=False, display_presented=False,
-    desktop=False, probe_fleet='m2381-trimmed+keystore+uikitcache'), indent=2) + '\n')
+    desktop=False, probe_fleet='m2381-trimmed+keystore+uikitcache+adsp+battery'), indent=2) + '\n')
 print('Built genuine original Legacy inheritance/dispatch; seven backend leaves still guarded, runtime lifecycle unqualified')

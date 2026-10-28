@@ -196,11 +196,11 @@ volatile uint32_t native_dpu_pipes[54] = {0};
 // Safari/lsd failed-lookup log: the kernel's native-lookup-trace patch
 // defines these itself (vfs_lookup.c); nothing to stub here.
 
-// Audio DSP / audio framework / battery (no AdspProbe/ShengBattery lanes)
-volatile int32_t native_adsp_stats[16] = {0};
-char native_adsp_text[96] = {0};
+// Audio DSP / battery: the real lanes joined the kernel (r80 charging lane —
+// AdspProbe.o/BatteryProbe.o ride libNativeLegacyDisplay.late.a and define
+// native_adsp_stats/native_adsp_text/native_battery_stats themselves). Only
+// the audio framework row stays a stub (no ShengAudioService lane).
 volatile int32_t native_audio_stats[16] = {0};
-volatile int32_t native_battery_stats[16] = {0};
 
 // UI swipe timing (no boot-ui-focus trace lane); 17: the [swipe2] row reads
 // slot 16 (the "heavy" gesture second) — the fork's extern under-declared it.

@@ -1106,6 +1106,62 @@ extern "C" int native_ufs_store_sync (void)
   return storeMode () == 2 && gStoreRegionBlocks && hostSyncCache () == kIOReturnSuccess;
 }
 
+// ---- Read-only access to other partitions, by GPT name ------------------------------------------------------------
+// The audio DSP's firmware is read from where package-m2381-boot.py appended it inside boot_b, so it never has to fit the payload's
+// ESP. Nothing here writes: only reads of 4096-byte blocks of the LUN the name was found on. (ShengUfs fc46224 same functions.)
+extern "C" int native_ufs_part_find (const char *name, uint32_t *lun, uint64_t *first, uint64_t *blocks)
+{
+  if (!gHost.ready || !name || !lun || !first || !blocks) return 0;
+  uint8_t *buffer = static_cast<uint8_t *> (IOMalloc (4096));
+  if (!buffer) return 0;
+  int found = 0;
+  const size_t length = strlen (name);
+  for (uint32_t l = 0; l < 6 && !found; ++l) {
+    if (hostRead4k (static_cast<uint8_t> (l), 1, 1, buffer) != kIOReturnSuccess || memcmp (buffer, "EFI PART", 8)) continue;
+    uint64_t entriesLba;
+    uint32_t count, size;
+    memcpy (&entriesLba, buffer + 72, 8);
+    memcpy (&count, buffer + 80, 4);
+    memcpy (&size, buffer + 84, 4);
+    if (size < 128 || size > 4096 || count > 512) continue;
+    for (uint32_t i = 0; i < count && !found; ++i) {
+      const uint64_t at = static_cast<uint64_t> (i) * size;
+      if (i == 0 || at % 4096 < size) {
+        if (hostRead4k (static_cast<uint8_t> (l), entriesLba + at / 4096, 1, buffer) != kIOReturnSuccess) break;
+      }
+      const uint8_t *entry = buffer + at % 4096;
+      uint64_t firstLba, lastLba;
+      memcpy (&firstLba, entry + 32, 8);
+      memcpy (&lastLba, entry + 40, 8);
+      if (!firstLba || lastLba < firstLba) continue;
+      size_t n = 0;
+      while (n < length && n < 36 && entry[56 + 2 * n] == static_cast<uint8_t> (name[n]) && entry[57 + 2 * n] == 0) ++n;
+      if (n == length && (n == 36 || (entry[56 + 2 * n] == 0 && entry[57 + 2 * n] == 0))) {
+        *lun = l;
+        *first = firstLba;
+        *blocks = lastLba - firstLba + 1;
+        found = 1;
+      }
+    }
+  }
+  IOFree (buffer, 4096);
+  return found;
+}
+
+// Reads `blocks` 4096-byte blocks from lba of the LUN (absolute, as native_ufs_part_find returned them).
+extern "C" int native_ufs_part_read (uint32_t lun, uint64_t lba, uint32_t blocks, void *dst)
+{
+  if (!gHost.ready || !dst || !blocks || lun > 5) return 0;
+  while (blocks) {
+    uint32_t chunk = blocks > kDataMax / 4096 ? static_cast<uint32_t> (kDataMax / 4096) : blocks;
+    if (hostRead4k (static_cast<uint8_t> (lun), lba, chunk, dst) != kIOReturnSuccess) return 0;
+    dst = static_cast<uint8_t *> (dst) + chunk * 4096ULL;
+    lba += chunk;
+    blocks -= chunk;
+  }
+  return 1;
+}
+
 // ---- Diagnostic log window (sheng-log=1) --------------------------------------------------------------------------
 // The board's log writer (kits/sheng BootLog.c) gets the last kLogReserveBlocks of userdata and the kExportBlocks below them, refused
 // unless the partition holds them clear of the flashed root image plus a 4 MiB guard. Off without the boot argument.

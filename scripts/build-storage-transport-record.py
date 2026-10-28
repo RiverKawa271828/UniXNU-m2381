@@ -28,10 +28,14 @@ if not obj.is_file():
     raise SystemExit(f'missing compiled transport object: {obj}')
 # The link audit derives the audited object from the archive file name
 # (libVirtioMmioBlock.a -> VirtioMmioBlock.o) while build-arm-driver writes
-# the runtime identifier (NativeVirtioBlock.o); alias it in place.
+# the runtime identifier (NativeVirtioBlock.o); alias it in place. The alias
+# refreshes on every run: a stale one survives a rebuild (any path or source
+# change moves the object hash) and the link's PY_BINDINGS sha check then
+# compares the fresh record against the stale alias.
 for archive in out.glob('lib*.a'):
     audit_obj = out / (archive.stem.removeprefix('lib') + '.o')
-    if not audit_obj.exists():
+    if audit_obj != obj:
+        audit_obj.unlink(missing_ok=True)
         audit_obj.hardlink_to(obj)
 source = ROOT / 'build/io-storage-family/bindings.json'
 if not source.is_file():

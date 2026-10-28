@@ -1,8 +1,28 @@
 {
-  "kernel_sha256": "c2ca64860aeef3f2c34ede28641f5e9aac955a38e199101eddd1d3d327a93842",
-  "fd_sha256": "7237ea09d0c7b9a9b1f6bd584cb93b4982e0dac0b2c7aa6e3c320367a4c55da4",
-  "image_sha256": "289614baa5257cde89ad0cc2578f61688b0d7585ab80a4e515730719497226bf",
-  "image_bytes": 1269760,
+  "kernel_sha256": "3d066d241cece3989c0c3c1cb2ee2080a3e7f337d813eb515cc6b92ea5959873",
+  "fd_sha256": "ce3ce88b25cb5e7add4c809f895854daf3acbf8913f566680cd073bf657f5c41",
+  "image_sha256": "ec1d518bcd9673cddfff97fed644d5d4c7bfdfb2bad533c82dbd56ccdf3ca1a4",
+  "image_bytes": 31793152,
+  "boot_image_sha256": "b9d0c03e9d8e612e4cc6a1d9527801aef2580b4c8b76de001bcf5a47fe674729",
+  "boot_image_bytes": 1269760,
+  "segment": {
+    "bytes": 30523392,
+    "boot_image_bytes": 1269760,
+    "entries": [
+      {
+        "name": "adsp",
+        "offset": 4096,
+        "size": 30499631,
+        "sha256": "acf95fd57030abb3a5a7b6e8fc830153d04bc54ab6a3d6eda898d9ea52c0eae1"
+      },
+      {
+        "name": "adsp_dtb",
+        "offset": 30507008,
+        "size": 12420,
+        "sha256": "db6a6478771b28154d845b207a0e391c7c9037514cb6dd061d2e83cb7d7154f1"
+      }
+    ]
+  },
   "header_version": 4,
   "os_version": "15.0.0",
   "os_patch_level": "2025-11",

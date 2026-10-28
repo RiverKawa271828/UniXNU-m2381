@@ -312,14 +312,19 @@ kernel_args = [
   # stand-in answers "no keybag, nothing locked"), so this entry can be
   # reconsidered once the AKS diagnostics row shows real opens/calls; kept
   # disabled one more round for change attribution.
-  "sheng-disable-jobs=com.apple.transparencyd,com.apple.assistantd,com.apple.biomed,com.apple.liveactivitiesd",
+  "sheng-disable-jobs=com.apple.transparencyd,com.apple.assistantd,com.apple.biomed,com.apple.liveactivitiesd,com.apple.coreduetd",
   # boot-ui-focus3=Preferences dropped in r64: the command line hit its 1000-byte
   # limit when uikit-cache-probe=1 joined (r45-era diagnostic focus; judgments
   # since r58 read the SpringBoard slot only, which focus4 keeps tracing).
   "boot-ui-focus4=SpringBoard",
   "sheng-smp=1",
-  "sheng-cpufreq=3",
-  "sheng-touch=4",
+  # The charging lane (r80): the ADSP battery stack boots the DSP from the
+  # boot_b firmware segment and publishes the battery as an IOPMPowerSource
+  # over PMIC GLINK. The cpufreq/touch probes stay unbuilt on this board
+  # (the trimmed fleet), so their args are gone; coreduetd rides the disable
+  # list above (the sheng P-cluster answer).
+  "sheng-adsp=2",
+  "sheng-battery=1",
   "sheng-aks=1",
   # r64 cache-global audit: the UIKitCore __DATA_DIRTY watcher (ext rows 4-7,
   # 2 s t-series over the bgTC/mainScreen singleton slots; display archive,
@@ -334,7 +339,8 @@ kernel_args = [
   "armcpu-spi-ipi=1",
   "-no_slto_panic",
   "ml-timeout-lock-panic-scale=40",
-  "sheng-touch-hid=1",
+  # sheng-touch-hid=1 dropped with the charging lane (r80): the touch/HID probes
+  # this arg gates are unbuilt here (NATIVE_HID_INPUT=n), same as sheng-touch.
   "sheng-data-persist=2",
   # The UFS diagnostic log (BootLog.c): every 2 s the full diagnostic page,
   # the kernel message buffer and the exec census (per process name, starts/

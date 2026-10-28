@@ -34,6 +34,10 @@ int sheng_fw_open(const char *path, void **handle, uint64_t *size);
 void sheng_qrtr_start(void);
 int sheng_fw_read(void *handle, uint64_t offset, void *to, size_t length);
 void sheng_fw_close(void *handle);
+// m2381: the boot_b segment form reads the squashed images in place through ShengUfs
+// (scripts/package-m2381-boot.py appends them inside boot_b; the ESP cannot hold 30.5 MiB).
+int sheng_fw_ufs_read(void *handle, uint64_t offset, void *to, size_t length);
+void sheng_fw_ufs_close(void *handle);
 // m2381: the device's own ADSP images ride in the kernel (scripts/make-adsp-firmware.py squashes the stock split
 // images and the boot-progress archive stages AdspFirmwareBlob.c; the vendor firmware never enters git). The
 // zero-size default keeps the build working without the staged files, and the probe then falls back to VFS.
@@ -307,24 +311,30 @@ struct Image {  // plain data, zero at start: the two live in static storage (a 
     void *file;
     uint64_t size;
     bool embedded;  // m2381: the blob form reads from kernel rodata, not through a vnode
+    bool ufs;       // m2381: the boot_b segment form reads in place through ShengUfs
     QcomMdtImage mdt;
     IOBufferMemoryDescriptor *meta;
 };
 Image gDtbImage, gAdspImage;
 int fileRead(void *context, uint64_t offset, void *to, size_t length) {return sheng_fw_read(context, offset, to, length);}
 int memRead(void *context, uint64_t offset, void *to, size_t length) {return sheng_fw_mem_read(context, offset, to, length);}
+int ufsRead(void *context, uint64_t offset, void *to, size_t length) {return sheng_fw_ufs_read(context, offset, to, length);}
 int fwRead(const Image &image, uint64_t offset, void *to, size_t length) {
-    return image.embedded ? sheng_fw_mem_read(image.file, offset, to, length) : sheng_fw_read(image.file, offset, to, length);
+    return image.ufs ? sheng_fw_ufs_read(image.file, offset, to, length)
+                     : image.embedded ? sheng_fw_mem_read(image.file, offset, to, length)
+                                      : sheng_fw_read(image.file, offset, to, length);
 }
 void release(Image &image) {
-    if (image.file) (image.embedded ? sheng_fw_mem_close : sheng_fw_close)(image.file);
+    if (image.file) (image.ufs ? sheng_fw_ufs_close : image.embedded ? sheng_fw_mem_close : sheng_fw_close)(image.file);
     if (image.meta) image.meta->release();
-    image.file = nullptr; image.meta = nullptr; image.embedded = false;
+    image.file = nullptr; image.meta = nullptr; image.embedded = false; image.ufs = false;
 }
 int openImage(Image &image, const char *path) {
+    const bool ufs = !strncmp(path, "boot_b:", 7) || !strncmp(path, "boot_a:", 7);
     int rc = sheng_fw_open(path, &image.file, &image.size);
     if (rc) {image.file = nullptr; return rc;}
-    rc = qcom_mdt_parse(&image.mdt, image.size, fileRead, image.file);
+    image.ufs = ufs;
+    rc = qcom_mdt_parse(&image.mdt, image.size, ufs ? ufsRead : fileRead, image.file);
     return rc ? 1000 - rc : 0;
 }
 int openEmbedded(Image &image, const uint8_t *data, uint64_t size) {
@@ -345,7 +355,7 @@ int authenticateHeader(Image &image, uint32_t pas, uint64_t base) {
                                                                  0xfffffffffffff000ull);
     if (!image.meta || image.meta->prepare() != kIOReturnSuccess) return -12;
     uint8_t *va = static_cast<uint8_t *>(image.meta->getBytesNoCopy());
-    if (qcom_mdt_metadata(&image.mdt, image.embedded ? memRead : fileRead, image.file, va, bytes)) return -5;
+    if (qcom_mdt_metadata(&image.mdt, image.ufs ? ufsRead : image.embedded ? memRead : fileRead, image.file, va, bytes)) return -5;
     cleanToPoc(va, bytes);
     const uint64_t phys = image.meta->getPhysicalSegment(0, nullptr, kIOMemoryMapperNone);
     if (!scmOk(scm(QCOM_SCM_PAS_INIT_IMAGE, qcom_scm_args(2, QCOM_SCM_VAL, QCOM_SCM_RW, 0), pas, phys, 0))) return -1;
@@ -513,23 +523,27 @@ bool attachIrqs() {
     return true;
 }
 
-// The firmware comes from the device's own firmware partition ("modem:", read in place) or, with sheng-adsp-fw=DIR, from DIR/adsp.mbn
-// and DIR/adsp_dtb.mbn on a mounted volume. Without the argument the partition is tried first, then the two directories files may be
-// installed in. The UFS driver and the Data volume may not be up when this thread starts: a few tries with growing pauses (about two
-// minutes in all), not a poll. source gets the source that opened ("modem:" or a directory).
+// The firmware comes from the device's own firmware partition ("modem:", read in place), from the
+// m2381 boot_b segment ("boot_b:", the squashed images package-m2381-boot.py appended inside the
+// boot image's partition, read in place through ShengUfs) or, with sheng-adsp-fw=DIR, from
+// DIR/adsp.mbn and DIR/adsp_dtb.mbn on a mounted volume. Without the argument the sources are
+// tried in order, boot_b first. The UFS driver and the Data volume may not be up when this thread
+// starts: a few tries with growing pauses (about two minutes in all), not a poll. source gets the
+// source that opened.
 int openPair(Image &dtb, Image &adsp, const char *source, char *path, size_t size) {
     const bool modem = !strcmp(source, "modem:");
-    snprintf(path, size, modem ? "%sadsp_dtb" : "%s/adsp_dtb.mbn", source);
+    const bool bare = modem || !strncmp(source, "boot_b:", 7) || !strncmp(source, "boot_a:", 7);
+    snprintf(path, size, bare ? "%sadsp_dtb" : "%s/adsp_dtb.mbn", source);
     int rc = openImage(dtb, path);
     if (rc) return rc;
-    snprintf(path, size, modem ? "%sadsp" : "%s/adsp.mbn", source);
+    snprintf(path, size, bare ? "%sadsp" : "%s/adsp.mbn", source);
     if ((rc = openImage(adsp, path))) release(dtb);
     return rc;
 }
 int openFirmware(Image &dtb, Image &adsp, char *path, size_t size, const char *chosen) {
     static const uint32_t pauses[] = {1, 2, 4, 8, 16, 30, 30, 30};
-    const char *sources[3] = {"modem:", "/private/var/firmware/qcom/sm8550/sheng", "/private/var/ngpu/fw"};
-    const unsigned count = chosen ? 1 : 3;
+    const char *sources[4] = {"boot_b:", "modem:", "/private/var/firmware/qcom/sm8550/sheng", "/private/var/ngpu/fw"};
+    const unsigned count = chosen ? 1 : 4;
     if (chosen) sources[0] = chosen;
     // m2381: the squashed stock images ride in the kernel, so try them first; without the staged blobs
     // (zero size) this is a no-op and the volume sources below run as upstream has them.
