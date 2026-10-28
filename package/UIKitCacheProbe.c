@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BSD-2-Clause-Patent
-// r65 cache-global audit, dynamic leg v2. r64 established two facts and one
+// r68 cache-global audit, dynamic leg v3 (non-invasive sweep). r64 established two facts and one
 // bug: the 0xf1/0xf00 garbage sits in UIKitCore's lazily-cached singleton
 // globals (bgTC slot 0x1F48CE5E0, mainScreen singleton 0x1F48D5550), the
 // poison is ALREADY in place when SpringBoard is first scanned (t ~= 20 s,
@@ -56,6 +56,7 @@ extern char boot_progress_ext[8][48];
 static char probe_target[32];
 static uint64_t window_cur[UK_DIRTY_SIZE / 8];
 static volatile unsigned probe_round, probe_status = 1;
+static unsigned probe_silence_until;
 static unsigned probe_readfails;
 static unsigned first_disease_round, last_disease_round;
 static char first_disease_proc[16], last_disease_proc[16];
@@ -108,13 +109,28 @@ static int capture(proc_t p, void *arg)
     vm_map_t map = get_task_map_reference(task);
     if (!map) return PROC_RETURNED;
     uint64_t slide = (uint64_t)task->task_shared_region_slide;
-    vm_map_deallocate(map);
-    if (!slide) return PROC_RETURNED;  // no shared cache = no UIKit window
+    if (!slide) { vm_map_deallocate(map); return PROC_RETURNED; }  // no shared cache = no UIKit window
 
+    // r68 (two r66 bugs fixed here). (1) Refcount: the r66 lock-fix edit
+    // deallocated the map BEFORE the read and again after it — a use-after-
+    // deallocate plus a double deallocate of the task's map reference on
+    // every capture; keep the reference across the read and drop it once.
+    // (2) Never enter vm_map_read_user's fault path: its cross-task form is
+    // vm_map_switch(target map) → copyin → vm_map_switch back
+    // (vm_map.c:19636), and a failing copyin inside that window is what
+    // wedged CPU1's AP bring-up (ArmCpu::prepareGic) in r66 — twice,
+    // deterministically. Pre-check the region instead: __DATA_DIRTY is
+    // non-pageable once mapped, so a protection-passing read cannot fault.
+    if (!vm_map_check_protection(map, (vm_map_offset_t)(UK_DIRTY_BASE + slide),
+                                 (vm_map_offset_t)(UK_DIRTY_BASE + slide + UK_DIRTY_SIZE),
+                                 VM_PROT_READ)) {
+        vm_map_deallocate(map);
+        return PROC_RETURNED;
+    }
     kern_return_t kr = vm_map_read_user(map, (vm_map_offset_t)(UK_DIRTY_BASE + slide),
                                         window_cur, UK_DIRTY_SIZE);
     vm_map_deallocate(map);
-    if (kr != KERN_SUCCESS) { probe_status = 4; ++probe_readfails; return PROC_RETURNED; }
+    if (kr != KERN_SUCCESS) { probe_status = 4; ++probe_readfails; probe_silence_until = probe_round + 100; return PROC_RETURNED; }
     probe_status = 0;
 
     const unsigned n = (unsigned)(UK_DIRTY_SIZE / 8);
@@ -149,7 +165,12 @@ static void monitor(void *arg, wait_result_t result)
     thread_set_thread_name(current_thread(), "uikit_cache_probe");
     for (;;) {
         agg_procs = agg_nonzero = agg_garbage = probe_readfails = 0;
-        proc_iterate(PROC_ALLPROCLIST | PROC_NOWAITTRANS, capture, NULL, NULL, NULL);
+        // r68 warmup + circuit breaker: no sweep during the first ~12 s (the
+        // AP bring-up window this probe wedged in r66) and, if a read ever
+        // fails despite the protection pre-gate, stay silent for 100 rounds
+        // instead of hammering the map every 2 s.
+        if (probe_round >= 6 && probe_round >= probe_silence_until)
+            proc_iterate(PROC_ALLPROCLIST | PROC_NOWAITTRANS, capture, NULL, NULL, NULL);
         ++probe_round;
         char buf[64];
         snprintf(buf, sizeof buf, "UKC k%u p%u n%u g%u f%u",
