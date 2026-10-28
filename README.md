@@ -3,10 +3,14 @@
 Device support for the **Meizu 20 Classic** (`m2381`, Qualcomm SM8550
 phone): UniXNU 4K kernel + an OS profile selecting
 `ipados-17.7.11-21H461` (iPad7,1 donor — the same donor as sheng) plus a
-board profile that drives the unixnu build tree. Developed inside the
+board profile that drives the unixnu build tree. Standalone device
+repository since 2026-10-29, extracted from the
 [ios-m2381-unixnu](https://github.com/RiverKawa271828/ios-m2381-unixnu)
-workspace (branch `m2381`; this directory is mirrored to the orphan
-branch `device-m2381` for CI).
+workspace via `git subtree split` (the legacy orphan-branch mirror
+`device-m2381` there stays frozen until the first CI dispatch from this
+repository goes green). Point the unixnu build tree at a local checkout
+with `./unixnu -D <path-to-this-checkout>`; the device path is
+remembered across runs.
 
 **Status (2026-10-27, after round r55e / payload r56 db3a7392):** the
 full iOS chain runs on hardware — UEFI → XNU → launchd → a 173-process
@@ -47,11 +51,12 @@ workspace commit messages.
 All outputs land under `out/m2381/ipados-17.7.11-21H461/m2381/`.
 
 ```bash
-./unixnu defconfig
+git clone https://github.com/UniXNU/UniXNU && cd UniXNU
+./unixnu -D /path/to/UniXNU-m2381 defconfig
 ./unixnu fetch
 ./unixnu status
 ./unixnu kernel      # Linux lane proven locally; CI uses macos.yml
-./unixnu firmware    # m2381Pkg (Mu-Silicium) builds in devices/m2381/uefi
+./unixnu firmware    # m2381Pkg (Mu-Silicium) sources live in the workspace devices/m2381/uefi
 UNIXNU_UNIQUE_CHIP_ID=<seed> ./unixnu payload
 ./unixnu bootimg
 ```

@@ -1,0 +1,25 @@
+# Build outputs and caches (re-derivable; nothing important lives here)
+/build/
+/Build/
+/Conf/
+/out/
+/.cache/
+
+# Signing keys stay local-only (per-device owner trust anchor)
+*.pem
+
+# Local development files
+*.log
+*.terminal
+*.swp
+*.swo
+*~
+.DS_Store
+.vscode/
+.idea/
+__pycache__/
+*.pyc
+*.dSYM/
+
+# Inputs, images and products that never belong in Git
+*.ipsw
