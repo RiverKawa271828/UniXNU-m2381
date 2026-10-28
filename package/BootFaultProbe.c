@@ -63,11 +63,13 @@ void boot_progress_exit_fault(int pid,unsigned signal,char *out,unsigned long ca
  // from __DATA_CONST slots — the transient the three-window scan cannot see.
  unsigned long n=snprintf(out,capacity,"p%d %.20s sig%u PC%llx LR%llx SP%llx E%llx F%llx +%llx R%u X0%llx X1%llx X16%llx X17%llx bt",
   f.pid,f.name,signal,f.pc,f.lr,f.sp,f.esr,f.far,f.slide,f.src,f.x[0],f.x[1],f.x[16],f.x[17]);
+ uint64_t btv[8]; unsigned btn=0;
  if(pid==proc_selfpid()) {
   uint64_t frame=f.fp;
   for(unsigned depth=0;depth<8 && frame && !(frame&15) && n+16<capacity;++depth) {
    uint64_t pair[2];
    if(copyin(frame,pair,sizeof(pair)))break;
+   btv[btn++]=pair[1];
    n+=snprintf(out+n,capacity-n," %llx",pair[1]);
    if(pair[0]<=frame || pair[0]-frame>1048576)break;
    frame=pair[0];
@@ -81,6 +83,11 @@ void boot_progress_exit_fault(int pid,unsigned signal,char *out,unsigned long ca
  // the shared-cache runtime window or the main-binary window (dyld image0
  // = the executable's load address) on wide row W1. Same-map copyin only:
  // gated on pid==proc_selfpid(), never the r66 cross-map fault path.
+ // r72: r71's 9-slot budget died on the terminate chain plus unmapped data
+ // pointers before reaching the torn throw site. Exclude the bt frames
+ // (that chain is known), dedup against everything already published, and
+ // gate each candidate on a bl/blr at [v-4] — a live return address sits
+ // one word after a call, data pointers fail and stop burning slots.
  if(pid==proc_selfpid() && f.src==2) {
   uint64_t mainbase=0;
   struct user64_dyld_all_image_infos info={0};
@@ -90,16 +97,28 @@ void boot_progress_exit_fault(int pid,unsigned signal,char *out,unsigned long ca
      !copyin(info.infoArray,&image,sizeof(image)))
    mainbase=image.imageLoadAddress;
   char row[112]; unsigned ri=(unsigned)snprintf(row,sizeof row,"SS b%llx",mainbase);
-  unsigned count=0; uint64_t prev=0;
+  unsigned count=0;
+  uint64_t seen[8];
   uint64_t c_lo=f.slide+0x17f000000ULL, c_hi=f.slide+0x201000000ULL;
-  for(uint64_t a=(f.sp+7)&~(uint64_t)7; a<f.sp+49152 && count<9; a+=512) {
+  for(uint64_t a=(f.sp+7)&~(uint64_t)7; a<f.sp+49152 && count<8; a+=512) {
    unsigned char chunk[512];
    if(copyin((user_addr_t)a,chunk,sizeof chunk))break;
-   for(unsigned o=0;o+8<=sizeof chunk && count<9;o+=4) {
+   for(unsigned o=0;o+8<=sizeof chunk && count<8;o+=4) {
     uint64_t v; memcpy(&v,chunk+o,8);
-    if((v&3)||v==prev)continue;
+    if(v&3)continue;
     if(!((v>=c_lo&&v<c_hi)||(mainbase&&v>=mainbase&&v<mainbase+0x1000000ULL)))continue;
-    prev=v;
+    unsigned dup=0;
+    for(unsigned k=0;k<count;++k) if(seen[k]==v){dup=1;break;}
+    if(dup)continue;
+    unsigned stale=0;
+    for(unsigned k=0;k<btn;++k) if(btv[k]==v){stale=1;break;}
+    if(stale)continue;
+    uint32_t gate[2];
+    if(copyin((user_addr_t)(v-8),gate,sizeof gate))continue;
+    uint32_t w4=gate[1];
+    if((w4&0xFC000000u)!=0x94000000u &&
+       (w4&0xFFFFFC1Fu)!=0xD63F0000u) continue;
+    seen[count]=v;
     if(ri+12<sizeof row)ri+=(unsigned)snprintf(row+ri,sizeof row-ri," %llx",v);
     ++count;
    }
