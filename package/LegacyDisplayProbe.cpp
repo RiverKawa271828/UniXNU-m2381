@@ -82,6 +82,7 @@ volatile uint32_t native_legacy_retirement_calls,native_legacy_retired_generatio
 volatile uint64_t native_legacy_retired_current,native_legacy_retired_pending;
 char native_legacy_properties[4096];
 volatile uint32_t native_legacy_client_calls,native_legacy_client_type;
+volatile uint32_t native_legacy_wait_standin_calls;
 volatile int native_legacy_client_pid,native_legacy_client_status=-1;
 volatile uint64_t native_legacy_client_task,native_legacy_client_object;
 char native_legacy_client_class[64];
@@ -371,6 +372,7 @@ extern "C" unsigned native_legacy_state_words(char *out,unsigned cap) {
 }
 extern "C" unsigned native_legacy_clients_dump(char *out,unsigned cap) {
     unsigned at=0;out[0]=0;
+    at+=snprintf(out+at,cap-at,"wait-standin %u\n",native_legacy_wait_standin_calls);
     for(unsigned c=0;c<seenClientCount && at+120<cap;++c) {
         const ClientStat &s=seenClients[c];
         at+=snprintf(out+at,cap-at,"C%u pid=%d calls=%u fails=%u regs=%u",c,s.pid,s.calls,s.fails,s.regs);
