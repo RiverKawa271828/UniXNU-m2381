@@ -54,6 +54,7 @@ void proc_iterate(unsigned,int (*)(proc_t,void *),void *,int (*)(proc_t,void *),
 #define PROC_NOWAITTRANS (1U<<2)
 
 extern char boot_progress_ext[8][48];
+extern char boot_progress_ext_wide[2][112]; // W0/W1 rows in BootLog; free (ADRENO=n)
 
 // UIKitCore (iPad7,1 21H461) segments, LC-parsed from the image macho.
 #define UK_DIRTY_BASE 0x1f489fef0ULL
@@ -67,6 +68,9 @@ extern char boot_progress_ext[8][48];
 #define SLOT_SELP 0x1f046e1d8ULL   // _objc_msgSend$mainScreen SEL slot
 #define SLOT_BGTC 0x1f48ce5e0ULL   // __backgroundThreadFallbackTraitCollection lazy slot (DIRTY)
 #define SLOT_MAINSCREEN 0x1f48d5550ULL // [UIScreen mainScreen] fast path (DIRTY)
+#define SLOT_SCREENCACHE 0x1f48d59f8ULL // __UIGet screen cache 2, page-cache branch premise (DIRTY)
+#define SLOT_GATECHK1 0x1f48ce5f0ULL   // __UIGet cmn #-1 gate slot (DIRTY)
+#define SLOT_GATECHK2 0x1f48ce5f8ULL   // __UIGet w19 gate slot == scene-branch X19 (DIRTY)
 
 // Pointers in this cache are >= 0x1_80000000 unslid; anything small is garbage.
 #define GARBAGE_LIMIT 0x1000000ULL
@@ -227,6 +231,22 @@ static void monitor(void *arg, wait_result_t result)
                 snprintf(buf, sizeof buf, "B- M-");
             }
             put(5, buf, sizeof buf);
+            // r70: the three feeder slots of the (fixed) bl bgTC at
+            // __UIGet+0xa8 — page-cache premise and the two gate slots.
+            // Published on wide row W0 (111 chars; BootLog emits "W0 ...").
+            if (win_fresh & 1) {
+                unsigned sc = (unsigned)((SLOT_SCREENCACHE - UK_DIRTY_BASE) / 8);
+                unsigned g1 = (unsigned)((SLOT_GATECHK1 - UK_DIRTY_BASE) / 8);
+                unsigned g2 = (unsigned)((SLOT_GATECHK2 - UK_DIRTY_BASE) / 8);
+                snprintf(buf, sizeof buf, "S%llx G1%llx G2%llx x19ref%llx",
+                         win_dirty[sc], win_dirty[g1], win_dirty[g2],
+                         win_dirty[g2]);
+            } else {
+                snprintf(buf, sizeof buf, "S- G1- G2-");
+            }
+            for (unsigned i = 0; i < 111; ++i)
+                boot_progress_ext_wide[0][i] = buf[i] ? buf[i] : ' ';
+            boot_progress_ext_wide[0][111] = 0;
             if (first_small_round[2])
                 snprintf(buf, sizeof buf, "C k%u +%llx v%llx",
                          first_small_round[2], first_small_off[2], first_small_val[2]);

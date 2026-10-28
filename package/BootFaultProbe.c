@@ -12,7 +12,7 @@ extern int proc_selfpid(void);
 extern void proc_selfname(char *, int);
 
 struct boot_fault_record {
- unsigned valid;
+ unsigned valid,src; // src: 1 = hardware exception capture, 2 = exit-time fallback
  int pid;
  char name[32];
  uint64_t pc,lr,sp,fp,esr,far,slide,x[29];
@@ -24,7 +24,7 @@ static void capture_exception(void *saved,unsigned esr,uint64_t far) {
  arm_saved_state_t *state=saved;
  if(__atomic_exchange_n(&fault_lock,1,__ATOMIC_ACQUIRE))return;
  struct boot_fault_record *f=&faults[fault_count++%8];
- f->valid=0;f->pid=proc_selfpid();proc_selfname(f->name,sizeof(f->name));
+ f->valid=1;f->src=1;f->pid=proc_selfpid();proc_selfname(f->name,sizeof(f->name));
  f->pc=(uint64_t)get_saved_state_pc(state);f->lr=(uint64_t)get_saved_state_lr(state);
  f->sp=(uint64_t)get_saved_state_sp(state);f->fp=(uint64_t)get_saved_state_fp(state);f->esr=esr;f->far=far;
  f->slide=current_task()->task_shared_region_slide;
@@ -50,7 +50,7 @@ void boot_progress_exit_fault(int pid,unsigned signal,char *out,unsigned long ca
  if(!f.valid && pid==proc_selfpid()) {
   arm_saved_state_t *state=find_user_regs(current_thread());
   if(state && is_saved_state64(state)) {
-   f.valid=1;f.pid=pid;proc_selfname(f.name,sizeof(f.name));
+   f.valid=1;f.src=2;f.pid=pid;proc_selfname(f.name,sizeof(f.name));
    f.pc=(uint64_t)get_saved_state_pc(state);f.lr=(uint64_t)get_saved_state_lr(state);
    f.sp=(uint64_t)get_saved_state_sp(state);f.fp=(uint64_t)get_saved_state_fp(state);
    for(unsigned i=0;i<29;++i)f.x[i]=(uint64_t)get_saved_state_reg(state,i);
@@ -60,8 +60,8 @@ void boot_progress_exit_fault(int pid,unsigned signal,char *out,unsigned long ca
  if(!f.valid)return;
  // X0/X1/X16/X17: the msgSend receiver/SEL and the class/IMP the fast path loaded
  // from __DATA_CONST slots — the transient the three-window scan cannot see.
- unsigned long n=snprintf(out,capacity,"p%d %.20s sig%u PC%llx LR%llx E%llx F%llx +%llx X0%llx X1%llx X16%llx X17%llx bt",
-  f.pid,f.name,signal,f.pc,f.lr,f.esr,f.far,f.slide,f.x[0],f.x[1],f.x[16],f.x[17]);
+ unsigned long n=snprintf(out,capacity,"p%d %.20s sig%u PC%llx LR%llx SP%llx E%llx F%llx +%llx R%u X0%llx X1%llx X16%llx X17%llx bt",
+  f.pid,f.name,signal,f.pc,f.lr,f.sp,f.esr,f.far,f.slide,f.src,f.x[0],f.x[1],f.x[16],f.x[17]);
  if(pid==proc_selfpid()) {
   uint64_t frame=f.fp;
   for(unsigned depth=0;depth<8 && frame && !(frame&15) && n+16<capacity;++depth) {
