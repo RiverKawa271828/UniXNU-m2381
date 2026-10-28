@@ -183,9 +183,10 @@ include_dirs = ["soc:dts"]
 # (UniXNU/uefi-sheng shape) with the proven platform constants of the nura
 # Mu chain: FD at 0xA7100000+0x300000, BootShim with kernel header + Gunyah
 # watchdog disable, boot header v4, gzip, no appended DTB. See
-# docs/STATE.md §5-A3 for the base decision record. The uefi checkout is a
-# uefi-sheng clone with Platforms/Meizu/m2381Pkg and Resources/Configs/
-# m2381.toml overlaid from devices/m2381/uefi/.
+# docs/STATE.md §5-A3 for the base decision record. The uefi checkout is
+# the Mu-Silicium fork at ../uefi-m2381 (branch main) with Platforms/Meizu/
+# m2381Pkg and Resources/Configs/m2381.toml committed directly (consolidated
+# 2026-10-29; the devices/m2381/uefi overlay and sync.sh are retired).
 [firmware]
 config = "m2381"                   # Resources/Configs/m2381.toml in the Mu-Silicium checkout (--uefi)
 dsc = "Platforms/Meizu/m2381Pkg/m2381.dsc"
