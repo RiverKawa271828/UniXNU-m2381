@@ -288,6 +288,12 @@ kernel_args = [
   "sheng-pmgr=2",
   "armcpu-diagnostics=1",
   "sheng-disable-watchdogd=1",
+  # r70: the crash-looping SpringBoard lives long enough to let the upstream
+  # 3 s idle-sleep timer arm; its expiry walked PMRD -> IOCPUSleepKernel ->
+  # ArmCpu::haltCPU and parked the machine in the diagnosePower panic at
+  # t=139s. Upstream IOPMrootDomain keeps the timer disarmed under "noidle"
+  # (gNoIdleFlag, also a device-tree "no-idle" default).
+  "noidle=1",
   # The sheng production disable set (the lite list's first four are these same
   # jobs; the rest are the crash/XPC-wait loops — on hardware 2026-10-26:
   # findmydeviced/assistantd SIGABRT, biomed exit 100 — that churned launchd

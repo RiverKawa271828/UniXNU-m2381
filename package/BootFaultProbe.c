@@ -10,6 +10,7 @@
 #include <vm/vm_map.h>
 extern int proc_selfpid(void);
 extern void proc_selfname(char *, int);
+extern char boot_progress_ext_wide[2][112]; // W1 wide row carries the SS stack-ash scan
 
 struct boot_fault_record {
  unsigned valid,src; // src: 1 = hardware exception capture, 2 = exit-time fallback
@@ -71,6 +72,40 @@ void boot_progress_exit_fault(int pid,unsigned signal,char *out,unsigned long ca
    if(pair[0]<=frame || pair[0]-frame>1048576)break;
    frame=pair[0];
   }
+ }
+ // r71 stack-ash scan: the C++ unwind tears the fp chain (r70's sig6 wall
+ // lost the nil-insert caller — the CRASH-row bt shows only the terminate
+ // chain plus ash), but the bytes ABOVE the exiting SP still hold the dead
+ // return addresses; the throw-site frames are the highest ones. Scan
+ // 48 KiB in gated chunks, publish word-aligned candidates that fall in
+ // the shared-cache runtime window or the main-binary window (dyld image0
+ // = the executable's load address) on wide row W1. Same-map copyin only:
+ // gated on pid==proc_selfpid(), never the r66 cross-map fault path.
+ if(pid==proc_selfpid() && f.src==2) {
+  uint64_t mainbase=0;
+  struct user64_dyld_all_image_infos info={0};
+  struct user64_dyld_image_info image={0};
+  if(!copyin(task_get_all_image_info_addr(current_task()),&info,sizeof(info)) &&
+     info.infoArrayCount && info.infoArray &&
+     !copyin(info.infoArray,&image,sizeof(image)))
+   mainbase=image.imageLoadAddress;
+  char row[112]; unsigned ri=(unsigned)snprintf(row,sizeof row,"SS b%llx",mainbase);
+  unsigned count=0; uint64_t prev=0;
+  uint64_t c_lo=f.slide+0x17f000000ULL, c_hi=f.slide+0x201000000ULL;
+  for(uint64_t a=(f.sp+7)&~(uint64_t)7; a<f.sp+49152 && count<9; a+=512) {
+   unsigned char chunk[512];
+   if(copyin((user_addr_t)a,chunk,sizeof chunk))break;
+   for(unsigned o=0;o+8<=sizeof chunk && count<9;o+=4) {
+    uint64_t v; memcpy(&v,chunk+o,8);
+    if((v&3)||v==prev)continue;
+    if(!((v>=c_lo&&v<c_hi)||(mainbase&&v>=mainbase&&v<mainbase+0x1000000ULL)))continue;
+    prev=v;
+    if(ri+12<sizeof row)ri+=(unsigned)snprintf(row+ri,sizeof row-ri," %llx",v);
+    ++count;
+   }
+  }
+  for(unsigned i=0;i<111;++i) boot_progress_ext_wide[1][i]=row[i]?row[i]:' ';
+  boot_progress_ext_wide[1][111]=0;
  }
 }
 

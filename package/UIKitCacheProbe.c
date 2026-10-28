@@ -85,6 +85,8 @@ static unsigned probe_silence_until;
 static unsigned first_small_round[3];
 static uint64_t first_small_off[3], first_small_val[3];
 static unsigned win_fresh;
+static unsigned win_half;   // window read was only its first half this round
+static unsigned last_rc[3]; // per-window read outcome for the row diagnostics
 static unsigned agg_procs, agg_nonzero, agg_garbage;
 
 static void put(unsigned row, char *buf, size_t cap)
@@ -104,14 +106,27 @@ static void note_small(unsigned w, unsigned round, uint64_t off, uint64_t val)
 
 // Read one window under the protection pre-gate. Returns 0 on success,
 // 1 if the gate skipped it (region not mapped readable yet), 2 on read fail.
-static int read_window(vm_map_t map, uint64_t base, uint64_t size, uint64_t slide, uint64_t *buf)
+// r70: the dirty window skipped 59/59 rounds while const passed every time
+// (k kept advancing, so rc==2 silences never fired). On a full-range gate
+// refusal, retry the first half under the same gate — still never enters
+// vm_map_read_user's fault path (r66 rule), publishes real data when only
+// the upper part of the range is unmapped, and the rc code on the rows
+// tells the two failure modes apart next round.
+static int read_window(unsigned w, vm_map_t map, uint64_t base, uint64_t size, uint64_t slide, uint64_t *buf)
 {
-    if (!vm_map_check_protection(map, (vm_map_offset_t)(base + slide),
-                                 (vm_map_offset_t)(base + slide + size),
-                                 VM_PROT_READ))
-        return 1;
-    if (vm_map_read_user(map, (vm_map_offset_t)(base + slide), buf, size) != KERN_SUCCESS)
-        return 2;
+    vm_map_offset_t s = (vm_map_offset_t)(base + slide);
+    vm_map_offset_t e = (vm_map_offset_t)(base + slide + size);
+    if (vm_map_check_protection(map, s, e, VM_PROT_READ)) {
+        win_half &= ~(1u << w);
+        if (vm_map_read_user(map, s, buf, size) != KERN_SUCCESS) { last_rc[w] = 2; return 2; }
+        last_rc[w] = 0;
+        return 0;
+    }
+    vm_map_offset_t m = (vm_map_offset_t)(base + slide + size / 2);
+    if (!vm_map_check_protection(map, s, m, VM_PROT_READ)) { last_rc[w] = 1; return 1; }
+    win_half |= 1u << w;
+    if (vm_map_read_user(map, s, buf, size / 2) != KERN_SUCCESS) { last_rc[w] = 4; return 2; }
+    last_rc[w] = 3;
     return 0;
 }
 
@@ -130,6 +145,10 @@ static int capture(proc_t p, void *arg)
     if (strcmp(name, probe_target) != 0) return PROC_RETURNED;
     task_t task = proc_task(p);
     if (!task) return PROC_RETURNED;
+    // A task on its way out can have its shared region half-unmapped; that
+    // is noise for the windows and r70 showed it as a permanent dirty-window
+    // refusal. Only sample live tasks.
+    if (!task->active) return PROC_RETURNED;
     // get_task_map_reference takes the task lock ITSELF (bsd_kern.c:386) —
     // never hold it (r65a recursive-acquired into panic). The reference
     // handles !active; task_shared_region_slide is write-once, unlocked
@@ -140,9 +159,9 @@ static int capture(proc_t p, void *arg)
     if (!slide) { vm_map_deallocate(map); return PROC_RETURNED; }
 
     int rc[3];
-    rc[0] = read_window(map, UK_DIRTY_BASE, UK_DIRTY_SIZE, slide, win_dirty);
-    rc[1] = read_window(map, UK_DATA_BASE, UK_DATA_SIZE, slide, win_data);
-    rc[2] = read_window(map, UK_CONST_BASE, UK_CONST_SIZE, slide, win_const);
+    rc[0] = read_window(0, map, UK_DIRTY_BASE, UK_DIRTY_SIZE, slide, win_dirty);
+    rc[1] = read_window(1, map, UK_DATA_BASE, UK_DATA_SIZE, slide, win_data);
+    rc[2] = read_window(2, map, UK_CONST_BASE, UK_CONST_SIZE, slide, win_const);
     vm_map_deallocate(map);
 
     if (rc[0] == 2 || rc[1] == 2 || rc[2] == 2) {
@@ -153,11 +172,12 @@ static int capture(proc_t p, void *arg)
     }
     // Per-window freshness: a gate-skipped window leaves its buffer stale,
     // so rows may only publish windows that were actually read this round.
+    // A half-window (r71 fallback) publishes with its slot count halved.
     win_fresh = (unsigned)((rc[0] == 0) | ((rc[1] == 0) << 1) | ((rc[2] == 0) << 2));
     probe_status = 0;
-    if (win_fresh & 1) scan_window(0, win_dirty, (unsigned)(UK_DIRTY_SIZE / 8));
-    if (win_fresh & 2) scan_window(1, win_data, (unsigned)(UK_DATA_SIZE / 8));
-    if (win_fresh & 4) scan_window(2, win_const, (unsigned)(UK_CONST_SIZE / 8));
+    if (win_fresh & 1) scan_window(0, win_dirty, (unsigned)((win_half & 1 ? UK_DIRTY_SIZE / 2 : UK_DIRTY_SIZE) / 8));
+    if (win_fresh & 2) scan_window(1, win_data, (unsigned)((win_half & 2 ? UK_DATA_SIZE / 2 : UK_DATA_SIZE) / 8));
+    if (win_fresh & 4) scan_window(2, win_const, (unsigned)((win_half & 4 ? UK_CONST_SIZE / 2 : UK_CONST_SIZE) / 8));
     return PROC_RETURNED;
 }
 
@@ -171,11 +191,11 @@ static int capture_sweep(proc_t p, void *arg)
     if (!map) return PROC_RETURNED;
     uint64_t slide = (uint64_t)task->task_shared_region_slide;
     if (!slide) { vm_map_deallocate(map); return PROC_RETURNED; }
-    int rc = read_window(map, UK_DIRTY_BASE, UK_DIRTY_SIZE, slide, win_dirty);
+    int rc = read_window(0, map, UK_DIRTY_BASE, UK_DIRTY_SIZE, slide, win_dirty);
     vm_map_deallocate(map);
     if (rc) { if (rc == 2) { ++probe_readfails; probe_silence_until = probe_round + 3; } return PROC_RETURNED; }
 
-    const unsigned n = (unsigned)(UK_DIRTY_SIZE / 8);
+    const unsigned n = (unsigned)((win_half & 1 ? UK_DIRTY_SIZE / 2 : UK_DIRTY_SIZE) / 8);
     unsigned nonzero = 0;
     for (unsigned i = 0; i < n; ++i) {
         uint64_t v = win_dirty[i];
@@ -228,7 +248,7 @@ static void monitor(void *arg, wait_result_t result)
                 snprintf(buf, sizeof buf, "B%llx M%llx",
                          win_dirty[bg], win_dirty[ms]);
             } else {
-                snprintf(buf, sizeof buf, "B- M-");
+                snprintf(buf, sizeof buf, "B- M- R%u", last_rc[0]);
             }
             put(5, buf, sizeof buf);
             // r70: the three feeder slots of the (fixed) bl bgTC at
@@ -242,7 +262,7 @@ static void monitor(void *arg, wait_result_t result)
                          win_dirty[sc], win_dirty[g1], win_dirty[g2],
                          win_dirty[g2]);
             } else {
-                snprintf(buf, sizeof buf, "S- G1- G2-");
+                snprintf(buf, sizeof buf, "S- G1- G2- R%u h%u", last_rc[0], !!(win_half & 1));
             }
             for (unsigned i = 0; i < 111; ++i)
                 boot_progress_ext_wide[0][i] = buf[i] ? buf[i] : ' ';
