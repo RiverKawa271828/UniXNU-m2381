@@ -48,3 +48,34 @@ ABL facts (r55d/r55e): same-slot consecutive boot failures exhaust the
 retry budget and drop to fastboot; recovery = `fastboot --set-active=b`
 (stays on b, resets budget). `rebootbl` inside the reader reboots but
 does not land in ABL fastboot on this chain.
+
+## r70（2026-10-28 深夜，出件待刷 `9b3a26f0` / 内核 `2799e328`）
+
+- **机制终审（r69 活读窗二次判读 + DeepSeek 三轮协作 + fixup-aware 复核）**：
+  0x1800F5FAC 崩点真身 = objc_retain 谓词 0x1800F5FA4（`ldr x8,[x0]`，
+  x0=FAR=0xF1，"+initialize 派发"为最近符号噪声）；毒源 = r60 fixup14
+  （.03,3261c50，commit 618811a）把 `mov x0,x20; bl _fallbackTraitCollection`
+  换成 `bl bgTC; mov x19,x0`，删掉 x0 设置——页缓存支路（0xdbf0，
+  [0x1F48D59F8] 非零）把 gate（0x18da8a790→0x1AC062BD0，dyld4::gDyld
+  API 快派发）返回值 0xF1 当 receiver；三槽无辜（SEL/classref/thunk
+  管道，六轮扫描选错对象）；H2 排除（worker 唯一出口过 objc_retain(x8)
+  变体 0x1800E9238）；时间线闭合（r59 nil-traitCollection 墙 → r60 #21
+  引入 → r61 墙首现）。
+- **改动（commit 73e1152）**：①#21 替换字节 c6bbff97f30300aa →
+  e00314aac5bbff97（保留 mov x0,x20，bl imm26 0x3ffbbc5 从 0xdc54 仍落
+  bgTC；0xdc58 原生 mov x19,x0 承接）；②UIKitCacheProbe W0 宽行 =
+  S[0x1F48D59F8]/G1[0x1F48CE5F0]/G2[0x1F48CE5F8]；③BootFaultProbe
+  CRASH 行加 SP + R 来源标记；④r71 备件：0xdc3c cbnz x0→b 0xdc40。
+- **工具正编（commit 7f8bfaa）**：re-tools 升级运行态反汇编——
+  cachesym.profile_fixups()/read_run()，disasm.py 默认运行态 + FIXUP
+  标记，verifychain.py 同走；README 补 Runtime vs build state 教训
+  （r69 六轮文件态盲区 = 本轮根因迟到的主因）。
+- **取证纪律入记忆**：日志环 header 分代（r69 活读窗 slots_written=
+  232/509，"多崩族"= 6 代残影幻象）；判读禁止直 grep 原始镜像。
+- **出件链**：kernel 2799e328（六格式串实证；坑再现 = 树重组后 package
+  不自动同步，手动 cp）→ payload 9b3a26f0（ESP 四样过：toml args /
+  trustcache / scratch-data / ADT 含 #21 新字节 + PackedRAMDisk）。
+- **判读三分支**：①崩消失 = 关账转 display 机制三件套（假 UIScreen +
+  displayConfiguration + _UIScreenInitialDisplayConfigurationLoader）；
+  ②崩保留且 FAR == W0 S 槽值 = 槽垃圾实锤；③FAR 仍 0xF1 = 第四入口，
+  带 F 清单四样回找 DeepSeek。
