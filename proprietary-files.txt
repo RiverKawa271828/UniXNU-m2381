@@ -1,0 +1,19 @@
+# Private firmware inputs and their SHA-256 digests, per the UniXNU
+# device-repository format (path|sha256, paths under .cache/).
+# None of these have a public fetch URL: every file is this phone's own
+# vendor firmware or a nura-lane artifact held locally, re-derivable from
+# the sources noted per entry. Files land under .cache/ and stay out of git.
+
+# ADSP modem firmware, squashed by scripts/make-adsp-firmware.py from
+# .cache/firmware/adsp-src/ (mdt + bNN splits harvested from this phone's
+# own Android image at meizu20_linux/vendor-fw-harvest/modem/image/).
+# Consumed via the boot_b appended segment (package-m2381-boot.py).
+adsp/adsp.mbn|acf95fd57030abb3a5a7b6e8fc830153d04bc54ab6a3d6eda898d9ea52c0eae1
+adsp/adsp_dtb.mbn|db6a6478771b28154d845b207a0e391c7c9037514cb6dd061d2e83cb7d7154f1
+
+# Forensic reader inputs (FLASHING §7): the pmOS EFI-stub kernel and the
+# 13-field newc initrd built in the nura lane, plus the sm8550 device tree
+# that carries the UFS/USB nodes the reader needs.
+forensic/forensic-kernel.efi|4aad92b348689b8acf99d4d0b041287ab3727f603dcf5d5555a3541997056a28
+forensic/forensic-initrd.img|402fb4314fe134a370ac4c273b4b9716afba621c486dddfee7f46d706c3b2787
+forensic/forensic.dtb|c061acd9e1ba39c96c0334a57bd090f04760ea06172af87080c964f76f654a24

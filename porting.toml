@@ -3,21 +3,21 @@ schema_version = 1
 [device]
 name = "m2381"
 soc = "SM8550"
-os_profile = "ipados-17.7.11-21H461"
-summary = "Meizu 20 Classic (SM8550 phone, 16 GB LPDDR5X, 1080x2400 BOE AMOLED cmd-mode DSC, UFS 4.0 512 GB). Full iOS chain boots on device: UEFI -> XNU -> launchd -> 173-process userland with real IOMFB swaps on the panel; SpringBoard is in a known displayIdentity assert loop under active fixup iteration (r56)."
+os_profile = "ios-16.7.16-20H392"
+summary = "Meizu 20 Classic (SM8550 phone, 16 GB LPDDR5X, 1080x2400 BOE AMOLED cmd-mode DSC, UFS 4.0 512 GB). The per-area records below carry r55e/r56 on-device evidence from the 21H461 donor lane; r83 (2026-10-29) swapped back to the original iPhone10,3 iOS 16.7.16 pairing, rebuilt the verified-root policies and both volume UUIDs, repaired the cross-generation prelink gap, and produced the first 20H392 payload — first flash pending."
 
 [[area]]
 id = "configuration"
 status = "device-verified"
 components = ["ArmDTPlatform", "ArmCpu", "SoftwareAES", "XnuPrelink", "DarwinBoot"]
 paths = ["board.toml", "feeds.toml", "configs/**", "dts/**", "patches/**", "unixnu.lock"]
-inputs = ["Upstream UniXNU main (pin 16e592a) with the m2381 branch carried as workspace commits", "Donor iPad7,1 iPadOS 17.7.11 21H461 (same donor as sheng/fuxi; kernelcache + OS assets)", "UniXNU-sm8550-common feed pin 43da0d56 for sm8550 dts/configs", "Stock FDT/DTS dumps in the workspace docs/hardware/ for constants"]
-configuration = ["board.toml schema v2: soc_source = sm8550 pin 23b2049f, os_profile = ipados-17.7.11-21H461", "defconfig = m2381_defconfig derived from sheng; fragments arch:common soc:sm8550 os:ipados", "ADT generated from dts/m2381.dts + the v2 generator (sm8550.dtsi exports intc/ufshc/ufsphy; 16 GiB reg split as two cells; ufs/ufsphy okay; GPU disabled)", "Kernel args: -v serial=3 debug=0x14e kt_fixed_zones=120 offline-legacy-* set, boot-progress=2, native-ufs-root=1, sheng-pmgr=2, sheng-lite=1 plus the sheng production disable set, sheng-smp=1 sheng-cpufreq=3 sheng-touch=4, boot-ui-focus4=SpringBoard"]
+inputs = ["Upstream UniXNU main (pin 16e592a) with the m2381 branch carried as workspace commits", "Donor iPhone10,3 iOS 16.7.16 20H392 (the original pairing, restored r79; classic arm64 kernelcache 2ec297ba, no fileset rebinding)", "UniXNU-sm8550-common feed pin 43da0d56 for sm8550 dts/configs", "Stock FDT/DTS dumps in the workspace docs/hardware/ for constants", "xnu-8796.101.5 sources (16-gen) for the restored IORPCMessageFromMach"]
+configuration = ["board.toml schema v2: soc_source = sm8550 pin 23b2049f, os_profile = ios-16.7.16-20H392 (r83); root_match_volume_uuid = DADD93F8 and the cache volume 96096B28 derived by APSB scanning the 20H392 windows (temp/scan-apfs-volume-uuids.py, gold-checked against the 21H461 userdata)", "defconfig = m2381_defconfig derived from sheng; fragments arch:common soc:sm8550 os:ipados", "ADT generated from dts/m2381.dts + the v2 generator (sm8550.dtsi exports intc/ufshc/ufsphy; 16 GiB reg split as two cells; ufs/ufsphy okay; GPU disabled)", "Kernel args: -v serial=3 debug=0x14e kt_fixed_zones=120 offline-legacy-* set, boot-progress=2, native-ufs-root=1, sheng-pmgr=2, sheng-lite=1 plus the sheng production disable set (coreduetd included), sheng-smp=1 sheng-adsp=2 sheng-battery=1 armcpu-spi-ipi=1, boot-ui-focus4=SpringBoard (r81: the dead sheng-cpufreq/sheng-touch args retired for the ADSP charging stack)"]
 procedure = ["UNIXNU_UNIQUE_CHIP_ID=3645ad55d47e77c1 ./unixnu payload (Linux lane)", "python3 devices/m2381/unixnu-m2381/scripts/add-forensic-entry.py out/m2381/ipados-17.7.11-21H461/m2381/payload/payload.img", "copy to the flat out/m2381/payload-rNN-<sha8>.img name"]
-findings = ["Donor pairing must be same-generation: the xnu-10063.141.1 source against a 16-gen donor failed everywhere (entropy, AppleImage4); the 17.7 21H461 donor cleared those walls", "text fixups are inherited from the OS profile (the nx729j set for the same donor build) and are applied lazily at page-in, so the applied counter doubles as an execution oracle", "OS profile text_fixups grew from 13 to 16 entries during the =y lane (fixups 8a/8b/11/12/9 in r47-r56)"]
+findings = ["r83 reverses the r56 pairing finding: the 17-generation walls (traitCollection/avocado widget/once domain/sel6 FDR gate) were all 21H461 userland+kext artifacts, and the xnu-10063.141.1 kernel pairs with the 16-gen 20H392 donor once the one dropped symbol is restored — the prelink closure binds 65346 sites with exactly 2 misses (_IORPCMessageFromMach, IOStorageFamily+IOHIDFamily), repaired by restore-iorpc-from-mach.patch (verbatim xnu-8796.101.5 body, extern C so the prelink name match does not mangle)", "The entropy guard is back in the series for the 16-gen corecrypto PRNG ordering (the r11 wall, dormant since the 2026-10-24 swap)", "Donor pairing must be same-generation: the xnu-10063.141.1 source against a 16-gen donor failed everywhere (entropy, AppleImage4); the 17.7 21H461 donor cleared those walls", "text fixups are inherited from the OS profile (the nx729j set for the same donor build) and are applied lazily at page-in, so the applied counter doubles as an execution oracle", "OS profile text_fixups grew from 13 to 16 entries during the =y lane (fixups 8a/8b/11/12/9 in r47-r56)"]
 completion = ["All source pins resolve; the payload builds on Linux and boots the full chain on device; every selected component has a record"]
 limits = ["CI kernel lane is still macos.yml (Linux kernel build proven locally, CI wiring pending)", "fileset-KC rebinding (XS donors) out of scope for this donor"]
-next_action = ["Keep the board profile synced on upstream rebase; re-derive nothing per round unless the donor changes"]
+next_action = ["First flash of the r83 three-piece set (boot_b ec1d518b charging segment + recovery_a ee012043 + userdata 2c2aca3f), judge the r11-era evidence forms; CI lane re-green on the 20H392 identities is a prerequisite for the ci-owner-policy re-run"]
 evidence = [
   { kind = "device", reference = "records/rounds.md", command = "fastboot getvar current-slot && sha256sum out/m2381/payload-r56-db3a7392.img && fastboot flash recovery_a out/m2381/payload-r56-db3a7392.img", revision = "926f084602ebf21a0f66bbe216e5d5f2edd2ed29", result = "r51-r56 payloads all built from this board config and booted the full chain on device; r56 flashed OKAY 2026-10-27" },
   { kind = "source", reference = "board.toml", result = "schema v2 board: soc_source sm8550 pin 23b2049f, os_profile ipados-17.7.11-21H461, measured userdata LBA geometry from the device GPT" },
@@ -77,7 +77,7 @@ id = "storage"
 status = "device-verified"
 components = ["ShengUfs", "VirtioMmioBlock", "RamBlock", "VerifiedRoot"]
 paths = ["drivers/ShengUfs", "kits/**", "records/r55e-judgment.md", "records/reader-channel.md"]
-inputs = ["UFS 4.0 controller 0x1d84000, PHY 0x1d80000, ICE 0x1d88000; Samsung KLUFG8RHHD-B0G1 512 GB", "Measured GPT geometry (three-source cross-check) baked into board.toml [userdata]", "Donor trust-cache trio values in board.toml; verified-root stub refuses placeholders without staged policy evidence"]
+inputs = ["UFS 4.0 controller 0x1d84000, PHY 0x1d80000, ICE 0x1d88000; Samsung KLUFG8RHHD-B0G1 512 GB", "Measured GPT geometry (three-source cross-check) baked into board.toml [userdata]", "Donor trust-cache pins in board.toml (r83: 20H392 pair 63e01c03/9cc478fe -> bundle eb1475f6, byte-verified); verified-root policies rebuilt for the 20H392 windows (os 343939 + systemos 167424 blocks RSA-verified; the 21H461 pair is backed up) — configureVerification selects by capacity match, so stale donor policies would simply never publish the device"]
 configuration = ["native-ufs-root=1 (launchd boots off the native UFS root); ShengUfs driver via kits fork; prelink binding = nx729j static binding (build-storage-bindings.py + prelink-storage-bindings.json, 190 IOBlockStorageDevice slots of the same donor kernelcache); sheng-data-persist=2"]
 procedure = ["flash userdata = CI-built iOS root (fd43e70) once; per-round work only touches recovery_a", "read [data]/UFS lines in the SHLOG slots for live counters"]
 findings = ["r55e: UFS requests=236660 verified4K=413320 failures=0 integrity=0; TIME verify=5404ms read=26864ms; [data] wr=9707 cm=2320 er=0; SWAP COPY calls=3 status=0 bytes=10368000 retired=3 (swap works on device)", "launchd pid=1 execs from the userdata root every round since r44; cryptex OS stage=5 status=0", "The reader reads userdata raw (sda22) with zero writes and zero mounts — flash readback closure needs no adb"]
@@ -92,7 +92,7 @@ evidence = [
 [[area]]
 id = "display"
 status = "device-verified"
-components = ["GopFramebuffer"]
+components = ["GopFramebuffer", "AppleKeyStoreState"]
 paths = ["package/**", "configs/**", "records/r55e-judgment.md"]
 inputs = ["1080x2400 BOE AMOLED cmd-mode DSC panel; ABL framebuffer 0xb8000000 size 0x2b00000 stride 4320 (UEFI SimpleFbDxe consumes it)", "=y display lane: CONFIG_XNU_NATIVE_LEGACY_DISPLAY=y with NativeLegacyDisplay/NativeGOPPresenter (hand-built qualified archive; the component recipe is deliberately empty)", "OriginalLegacyFramebufferABI.h shipped in the device package (component compile without a staged candidate)"]
 configuration = ["offline-legacy-gop=1 offline-legacy-unit-scale=2 offline-legacy-pm=1 offline-legacy-transfer=1 offline-mobile-graphics-client=1 offline-mobile-graphics-load=1; boot-progress=2 (sheng/fuxi production diagnostics page); sheng-fb-gpu=1"]
@@ -100,7 +100,7 @@ procedure = ["boot the xnu entry; read DISPLAY/GOP/[swap timeline]/[display stat
 findings = ["r55e: DISPLAY stage=10 PM=4 calls=4 callbacks=1 owned=1; GOP actual mapping physical=b8000000; three real swaps W1/W2/W3 at t=243-245s (done=1410/188/207 ms); panel shows diagnostics page then a steady Apple logo", "Backlight-domain fixups (8a/8b/12) all apply since r53; the r55e wall moved past backlight into the displayIdentity assert of the system-gesture manager singleton", "fixup 9 (r56) returns self from SBSystemGestureManager _initWithDisplayIdentity: because FBDisplayManager mainIdentity (ivar@8) is never registered on a displayless lane; SBMainDisplay's same-named init is an 'unallowed initializer' trap that sharedInstance deliberately bypasses via super — patch the base class, never the trap"]
 completion = ["A known frame appears with correct geometry and colors, then userland presentation and backlight controls work"]
 limits = ["SpringBoard UI and userland backlight control sit behind the displayIdentity/SpringBoard fixup iteration; panel is fed by GOP/IOMFB swaps only", "DSI/panel probe ordering under fw_devlink=off occasionally loses the display (3/5 dark boots candidate) — not blocking the reader loop"]
-next_action = ["r56 run: judge applied=8 and whether the displayIdentity wall breaks; iterate the next fixup from the new crash chain"]
+next_action = ["The =y lane (r51-r78b, 21H461) is parked: the displayIdentity wall chain was eaten by the r79 donor swap; the qualified display archive still rides the 21H461 ABI pin, so a 16-gen IOMFB ABI re-audit is the open item once the r83 first flash boots"]
 evidence = [
   { kind = "device", reference = "records/r55e-judgment.md", command = "python3 devices/m2381/unixnu-m2381/scripts/read-m2381-ufs-log.py out/m2381/reader-r55e-log.bin --all", revision = "926f084602ebf21a0f66bbe216e5d5f2edd2ed29", result = "W1 t=243.275s done=1410ms, W2 t=244.712s, W3 t=245.286s; GOP physical=b8000000 bytes=10368000 (1080x2400 ARGB); [text fixup] parsed=15 applied=7" },
   { kind = "source", reference = "configs/m2381_defconfig", result = "LEGACY_DISPLAY=y lane with the offline-legacy/offline-mobile-graphics arg set; sheng-fb-gpu=1" },
@@ -175,13 +175,13 @@ id = "power"
 status = "implemented"
 components = []
 paths = ["configs/**"]
-inputs = ["sheng platform-power lane (sheng-pmgr=2) adapted for SM8550; PMK8550 PON pwrkey/resin verified at the UEFI level", "CPU freq states observed live via sheng-cpufreq=3"]
-configuration = ["sheng-pmgr=2 sheng-cpufreq=3 sheng-gpu-power=9 (reserved) kernel args; sleep-disabled=1 for the bring-up lane"]
+inputs = ["sheng platform-power lane (sheng-pmgr=2) adapted for SM8550; PMK8550 PON pwrkey/resin verified at the UEFI level", "r81 ADSP charging stack (QcomGlink/Qrtr/Smem/Smp2p/Qmp/Rpmh/Mdt + Battmgr, 25 package files): ADSP firmware runs charging and PD/PPS negotiation, sheng-adsp=2 starts it, sheng-battery=1 publishes IOPMPowerSource; the 30.5 MB adsp.mbn rides boot_b free space (ShengUfs part_find/read export), not the ESP"]
+configuration = ["sheng-pmgr=2 sheng-adsp=2 sheng-battery=1 sheng-gpu-power=9 (reserved) kernel args; sleep disabled for the bring-up lane"]
 procedure = ["read the SMP/CPU slot lines (per-core cpufreq states) and UEFI button behavior"]
 findings = ["r55e slot 313: c1..c7=step7 — cpufreq scaling live on all performance cores; sleep-disabled=1 keeps the bring-up lane awake by design", "Battery/regulator inventory not taken; no sleep/resume testing in this lane"]
 completion = ["Declared power controls and battery readings match observations; each claimed sleep/resume transition restores its dependent peripherals"]
 limits = ["Battery gauge, charging and suspend/resume are out of scope for the bring-up lane"]
-next_action = ["Keep pmgr at the sheng-adapted level; battery/sleep inventory after userland is interactive"]
+next_action = ["First flash proves the charging stack on device (BATTMGR GLINK lines, native_adsp_stats, charge current) plus the ABL tolerance of the appended boot_b segment; battery/sleep inventory after userland is interactive"]
 evidence = [
   { kind = "device", reference = "records/r55e-judgment.md", command = "python3 devices/m2381/unixnu-m2381/scripts/read-m2381-ufs-log.py out/m2381/reader-r55e-log.bin --all", revision = "926f084602ebf21a0f66bbe216e5d5f2edd2ed29", result = "SMP req=1 run=7 | c1=step7 c2=step7 c3=step7 c4=step7 c5=step7 c6=step7 c7=step7 (cpufreq live); CPU sleep-disabled=1 by lane design" },
   { kind = "source", reference = "configs/m2381_defconfig", result = "sheng-pmgr=2/sheng-cpufreq=3 wired in the board kernel args" },
