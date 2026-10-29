@@ -43,7 +43,7 @@ soc = "SM8550"
 description = "Meizu 20 Classic"
 kit = "sheng"                      # package/ of this repository appears as kits/sheng in the build tree (fuxi same: build-sheng-platform-power.py reads kits/sheng/ShengPlatformPower.cpp)
 soc_source = "sm8550"              # feeds.toml pins UniXNU-sm8550-common
-os_profile = "ios-16.7.16-20H392"
+os_profile = "ipados-26.5.2-23F84"
 
 # The raw image for the userdata partition: the OS and SystemOS disk images of
 # the IPSW behind a manifest.
@@ -358,11 +358,11 @@ kernel_args = [
 [payload.adt]
 chip_id = "207"                     # [DTB] qcom,msm-id 0x207 (SM8550-AB) — same value sheng/nx729j use
 owned_memory_size = "0x130000000"
-# root_match_volume_uuid of the donor OS image's root volume: the only volume
-# in the 20H392 OS container (derived 2026-10-29 by scanning the OS window's
-# volume superblocks — temp/scan-apfs-volume-uuids.py, gold-checked against
-# the 21H461 userdata: 04769D26…/8846FE78… reproduced exactly).
-root_match_volume_uuid = "DADD93F8-DBBF-4B17-A1DF-0F11E64172F7"
+# root_match_volume_uuid of the donor OS image's root volume: the 26.5.2
+# (23F84) profile is self-sufficient and carries it (os volume 546DFF4A…,
+# donor iPad17,3/j820ap); the 20H392 value (DADD93F8…) retired with that
+# frozen lane (full derivation history: git, 2026-10-29).
+root_match_volume_uuid = "546DFF4A-4172-4026-9F1B-7FDAD45F3D2E"
 packed_data_ramdisk = true
 unique_chip_id = "required"          # the platform seed is not stored in any repository
 # cpu identity moved to dts/m2381.dts (the v1 generator's cpu_regs list,
