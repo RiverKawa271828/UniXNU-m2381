@@ -215,8 +215,11 @@ BUILDID_STRING = "m2381-research"
 
 # The payload volume: a FAT image with the UniXNU config, the kernel, the ADT
 # and the optional trust cache and Data seed, written to the recovery_a
-# partition (100 MiB; the volume must stay ≤ 96 MiB to fit with FAT slack).
-# DarwinBoot (in the firmware volume) reads it through the UFS driver.
+# partition ([DEVICE] 2026-10-30 fastboot getvar: 0x6400000 = 100 MiB).
+# Volume stays at 96 MiB (the one-day 97 MiB bump for the combined reader
+# payload was reverted with the 2026-10-30 reader split; content ~86.5 MiB,
+# build gate 95% = 91.2). DarwinBoot (in the firmware volume) reads it
+# through the UFS driver.
 # The ADT is assembled by the schema v2 generator from dts/m2381.dts, the OS
 # profile's typed identity and the [payload.adt] options below; the v1
 # scripts/make-m2381-adt.py stays in the repository as the reference for
@@ -236,12 +239,16 @@ panic_screen = true
 # lands before the page's first paint, fall back to stage 4 resets (note:
 # _arm_init @0xb0b11b0 is a thin wrapper — one bl to _OSRuntimeSignStructors
 # then ret — pick the bisect function from the real init body).
-# The forensic log reader (FLASHING.md §7) is OFF on this lane for space: the
-# fileset collection kernel.macho alone is 85 MiB and recovery_a is a 100 MiB
-# partition — the reader trio (15.3 MiB) does not fit beside it. Nothing to
-# read yet either: the first fileset boots run without sheng-log=1, so no
-# SHLOG window exists to read back. Flip back on when the log args return and
-# a slim enough reader lane exists.
+# The forensic log reader is OFF in this payload again (2026-10-30 split
+# decision, user): the reader rides its own dedicated ESP image flashed to
+# recovery_a per forensic mission (forensic/build-forensic-esp.py in this
+# repository, trio from .cache/forensic — the proven nura v71 kernel
+# 4aad92b3, NOT the benched 3.79 MiB minimal build), so the iOS payload no
+# longer carries it and size pressure with the growing fileset kernel is
+# gone. History: ON 2026-10-30 with the minimal reader (payload 0f1013f4,
+# flashed) — first boot died in the zboot decompressor on the XPU-fenced
+# tz_stat page (FAR 0x82700020) that RamManagerDxe handed out as conventional
+# RAM; fixed in uefi-m2381 MemoryMapLib (adsp_mhi/global_sync/tz_stat added).
 forensic = false
 # sha256 of the trust caches of this 23F84 build: the two IM4P members
 # (extracted from the local IPSW 2026-10-30 via "unixnu ipsw fetch") and the
@@ -281,6 +288,10 @@ kernel_args = [
   # page — 120x48 stage history, registers, storage counters; freezes on
   # stall so a photograph pinpoints the stop. Zero geometry cost (arg only).
   "boot-progress=2",
+  # BootLog UFS window (package/BootLog.c, the r41 wiring): 8 KiB slot every
+  # 2 s into the 32 MiB window at the userdata tail — the forensic reader's
+  # cargo (scripts/read-m2381-ufs-log.py parses it; ~17 min to wrap).
+  "sheng-log=1",
 ]
 
 [payload.adt]

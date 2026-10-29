@@ -1,9 +1,9 @@
 {
-  "kernel_sha256": "3d066d241cece3989c0c3c1cb2ee2080a3e7f337d813eb515cc6b92ea5959873",
-  "fd_sha256": "ce3ce88b25cb5e7add4c809f895854daf3acbf8913f566680cd073bf657f5c41",
-  "image_sha256": "ec1d518bcd9673cddfff97fed644d5d4c7bfdfb2bad533c82dbd56ccdf3ca1a4",
+  "kernel_sha256": "fbac92af2228ec1f8ab8f959fdefb030a39c476b1eeaaf24dea36e4a7684b187",
+  "fd_sha256": "53fbdeb9dfc92baf09053bac71b7cef49a8b4cc897a55751f6b81d113ee21c23",
+  "image_sha256": "d0200a6b67406f7933948f4bd2c57f67bd26dc41f1e8c15522c2984a72d4f9e9",
   "image_bytes": 31793152,
-  "boot_image_sha256": "b9d0c03e9d8e612e4cc6a1d9527801aef2580b4c8b76de001bcf5a47fe674729",
+  "boot_image_sha256": "cb0b5f5a3d24fc63a4e03418d498fe6eee4468d58b3ffd8d1bfe197f2c593e6b",
   "boot_image_bytes": 1269760,
   "segment": {
     "bytes": 30523392,
