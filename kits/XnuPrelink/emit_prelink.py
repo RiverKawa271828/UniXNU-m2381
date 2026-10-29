@@ -9,7 +9,7 @@ from pathlib import Path
 import struct
 import xml.etree.ElementTree as ET
 
-from native_prelink import backed_offset, exports, macho, plan, u64, unserialize_xml
+from native_prelink import backed_offset, exports, macho, plan, unserialize_xml
 
 # Standard SHA-256 round constants, stored as 64 little-endian words. Some
 # assemblers embed these data in executable sections; do not decode as code.
@@ -24,22 +24,6 @@ MATH_LITERAL_POOLS = (
     ('0000c1c00000807f0000000084aec68f', 212, '43ef8598a507444b21d8a2abbe4065554baaa3b6a29dbe390465cc0ba0dfbe28'),
     ('9b1a86a049faa8bd053f4e7b9dee213e', 56, 'e874aeba59eebdebdf68d18b1196d1ca6aeee12b110985a856f8fe404e0c76ee'),
 )
-# Inline data of the com.apple.kec.Libm prelinked kext: three data runs inside
-# its __TEXT_EXEC (dispatch/lookup tables) that decode as PC-relative branches
-# into the image but are constants. The runs are byte-identical across the
-# 20H392, 21H461 and 21H16 caches (verified 2026-10-24 on all three), so one
-# prefix+digest table covers every supported pairing; a cache without them
-# fails loudly instead of silently skipping code.
-LIBM_LITERAL_POOLS = (
-    ('2a889c3d', 112, '31261217f7e08341597fc8debf9f7a125b5f3176936060904aabef1d8b0e3a31'),
-    ('620f08bc', 96, '64ea85f5b738ed3b316694f491aaab33a8c70240c59d0c1ccee017a5c652a9b8'),
-    ('526cdb37', 144, '2ccd4185649daaead86d57455b45a0a26196309548aab62407c6f0661a28dd61'),
-)
-# native placeholder segment -> original component segment name. The 21H461
-# caches carry the component regions as dedicated __PLK_*/__PRELINK_* segments;
-# the 21H16 (t8020) cache instead packs the kext segments inside the kernel's
-# own __TEXT_EXEC/__DATA_CONST/__DATA, so emit() resolves each source region
-# by containment of the component VAs (see below).
 COALESCED = {'__PRELINK_TEXT': '__TEXT', '__PLK_TEXT_EXEC': '__TEXT_EXEC',
              '__PLK_DATA_CONST': '__DATA_CONST', '__PRELINK_DATA': '__DATA'}
 
@@ -102,8 +86,7 @@ def instruction_inventory(original_data, parent, modules):
                     (bytes.fromhex('982f8a42'), 256, SHA256_K_DIGEST, 0),
                     (bytes.fromhex('0001000100010001'), 528, VECTOR_REPEAT_DIGEST, 64),
                     (bytes(range(32, 24, -1)), 40, ADLER32_VECTOR_DIGEST, 0),
-                    *((bytes.fromhex(prefix), size, digest, 0) for prefix, size, digest in MATH_LITERAL_POOLS),
-                    *((bytes.fromhex(prefix), size, digest, 0) for prefix, size, digest in LIBM_LITERAL_POOLS)):
+                    *((bytes.fromhex(prefix), size, digest, 0) for prefix, size, digest in MATH_LITERAL_POOLS)):
                 search = 0
                 while (search := blob.find(prefix, search)) >= 0:
                     start = search - prefix_offset
@@ -131,8 +114,8 @@ def instruction_inventory(original_data, parent, modules):
             'register_dataflow_qualified': False}
 
 
-def emit(native_data, original_data, roots, slide, early_security_init=None, original_symbols=None):
-    report = plan(native_data, original_data, roots, slide, original_symbols)
+def emit(native_data, original_data, roots, slide, early_security_init=None):
+    report = plan(native_data, original_data, roots, slide)
     native, original = macho(native_data), macho(original_data)
     marker = [address for address, names in exports(native_data, native).items()
               if '_kalloc_sparse_prelink_index_version' in names]
@@ -148,7 +131,7 @@ def emit(native_data, original_data, roots, slide, early_security_init=None, ori
     entries = {e['CFBundleIdentifier']: e for e in metadata['_PrelinkInfoDictionary']}
     modules = {}
     for identifier in report['components']:
-        va = u64(entries[identifier]['_PrelinkExecutableLoadAddr'])
+        va = entries[identifier]['_PrelinkExecutableLoadAddr']
         modules[identifier] = macho(original_data, backed_offset(parent, va, 32, len(original_data)))
     report.update(instruction_inventory(original_data, parent, modules))
     early_security_init = early_security_init or {}
@@ -198,19 +181,7 @@ def emit(native_data, original_data, roots, slide, early_security_init=None, ori
     # Keep coalesced geometry, but only copy selected component segments.
     # Packed kernel-resource records are copied as original readonly metadata.
     for coalesced_name, component_name in COALESCED.items():
-        # Resolve the parent region the component segments live in: by
-        # containment of any populated component VA (works for both the
-        # __PLK_* dedicated-region caches and the 21H16-style kernel-segment
-        # packing), falling back to the dedicated-region name.
-        sample = next((s for m in modules.values() for s in m['segments']
-                       if s['name'] == component_name and s['filesize']), None)
-        if sample is not None:
-            source = next((s for s in parent if s['name'] != '__PRELINK_INFO'
-                           and s['va'] <= sample['va'] < s['va'] + s['size']), None)
-        else:
-            source = None
-        if source is None:
-            source = next(s for s in parent if s['name'] == coalesced_name)
+        source = next(s for s in parent if s['name'] == coalesced_name)
         blob = bytearray(source['size'])
         for module in modules.values():
             for segment in module['segments']:
@@ -240,7 +211,7 @@ def emit(native_data, original_data, roots, slide, early_security_init=None, ori
     # Mach-O VM addresses are not all included in the cache's pointer list.
     # Rebase these headers explicitly; preserve section flags and offsets.
     for identifier, module in modules.items():
-        old_header = u64(entries[identifier]['_PrelinkExecutableLoadAddr'])
+        old_header = entries[identifier]['_PrelinkExecutableLoadAddr']
         original_header = backed_offset(parent, old_header, 32, len(original_data))
         new_header = new_offset(old_header + slide, 32)
         for segment in module['segments']:
@@ -253,31 +224,25 @@ def emit(native_data, original_data, roots, slide, early_security_init=None, ori
                     struct.pack_into('<Q', output, at + 32, section['va'] + slide)
     report['module_entrypoints'] = {}
     for identifier in report['components']:
-        va = u64(entries[identifier]['_PrelinkKmodInfo'])
+        va = entries[identifier]['_PrelinkKmodInfo']
         at = backed_offset(parent, va, 196, len(original_data))
+        start, stop = struct.unpack_from('<QQ', original_data, at + 180)
         # The original OSKext boot path slides this field separately from its
         # coalesced pointer table. An ordinary relink must do the same.
         address, = struct.unpack_from('<Q', original_data, at + 156)
         if address:
-            if address != u64(entries[identifier]['_PrelinkExecutableLoadAddr']):
+            if address != entries[identifier]['_PrelinkExecutableLoadAddr']:
                 raise ValueError('Original kmod address disagrees with its component header')
             struct.pack_into('<Q', output, new_offset(va + slide + 156, 8), address + slide)
-        if report['kmod_entrypoints'] is not None:
-            # Fileset caches chain-encode kmod_info start/stop; plan() decoded
-            # them from the bindings.
-            start = report['kmod_entrypoints'][identifier]['start']
-            stop = report['kmod_entrypoints'][identifier]['stop']
-        else:
-            start, stop = struct.unpack_from('<QQ', original_data, at + 180)
         report['module_entrypoints'][identifier] = {'kmod_info_va': va + slide,
             'start_va': start + slide if start else 0, 'stop_va': stop + slide if stop else 0}
-    headers = sorted(u64(entries[name]['_PrelinkExecutableLoadAddr']) + slide for name in report['components'])
+    headers = sorted(entries[name]['_PrelinkExecutableLoadAddr'] + slide for name in report['components'])
     prelink_text = next(s for s in new_segments if s['name'] == '__PRELINK_TEXT')
     index_size = len(headers) * 8
     index_va = (prelink_text['va'] + prelink_text['size'] - index_size) & ~7
     occupied_end = max([s['va'] + slide + s['size'] for module in modules.values()
                         for s in module['segments'] if s['name'] == '__TEXT'] +
-                       [u64(entries[name]['_PrelinkExecutableLoadAddr']) + slide + entries[name]['_PrelinkExecutableSize']
+                       [entries[name]['_PrelinkExecutableLoadAddr'] + slide + entries[name]['_PrelinkExecutableSize']
                         for name in report['kernel_interfaces']])
     if index_va < occupied_end:
         raise ValueError('No readonly prelink padding for the sparse header index')
@@ -293,7 +258,7 @@ def emit(native_data, original_data, roots, slide, early_security_init=None, ori
             entry['_NativePrelinkEarlySecurityInit'] = early_security_init[identifier] + slide
         for key in ('_PrelinkExecutableLoadAddr', '_PrelinkExecutableSourceAddr', '_PrelinkKmodInfo'):
             if entry.get(key):
-                entry[key] = u64(entry[key]) + slide
+                entry[key] += slide
         selected_entries.append(entry)
     new_base = next(s['va'] for s in new_segments if s['name'] == '__PRELINK_TEXT')
     offsets = [b['new_site'] - new_base for b in report['bindings']]
@@ -350,16 +315,62 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--early-security-init', action='append', default=[], metavar='BUNDLE=ORIGINAL_VA',
                         help='Explicit original void(void) policy initializer, called before lockdown; requires source ABI')
+    parser.add_argument('--fileset-map', type=Path, help='existing exact-input pairing for an MH_FILESET cache')
+    parser.add_argument('--fileset-reference', type=Path, help='symbol-bearing comparison kernel for fileset matching')
+    parser.add_argument('--allow-missing', action='store_true',
+                        help='MH_FILESET only: emit an experimental image with incomplete mappings')
     args = parser.parse_args()
+    if args.output.exists():
+        raise SystemExit('Refuse to overwrite an existing candidate')
     initializers = {}
     for request in args.early_security_init:
         identifier, separator, address = request.partition('=')
         if not separator or not identifier or identifier in initializers:
             parser.error('Use one BUNDLE=ORIGINAL_VA initializer per module')
         initializers[identifier] = int(address, 0)
-    image, report = emit(args.kernel.read_bytes(), args.prelinked.read_bytes(), args.root, args.slide, initializers)
-    if args.output.exists():
-        raise SystemExit('Refuse to overwrite an existing candidate')
+    native_data, original_data = args.kernel.read_bytes(), args.prelinked.read_bytes()
+    if len(original_data) >= 16 and struct.unpack_from('<I', original_data, 12)[0] == 12:
+        from fileset_emit import atomic_write, emit_images, validate_map, write_candidate
+        from fileset_match import match_images, MATCHER_VERSION, matcher_signature
+        reference_data = args.fileset_reference.read_bytes() if args.fileset_reference else None
+        reference_hash = hashlib.sha256(reference_data).hexdigest() if reference_data is not None else None
+        map_path = args.fileset_map or args.output.with_suffix('.map.json')
+        if args.fileset_map:
+            pairing = json.loads(map_path.read_text())
+            validate_map(original_data, native_data, pairing)
+            if pairing.get('matcher_version') != MATCHER_VERSION or pairing.get('matcher_signature') != matcher_signature():
+                parser.error('fileset map predates the current matching checks; regenerate it')
+            if reference_data is not None and pairing.get('reference_sha256') != reference_hash:
+                parser.error('fileset map does not match the supplied reference kernel')
+        else:
+            pairing = None
+            if map_path.is_file():
+                cached = json.loads(map_path.read_text())
+                try:
+                    validate_map(original_data, native_data, cached)
+                    if (cached.get('matcher_version') == MATCHER_VERSION and cached.get('matcher_signature') == matcher_signature()
+                            and cached.get('reference_sha256') == reference_hash):
+                        pairing = cached
+                except ValueError:
+                    pass
+            if pairing is None:
+                pairing = match_images(original_data, native_data, reference_data=reference_data)
+                atomic_write(map_path, (json.dumps(pairing, indent=2) + '\n').encode())
+        # An experimental image binds every unmatched function start to the
+        # panic stub, so an unknown call reports its site instead of jumping to
+        # a stale address. Data references still have no such fallback.
+        stub_symbol = '_unixnu_fileset_unmapped' if args.allow_missing else None
+        image, report = emit_images(original_data, native_data, pairing, args.root,
+                                    stub_symbol=stub_symbol, early_security_init=initializers or None)
+        report.update(kernelcache=str(args.prelinked.resolve()), native=str(args.kernel.resolve()),
+                      map=str(map_path.resolve()))
+        # Filesets use the native link address so early XNU can find their root.
+        # The old static-prelink --slide option is not applied to this format.
+        write_candidate(image, report, args.output, args.output.with_suffix('.json'), args.allow_missing)
+        return
+    if args.fileset_map or args.fileset_reference or args.allow_missing:
+        parser.error('--fileset-map, --fileset-reference and --allow-missing require an MH_FILESET input')
+    image, report = emit(native_data, original_data, args.root, args.slide, initializers)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_bytes(image)
     args.output.with_suffix('.json').write_text(json.dumps(report, indent=2) + '\n')

@@ -154,10 +154,18 @@ archives = [
   # GPU; the chain returns with its own topic once those inputs are ported.
 ]
 # [kernel.prelink] is inherited from the OS profile (ipados-26.5.2-23F84):
-# tool kits/XnuPrelink/emit_prelink.py (the kits/XnuPrelink fork of this
-# repository shadows the upstream submodule in the assembled tree), the 23F84
-# kernelcache sha 0f7d50ac…, slide -0x1000000, the AMFI early-init pointer and
-# the fileset reference workflow (--fileset-reference, MH_FILESET donor).
+# tool kits/XnuPrelink/emit_prelink.py (the kits/XnuPrelink vendored copy of
+# this repository shadows the upstream submodule in the assembled tree), the
+# 23F84 kernelcache sha 0f7d50ac…, slide -0x1000000 and the AMFI early-init
+# pointer. The 23F84 collection is an MH_FILESET, so emit_prelink takes the
+# fileset emitter; --allow-missing pairs with the kernel-side
+# fileset-unmapped-call.patch (arch series): every unmatched call binds to the
+# reporting stub instead of failing emission, and the JSON report lists the
+# unresolved targets per kext. The 21H16-era arm64e classical-path fork this
+# replaces (return value: git history, pre-2026-10-30) predates the fileset
+# pipeline.
+["kernel"."prelink"]
+"extra_args" = ["--fileset-reference", "build/xnu/fileset-reference/mach.release.bcm2837.unstripped.noctf", "--allow-missing"]
 
 [device_tree]
 source = "device:dts/m2381.dts"
@@ -221,121 +229,47 @@ title = "m2381 first boot: source 4K XNU to console"
 dram_size = "0x400000000"            # [DEVICE] 16 GiB LPDDR5X
 skip_setup_tool = "scripts/seed-data-skip-setup.py"   # used by --skip-setup
 panic_screen = true
-# The forensic log reader (FLASHING.md §7): a type="linux" entry that boots
-# the SHLOG-window reader (Linux EFI-stub kernel + busybox initramfs) from
-# the payload volume; files live in .cache/forensic (build with
-# forensic/build-forensic-reader.py).
-forensic = true
-# sha256 of the trust caches of this 20H392 build: the two IM4P members
-# (extracted from the local IPSW 2026-10-29) and the flat two-module bundle
-# made by scripts/make-m2381-trust-bundle.py (DarwinBoot/kernel need the bare
-# container). Overrides the profile's bundle-only pin. The 21H461 set this
-# replaces (4563bdbf/9742f3d5/7416ca4f) stays in the old profile's era.
+# The forensic log reader (FLASHING.md §7) is OFF on this lane for space: the
+# fileset collection kernel.macho alone is 85 MiB and recovery_a is a 100 MiB
+# partition — the reader trio (15.3 MiB) does not fit beside it. Nothing to
+# read yet either: the first fileset boots run without sheng-log=1, so no
+# SHLOG window exists to read back. Flip back on when the log args return and
+# a slim enough reader lane exists.
+forensic = false
+# sha256 of the trust caches of this 23F84 build: the two IM4P members
+# (extracted from the local IPSW 2026-10-30 via "unixnu ipsw fetch") and the
+# flat two-module bundle made by scripts/make-m2381-trust-bundle.py
+# (DarwinBoot/kernel need the bare container). Overrides the profile's
+# bundle-only pin. The 20H392 set this replaces (63e01c03/9cc478fe/eb1475f6)
+# stays in the frozen 16-lane era.
 trust_cache_sha256 = [
-  "63e01c03b31e1532a5581a24865490673f0b5c297b0199fe0095637c6100ef4b",   # StaticTrustCache (087-86698-044.dmg.trustcache)
-  "9cc478fe3525e2683b5b9ea1eea0851eaebebdab21d206556233400e59d2e361",   # Cryptex1,SystemTrustCache (087-86593-047.dmg.trustcache)
-  "eb1475f643f45a974ebd40596f6e2b1cdf40205d2ca3c6094d774886099399c3",   # original-trust.bundle (2760+61 entries, loader-rule PASS)
+  "e70a385aa5677f5c27677531ca1d87f0dba164e023495313f9236c3b7a5e84bb",   # StaticTrustCache (094-56106-108.dmg.aea.trustcache, 3308 entries)
+  "58960bbc4d5311b71803dbfcc29accb357e2d6954cc6af146fc8e4bc6a79d397",   # Cryptex1,SystemTrustCache (094-54821-109.dmg.aea.trustcache, 116 entries)
+  "ebeaf7fb5e35a230941e664747c9f306c82ecff70bc628a577f228439da9415c",   # original-trust-23F84.bundle (3308+116 entries, loader-rule PASS)
 ]
 # text_fixups are inherited from the OS profile (the nx729j set for the same
 # donor build: AWAttentionAwareness init, PosterBoard file protection,
 # BTAudioHALPlugin factory).
+# Case A (2026-10-30): the sheng arm64e bring-up baseline (their feat27 board
+# line) instead of the 21H461-era 983-byte diagnostic queue — the offline-* /
+# sheng-* probe args below it are all retired with that lane (the components
+# still link; their probes stay inert without the args). The first-boot
+# judgment gates read the serial console, not the arg-gated probes:
+# native-pac-keys per-core key programming, the fileset binding counts,
+# native-source-storage=1 taking effect. noidle=1 keeps the r70 idle-sleep
+# halt away; native-source-storage=1 is the source-storage master switch
+# (SourceStorage.cpp gates on it); -no_slto_panic and use_contiguous_hint=0
+# ride the sheng baseline verbatim.
 kernel_args = [
   "-v",
   "serial=3",
   "debug=0x14e",
   "kt_fixed_zones=120",
-  "offline-legacy-register=1",
-  "offline-legacy-gop=1",
-  "offline-legacy-unit-scale=2",
-  "offline-legacy-pm=1",
-  "offline-legacy-validate=1",
-  "offline-legacy-transfer=1",
-  "offline-legacy-cpu-present=1",
-  "offline-hid-home=1",
-  "offline-hid-input=1",
-  "offline-legacy-phase=4",
-  "offline-mobile-graphics-client=0",
-  # The kernel-side IOMFB client probe is diagnostic-only; the boards past the
-  # SpringBoard wall run it off (asteroids sets 0, sheng/oneplus13t omit it).
-  # The r52 "[mfb clients] C0 sel6 fails" was this probe's own client, not a
-  # real consumer.
-  "offline-mobile-graphics-load=1",
-  "offline-apfs-load=1",
-  "boot-progress=2",                 # diagnostics page at the sheng/fuxi production level
-  # Board display timing (the sheng-template arg every SB-wall-crossing board
-  # carries: sheng=144, asteroids=120, oneplus13t=60): arms the work-loop
-  # vsync stand-in for the render server and, above 60, publishes
-  # IOMFBDisplayRefresh at registerService. The m2381 panel is 120 Hz.
-  "sheng-vsync=120",
-  "-apfs_shared_datavolume",
-  "offline-key-events=1",
-  "native-ufs-root=1",
-  "sheng-pmgr=2",
-  "armcpu-diagnostics=1",
-  "sheng-disable-watchdogd=1",
-  # r70: the crash-looping SpringBoard lives long enough to let the upstream
-  # 3 s idle-sleep timer arm; its expiry walked PMRD -> IOCPUSleepKernel ->
-  # ArmCpu::haltCPU and parked the machine in the diagnosePower panic at
-  # t=139s. Upstream IOPMrootDomain keeps the timer disarmed under "noidle"
-  # (gNoIdleFlag, also a device-tree "no-idle" default).
-  "noidle=1",
-  # The sheng production disable set (the lite list's first four are these same
-  # jobs; the rest are the crash/XPC-wait loops — on hardware 2026-10-26:
-  # findmydeviced/assistantd SIGABRT, biomed exit 100 — that churned launchd
-  # without reaching the UI stage).
-  "sheng-lite=1",
-  # On top of lite (both lists combine in disabled.plist): the 61ef9181 boot
-  # showed transparencyd respawning ~3x/s at exit 100 (its transparency data
-  # store does not exist on the 32 MiB RAM seed), pinning launchd's bootstrap
-  # queue so the UI never started — 549 nonzero exits by t=404s. assistantd
-  # SIGABRT (Siri support, no accounts) and biomed (exit 100) churn alongside.
-  # liveactivitiesd joined from the 764539c9 boots on: its SessionSyncEngine
-  # Keybag init fatals without SEP-backed AppleKeyStore keys. The r62 display
-  # archive carries KeyStoreProbe + AppleKeyStoreState (the sheng-template
-  # stand-in answers "no keybag, nothing locked"), so this entry can be
-  # reconsidered once the AKS diagnostics row shows real opens/calls; kept
-  # disabled one more round for change attribution.
-  "sheng-disable-jobs=com.apple.transparencyd,com.apple.assistantd,com.apple.biomed,com.apple.liveactivitiesd,com.apple.coreduetd",
-  # boot-ui-focus3=Preferences dropped in r64: the command line hit its 1000-byte
-  # limit when uikit-cache-probe=1 joined (r45-era diagnostic focus; judgments
-  # since r58 read the SpringBoard slot only, which focus4 keeps tracing).
-  "boot-ui-focus4=SpringBoard",
-  "sheng-smp=1",
-  # The charging lane (r80): the ADSP battery stack boots the DSP from the
-  # boot_b firmware segment and publishes the battery as an IOPMPowerSource
-  # over PMIC GLINK. The cpufreq/touch probes stay unbuilt on this board
-  # (the trimmed fleet), so their args are gone; coreduetd rides the disable
-  # list above (the sheng P-cluster answer).
-  "sheng-adsp=2",
-  "sheng-battery=1",
-  "sheng-aks=1",
-  # r64 cache-global audit: the UIKitCore __DATA_DIRTY watcher (ext rows 4-7,
-  # 2 s t-series over the bgTC/mainScreen singleton slots; display archive,
-  # uikit-cache-proc=<name> retargets, default SpringBoard).
-  "uikit-cache-probe=1",
-  "sheng-gpu-power=9",
-  "sheng-gpu-metal=1",
-  "sheng-fb-gpu=1",
-  "sheng-banner=0",
-  "sheng-gpu-perf=8",
-  "sheng-gpu-addon=1",
-  "armcpu-spi-ipi=1",
   "-no_slto_panic",
-  "ml-timeout-lock-panic-scale=40",
-  # sheng-touch-hid=1 dropped with the charging lane (r80): the touch/HID probes
-  # this arg gates are unbuilt here (NATIVE_HID_INPUT=n), same as sheng-touch.
-  "sheng-data-persist=2",
-  # The UFS diagnostic log (BootLog.c): every 2 s the full diagnostic page,
-  # the kernel message buffer and the exec census (per process name, starts/
-  # exits, first-start second) go into the last 32 MiB of userdata (the
-  # default 1 GiB tail reserve, clear of the root image and the Data store).
-  # The r40 boot could only be read from photographs; this makes the queue
-  # pacing record survive power-off and read back over nura-min (NCM dd).
-  "sheng-log=1",
-  # The seed excludes staged_system_apps by design (the fixture walk drops it);
-  # SpringBoard without staged apps is the sheng production answer, and the
-  # implementation ships in every kernel build (baseline late patch).
-  "sheng-staged-apps=1",
+  "use_contiguous_hint=0",
+  "native-source-storage=1",
+  "native-ufs-root=1",
+  "noidle=1",
 ]
 
 [payload.adt]

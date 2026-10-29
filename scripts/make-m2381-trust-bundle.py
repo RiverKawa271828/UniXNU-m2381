@@ -26,6 +26,11 @@ PINNED_INPUTS = {
     # IPSW 2026-10-29; same DER/IM4P shape, version-2 modules).
     '63e01c03b31e1532a5581a24865490673f0b5c297b0199fe0095637c6100ef4b': 'StaticTrustCache',
     '9cc478fe3525e2683b5b9ea1eea0851eaebebdab21d206556233400e59d2e361': 'Cryptex1,SystemTrustCache',
+    # The 23F84 donor pair (iPad17,3 iPadOS 26.5.2, extracted from the local
+    # IPSW 2026-10-30 via "unixnu ipsw fetch"; same DER/IM4P shape, version-2
+    # modules — the pin check stays so a cross-build pair cannot slip through).
+    'e70a385aa5677f5c27677531ca1d87f0dba164e023495313f9236c3b7a5e84bb': 'StaticTrustCache',
+    '58960bbc4d5311b71803dbfcc29accb357e2d6954cc6af146fc8e4bc6a79d397': 'Cryptex1,SystemTrustCache',
 }
 
 
@@ -78,7 +83,7 @@ for path, name in ((args.static_trustcache, 'StaticTrustCache'), (args.system_tr
     original, module = im4p_payload(path)
     digest = hashlib.sha256(original).hexdigest()
     if digest not in PINNED_INPUTS:
-        raise SystemExit(f'{path.name}: sha256 {digest} is not one of the pinned 21H461 trust caches')
+        raise SystemExit(f'{path.name}: sha256 {digest} is not one of the pinned trust caches')
     entries = check_module(module, name)
     print(f'{name}: {len(module)} bytes, {entries} entries, input sha256 {digest[:16]}... pinned')
     modules.append(module)
@@ -114,4 +119,4 @@ args.output.write_bytes(bundle)
     'bundle_sha256': hashlib.sha256(bundle).hexdigest(), 'modules': inputs,
     'original_modules_modified': False, 'own_code_entries_added': False,
     'purpose': 'm2381 boot trust cache: both unchanged 21H461 modules'}, indent=2) + '\n')
-print('PASS: 21H461 trust bundle (StaticTrustCache + Cryptex1,SystemTrustCache)', hashlib.sha256(bundle).hexdigest())
+print('PASS: trust bundle (StaticTrustCache + Cryptex1,SystemTrustCache)', hashlib.sha256(bundle).hexdigest())

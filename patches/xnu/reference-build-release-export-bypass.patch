@@ -1,0 +1,25 @@
+# The fileset prelink reference kernel (XNU_REFERENCE_BUILD=1, the RELEASE-config
+# pass of build-xnu-4k-baseline.sh) never boots and is only read for code
+# comparison. The RELEASE-only -exported_symbols_list check demands definitions
+# for every KPI export, including interfaces whose implementations live in
+# prelinked kexts (IOUnifiedAddressTranslator, the DART tables) and the LLVM
+# profile runtime - none of which exist in the open-source xnu tree, so a plain
+# source-only RELEASE kernel cannot link. DEVELOPMENT links fine precisely
+# because it has no export check. Bypass the check for the reference build only;
+# the shipping lane keeps it.
+
+--- a/makedefs/MakeInc.def	2026-10-30 02:09:33.982650555 +0800
++++ b/makedefs/MakeInc.def	2026-10-30 02:09:34.001103751 +0800
+@@ -1100,8 +1100,12 @@
+ 	$(LDFLAGS_KERNEL_SEGARM64) \
+ 	$(LDFLAGS_KERNEL_STRIP_LTO)
+ 
++ifeq ($(XNU_REFERENCE_BUILD),1)
++LDFLAGS_KERNEL_ONLY_CONFIG_RELEASEARM64     =
++else
+ LDFLAGS_KERNEL_ONLY_CONFIG_RELEASEARM64     = \
+ 	-Wl,-exported_symbols_list,$(TARGET)/all-kpi.exp
++endif
+ 
+ LDFLAGS_KERNEL_DEVELOPMENTARM64     = \
+ 	$(LDFLAGS_KERNEL_GENARM64) \

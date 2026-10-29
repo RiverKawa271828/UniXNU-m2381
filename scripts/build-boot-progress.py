@@ -2,6 +2,7 @@
 """Build the opt-in board diagnostic against this source kernel's actual ABI."""
 import hashlib
 import json
+import os
 from pathlib import Path
 import subprocess
 
@@ -88,19 +89,27 @@ subprocess.run(blob_command, cwd=policy_record['directory'], check=True, timeout
 # and NOT stubbed in BootProgressTelemetryDefs.c. The osfmk-side template
 # (startup.o.json, like BootProgress.o above) is the one that carries the
 # private kern/ headers BootLog.c includes; the bsd template does not.
-log_source = ROOT / 'kits/sheng/BootLog.c'
+# On the source-storage lane the adapter archive (libShengUfs.a, built by
+# build-sheng-source-storage.py) links BootLog.c in its own sources table, so a
+# second copy here is a duplicate of every strong boot_log_*/boot_diag_* symbol
+# at the kernel link; BootProgress.o's weak boot_log_tick resolves from that
+# archive instead.
 log_obj = OUT / 'BootLog.o'
-log_command = [str(log_source) if arg == str(fault_source) else str(log_obj) if arg == str(fault_obj) else arg for arg in fault_command]
-subprocess.run(log_command, cwd=record['directory'], check=True, timeout=90)
+if os.environ.get('XNU_SOURCE_STORAGE') != '1':
+    log_source = ROOT / 'kits/sheng/BootLog.c'
+    log_command = [str(log_source) if arg == str(fault_source) else str(log_obj) if arg == str(fault_obj) else arg for arg in fault_command]
+    subprocess.run(log_command, cwd=record['directory'], check=True, timeout=90)
 
 archive = OUT / 'libBootProgress.a'
 archive.unlink(missing_ok=True)
-subprocess.run(['xcrun', 'ar', 'rcs', str(archive), str(obj), str(fault_obj), str(policy_obj), str(diag_obj), str(fw_obj), str(blob_obj), str(log_obj)], check=True, timeout=30)
-(OUT / 'build-report.json').write_text(json.dumps({
+members = [str(obj), str(fault_obj), str(policy_obj), str(diag_obj), str(fw_obj), str(blob_obj)]
+if os.environ.get('XNU_SOURCE_STORAGE') != '1':
+    members.append(str(log_obj))
+subprocess.run(['xcrun', 'ar', 'rcs', str(archive), *members], check=True, timeout=30)
+report = {
     'watchdog_policy_sha256': hashlib.sha256(policy_source.read_bytes()).hexdigest(),
     'diag_sha256': hashlib.sha256(diag_source.read_bytes()).hexdigest(),
     'fault_sha256': hashlib.sha256(fault_source.read_bytes()).hexdigest(),
-    'log_sha256': hashlib.sha256(log_source.read_bytes()).hexdigest(),
     'source_sha256': hashlib.sha256(source.read_bytes()).hexdigest(),
     'lifecycle_sha256': hashlib.sha256((source.parent / 'BootProgressLifecycle.h').read_bytes()).hexdigest(),
     'core_sha256': hashlib.sha256((source.parent / 'BootProgressCore.h').read_bytes()).hexdigest(),
@@ -108,5 +117,8 @@ subprocess.run(['xcrun', 'ar', 'rcs', str(archive), str(obj), str(fault_obj), st
     'pulse_sha256': hashlib.sha256((source.parent / 'BootProgressPulse.h').read_bytes()).hexdigest(),
     'archive_sha256': hashlib.sha256(archive.read_bytes()).hexdigest(),
     'hardware_execution': False,
-}, indent=2) + '\n')
+}
+if os.environ.get('XNU_SOURCE_STORAGE') != '1':
+    report['log_sha256'] = hashlib.sha256(log_source.read_bytes()).hexdigest()
+(OUT / 'build-report.json').write_text(json.dumps(report, indent=2) + '\n')
 print('PASS: strict source-kernel ARM64 boot diagnostic build')
