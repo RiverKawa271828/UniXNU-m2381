@@ -27,15 +27,15 @@ out = ROOT / (('build/verified-root-os-xnu' if args.component == 'os' else 'buil
 out.mkdir(parents=True, exist_ok=True)
 policy_dir = ROOT / ('build/verified-root-' + args.component)
 metadata = json.loads((policy_dir / 'verification.json').read_text())
-image = ROOT / '.cache/firmware/target-volumes/044-76034-038.dmg'
+image = ROOT / '.cache/firmware/target-volumes/087-86593-047.dmg'
 manifest = policy_dir / 'manifest.bin'
 key = policy_dir / 'trusted-key.bin'
-expected_digest = ('e5634d04a8ac35f024845f583394e0a35deb26a04cb0c00286a8674e25a9a4f2' if args.component == 'os' else
-                   'b4908cde41d23e6bc05e6af51a2c9eeb00cf0f863a6a18b1600c96a3fd70414f')
+expected_digest = ('6e87bfcaa8eca952e00b719f333d1f1060715a63566112267ad8730e1ed98906' if args.component == 'os' else
+                   '9cd738f3b0169055549df84ad6d8d13e50a2da39af618ce0522ca4e06df86849')
 # m2381: 16 KiB verification blocks (the 100 MiB recovery_a payload cannot
 # hold the 4 KiB manifests of both windows).
 block_bytes = 16384
-expected_count = 370947 if args.component == 'os' else 201600
+expected_count = 343939 if args.component == 'os' else 167424
 if (metadata['image_sha256'] != expected_digest or
         metadata['blocks_verified'] != expected_count or not metadata['real_c_signature_and_block_verification'] or
         hashlib.sha256(key.read_bytes()).hexdigest() != metadata['trusted_key_sha256']):
@@ -100,12 +100,12 @@ policy_records = [dict(manifest_sha256=hashlib.sha256(manifest.read_bytes()).hex
 if args.include_systemos:
     extra_dir = ROOT / 'build/verified-root-systemos'
     extra_meta = json.loads((extra_dir / 'verification.json').read_text())
-    if (extra_meta['image_sha256'] != 'b4908cde41d23e6bc05e6af51a2c9eeb00cf0f863a6a18b1600c96a3fd70414f' or
-            extra_meta['blocks_verified'] != 201600 or not extra_meta['real_c_signature_and_block_verification'] or
+    if (extra_meta['image_sha256'] != '9cd738f3b0169055549df84ad6d8d13e50a2da39af618ce0522ca4e06df86849' or
+            extra_meta['blocks_verified'] != 167424 or not extra_meta['real_c_signature_and_block_verification'] or
             (extra_dir / 'trusted-key.bin').read_bytes() != key.read_bytes()):
         raise SystemExit('Require separately fully verified original SystemOS under the same independent anchor')
     extra = extra_dir / 'manifest.bin'
-    policy_records.append(dict(manifest_sha256=hashlib.sha256(extra.read_bytes()).hexdigest(), image_bytes=3303014400))
+    policy_records.append(dict(manifest_sha256=hashlib.sha256(extra.read_bytes()).hexdigest(), image_bytes=2743074816))
     bundle_assembly = '''.balign 8
 .globl _verified_root_systemos_manifest
 _verified_root_systemos_manifest:

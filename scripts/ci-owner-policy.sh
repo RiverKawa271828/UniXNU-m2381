@@ -51,16 +51,16 @@ echo "ipsw: ${IPSW_URL%%\?*}"
 TV=".cache/firmware/target-volumes"
 mkdir -p "$TV" build
 
-if [ ! -f "$TV/044-76040-038.dmg" ] || [ ! -f "$TV/044-76034-038.dmg" ]; then
+if [ ! -f "$TV/087-86698-044.dmg" ] || [ ! -f "$TV/087-86593-047.dmg" ]; then
   echo "== downloading the IPSW"
   curl -fsSL --retry 3 -o /tmp/m2381-owner.ipsw "$IPSW_URL"
-  for m in 044-76040-038.dmg 044-76034-038.dmg; do
+  for m in 087-86698-044.dmg 087-86593-047.dmg; do
     unzip -p /tmp/m2381-owner.ipsw "$m" > "$TV/$m"
   done
   rm -f /tmp/m2381-owner.ipsw
 fi
-echo "os dmg sha256:"; shasum -a 256 "$TV/044-76040-038.dmg"
-echo "systemos dmg sha256:"; shasum -a 256 "$TV/044-76034-038.dmg"
+echo "os dmg sha256:"; shasum -a 256 "$TV/087-86698-044.dmg"
+echo "systemos dmg sha256:"; shasum -a 256 "$TV/087-86593-047.dmg"
 
 echo "== host keys + verified-root.dylib"
 HOST=build/verified-root-host
@@ -108,12 +108,12 @@ for e in plistlib.load(open(sys.argv[1], "rb"))["system-entities"]:
   echo "$DETACH" > "/tmp/detach-$3"
 }
 
-attach_volume "$TV/044-76040-038.dmg" 04769D26-2CA0-4825-B443-E2E5F88300F2 os-mount
+attach_volume "$TV/087-86698-044.dmg" DADD93F8-DBBF-4B17-A1DF-0F11E64172F7 os-mount
 
 echo "== OS policy (real C signature + full block verification)"
 python3 scripts/build-owner-os-policy.py
 
-attach_volume "$TV/044-76034-038.dmg" 8846FE78-2910-4297-AF97-D59BB6F8FC16 systemos-mount
+attach_volume "$TV/087-86593-047.dmg" 96096B28-B6DC-4BC7-9D3A-2632A0FE53F1 systemos-mount
 
 echo "== SystemOS policy (same committed anchor, full block verification)"
 UNIXNU_CHECKOUT="$PWD" python3 "$DEVICE_DIR/scripts/build-owner-systemos-policy.py"

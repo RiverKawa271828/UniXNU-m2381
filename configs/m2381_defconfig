@@ -56,10 +56,14 @@ CONFIG_XNU_NATIVE_LEGACY_DISPLAY=y
 CONFIG_XNU_NATIVE_ADRENO=n
 
 CONFIG_XNU_CRYPTO_BOOTSTRAP="prelinked"
-# The 21H461 donor image Data volume UUID - the same value fuxi/nx729j run
-# for this exact build, and correct here as long as the userdata image is
-# rebuilt from the same IPSW.
+# The owner RAM Data seed volume UUID (built by the payload step, donor
+# independent). The donor cryptex volume rides XNU_OWNER_CACHE_VOLUME_UUID.
 CONFIG_XNU_OWNER_DATA_VOLUME_UUID="18AB5557-DC2D-469B-8758-855E60F5B0DF"
+# The 20H392 donor cryptex SystemOS volume UUID (the window the owner cache
+# mount unions over "/"; derived 2026-10-29 from the userdata SystemOS
+# window's volume superblocks, temp/scan-apfs-volume-uuids.py). Without this
+# line the kern_exec hook falls back to the 21H461 value patched in-tree.
+CONFIG_XNU_OWNER_CACHE_VOLUME_UUID="96096B28-B6DC-4BC7-9D3A-2632A0FE53F1"
 CONFIG_XNU_NATIVE_VIRTIO_BLOCK_ARCHIVE="{tree}/build/virtio-mmio-block-verified-bundle/libVirtioMmioBlock.a"
 CONFIG_XNU_VERIFIED_ROOT_ARCHIVE="{tree}/build/verified-root-os-xnu-bundle/libVerifiedRootProbe.a"
 # The static storage ABI archive: absolute symbols for IOBlockStorageDevice's

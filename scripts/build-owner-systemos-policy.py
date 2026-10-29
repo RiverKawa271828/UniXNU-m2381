@@ -24,12 +24,12 @@ import uuid
 # .cache/firmware trees (build-owner-os-policy.py sits in the checkout itself
 # and needs no override).
 ROOT = Path(os.environ.get('UNIXNU_CHECKOUT') or Path(__file__).resolve().parents[1])
-source = ROOT / '.cache/firmware/target-volumes/044-76034-038.dmg'
+source = ROOT / '.cache/firmware/target-volumes/087-86593-047.dmg'
 volume = ROOT / '.cache/firmware/target-volumes/systemos-mount'
 out = ROOT / 'build/verified-root-systemos'
-expected_uuid = uuid.UUID('8846FE78-2910-4297-AF97-D59BB6F8FC16')   # the donor cryptex volume the owner cache mount resolves
-expected_compressed = 'b4908cde41d23e6bc05e6af51a2c9eeb00cf0f863a6a18b1600c96a3fd70414f'
-expected_size = 3303014400
+expected_uuid = uuid.UUID('96096B28-B6DC-4BC7-9D3A-2632A0FE53F1')   # the donor cryptex volume the owner cache mount resolves
+expected_compressed = '9cd738f3b0169055549df84ad6d8d13e50a2da39af618ce0522ca4e06df86849'
+expected_size = 2743074816
 if not source.is_file():
     raise SystemExit('Require the existing exact original SystemOS input')
 digest = hashlib.sha256()

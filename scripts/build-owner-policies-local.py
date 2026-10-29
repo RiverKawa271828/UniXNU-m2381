@@ -25,12 +25,16 @@ image = Path(sys.argv[1])
 fw = Path(sys.argv[2])
 keys = ROOT / 'keys'
 WINDOWS = [
-    dict(name='os', out='build/verified-root-os', offset=1048576, size=6077580800,
-         uuid='04769D26-2CA0-4825-B443-E2E5F88300F2',
-         sha='e5634d04a8ac35f024845f583394e0a35deb26a04cb0c00286a8674e25a9a4f2'),
-    dict(name='systemos', out='build/verified-root-systemos', offset=6079643648, size=3303014400,
-         uuid='8846FE78-2910-4297-AF97-D59BB6F8FC16',
-         sha='b4908cde41d23e6bc05e6af51a2c9eeb00cf0f863a6a18b1600c96a3fd70414f'),
+    # The 20H392 windows (userdata-root.json, 2026-10-29): the offsets/sizes/
+    # digests are the image manifest's own pins, the volume UUIDs were derived
+    # from the windows' volume superblocks (temp/scan-apfs-volume-uuids.py,
+    # gold-checked against the 21H461 userdata before use).
+    dict(name='os', out='build/verified-root-os', offset=1048576, size=5635081728,
+         uuid='DADD93F8-DBBF-4B17-A1DF-0F11E64172F7',
+         sha='6e87bfcaa8eca952e00b719f333d1f1060715a63566112267ad8730e1ed98906'),
+    dict(name='systemos', out='build/verified-root-systemos', offset=5637144576, size=2743074816,
+         uuid='96096B28-B6DC-4BC7-9D3A-2632A0FE53F1',
+         sha='9cd738f3b0169055549df84ad6d8d13e50a2da39af618ce0522ca4e06df86849'),
 ]
 if not image.is_file():
     raise SystemExit(f'Require the dual-window userdata image: {image}')

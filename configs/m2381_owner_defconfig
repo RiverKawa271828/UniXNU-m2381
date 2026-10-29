@@ -113,7 +113,7 @@ CONFIG_XNU_OWNER_ROOT_TRUST=y
 # symlink (EROFS — no Data volume); the RAM-backed Data seed arrives via the
 # ESP scratch-data.img handoff (DarwinBoot PackedRAMDisk → NativeRamBlock),
 # so the Data mount turns on against the seeded scratch volume.
-CONFIG_XNU_OWNER_CACHE_VOLUME_UUID="8846FE78-2910-4297-AF97-D59BB6F8FC16"
+CONFIG_XNU_OWNER_CACHE_VOLUME_UUID="96096B28-B6DC-4BC7-9D3A-2632A0FE53F1"
 CONFIG_XNU_OWNER_CACHE_MOUNT=y
 CONFIG_XNU_OWNER_CACHE_STARTUP=y
 CONFIG_XNU_OWNER_BOOT_MANIFEST=y

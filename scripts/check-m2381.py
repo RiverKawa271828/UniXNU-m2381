@@ -147,10 +147,11 @@ def main():
     # --- placeholders that must be filled before an image is written --------
     adt = board['payload']['adt']
     uuid = adt.get('root_match_volume_uuid', '')
-    # P2 builds the firmware only; nothing here writes a disk. The placeholder
-    # no longer a placeholder: the donor image UUID applies verbatim (same 21H461 IPSW as fuxi/nx729j).
+    # P2 builds the firmware only; nothing here writes a disk. The value is
+    # the donor OS image root volume UUID, derived from the userdata OS
+    # window's volume superblocks per donor.
     if not uuid or uuid.upper().startswith('TODO'):
-        record(WARN, 'root_match_volume_uuid', 'still the P3 placeholder; must be derived from the 21H16 userdata build before any payload/userdata image is written')
+        record(WARN, 'root_match_volume_uuid', 'still a placeholder; must be derived from the donor OS image before any payload/userdata image is written')
     else:
         record(OK, 'root_match_volume_uuid', uuid)
 

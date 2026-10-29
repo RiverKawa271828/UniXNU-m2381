@@ -60,7 +60,8 @@ lba_bytes = 4096
 # Stage 7 (2026-10-25): launchd exec'd but dyld had no libSystem and no dyld
 # cache — both live in the Cryptex1,SystemOS volume, so the cryptex window
 # returns now and the owner cache mount unions it over "/" (kern_exec
-# OWNER_CACHE_MOUNT/OWNER_UNION_SYSTEMOS, cache volume 8846FE78-…).
+# OWNER_CACHE_MOUNT/OWNER_UNION_SYSTEMOS, cache volume 96096B28-… since the
+# 20H392 donor swap).
 windows = [
   { name = "OS", component = "OS" },
   { name = "SystemOS", component = "Cryptex1,SystemOS" },
@@ -357,10 +358,11 @@ kernel_args = [
 [payload.adt]
 chip_id = "207"                     # [DTB] qcom,msm-id 0x207 (SM8550-AB) — same value sheng/nx729j use
 owned_memory_size = "0x130000000"
-# root_match_volume_uuid of the donor OS image's Data volume: the same value
-# fuxi/nx729j pin for this exact 21H461 build (same IPSW = same UUID), so the
-# 21H461 userdata build carries it natively.
-root_match_volume_uuid = "04769D26-2CA0-4825-B443-E2E5F88300F2"
+# root_match_volume_uuid of the donor OS image's root volume: the only volume
+# in the 20H392 OS container (derived 2026-10-29 by scanning the OS window's
+# volume superblocks — temp/scan-apfs-volume-uuids.py, gold-checked against
+# the 21H461 userdata: 04769D26…/8846FE78… reproduced exactly).
+root_match_volume_uuid = "DADD93F8-DBBF-4B17-A1DF-0F11E64172F7"
 packed_data_ramdisk = true
 unique_chip_id = "required"          # the platform seed is not stored in any repository
 # cpu identity moved to dts/m2381.dts (the v1 generator's cpu_regs list,
