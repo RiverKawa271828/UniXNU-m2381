@@ -232,13 +232,15 @@ skip_setup_tool = "scripts/seed-data-skip-setup.py"   # used by --skip-setup
 # stage bars with no other evidence channel (forensic=false, no SHLOG window,
 # kernel serial never verified on this board). Stage 3 answers one question:
 # does execution pass the MMU-on site (magenta is painted just before it)?
-# A PSCI reset ~5 s after MMU-on = yes; a frozen magenta bar = hang inside the
-# MMU-enable sequence. Remove once a later gate takes over the bisection.
+# A PSCI reset ~10 s after MMU-on = yes; a frozen magenta bar = hang inside the
+# MMU-enable sequence. The 10 s window leaves room to photograph the
+# boot-progress diagnostic page before the reset. Remove once a later gate
+# takes over the bisection.
 # panic_screen=false for the same round: the panic screen (0x9df B) plus a
 # third probe cave exceeds the __TEXT_EXEC padding by 0xf B — the two cannot
 # coexist; panic text returns when the reset probes stand down.
 panic_screen = false
-entry_probe_reset_delay = 5
+entry_probe_reset_delay = 10
 # The forensic log reader (FLASHING.md §7) is OFF on this lane for space: the
 # fileset collection kernel.macho alone is 85 MiB and recovery_a is a 100 MiB
 # partition — the reader trio (15.3 MiB) does not fit beside it. Nothing to
@@ -280,6 +282,10 @@ kernel_args = [
   "native-source-storage=1",
   "native-ufs-root=1",
   "noidle=1",
+  # Upstream blind-zone channel (guide/debugging): the on-screen diagnostic
+  # page — 120x48 stage history, registers, storage counters; freezes on
+  # stall so a photograph pinpoints the stop. Zero geometry cost (arg only).
+  "boot-progress=2",
 ]
 
 [payload.adt]
