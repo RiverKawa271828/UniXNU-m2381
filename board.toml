@@ -43,7 +43,7 @@ soc = "SM8550"
 description = "Meizu 20 Classic"
 kit = "sheng"                      # package/ of this repository appears as kits/sheng in the build tree (fuxi same: build-sheng-platform-power.py reads kits/sheng/ShengPlatformPower.cpp)
 soc_source = "sm8550"              # feeds.toml pins UniXNU-sm8550-common
-os_profile = "ipados-17.7.11-21H461"
+os_profile = "ios-16.7.16-20H392"
 
 # The raw image for the userdata partition: the OS and SystemOS disk images of
 # the IPSW behind a manifest.
@@ -242,16 +242,15 @@ panic_screen = true
 # the payload volume; files live in .cache/forensic (build with
 # forensic/build-forensic-reader.py).
 forensic = true
-# sha256 of the trust caches of this 21H461 build: the two IM4P members
-# (computed from the IPSW members fetched via Apple CDN range requests,
-# CRC-32 verified, 2026-10-24) and the flat two-module bundle made by
-# scripts/make-m2381-trust-bundle.py (DarwinBoot/kernel need the bare
-# container). Overrides the profile's bundle-only pin; the bundle value
-# reproduces the fuxi pin independently.
+# sha256 of the trust caches of this 20H392 build: the two IM4P members
+# (extracted from the local IPSW 2026-10-29) and the flat two-module bundle
+# made by scripts/make-m2381-trust-bundle.py (DarwinBoot/kernel need the bare
+# container). Overrides the profile's bundle-only pin. The 21H461 set this
+# replaces (4563bdbf/9742f3d5/7416ca4f) stays in the old profile's era.
 trust_cache_sha256 = [
-  "4563bdbf6ed8f72237d45dbba3ccde432634338f95c10d79d5d4631678a97c7c",   # StaticTrustCache (044-76040-038.dmg.trustcache)
-  "9742f3d566369e6c48f63b3dc0740b06c243d13c6650e25bbf44616e13d6d097",   # Cryptex1,SystemTrustCache (044-76034-038.dmg.trustcache)
-  "7416ca4f8377146626bb284e2133c76bee6cb4e3ee0af5d648b186235a7323a7",   # original-trust.bundle (reproduces the fuxi pin independently)
+  "63e01c03b31e1532a5581a24865490673f0b5c297b0199fe0095637c6100ef4b",   # StaticTrustCache (087-86698-044.dmg.trustcache)
+  "9cc478fe3525e2683b5b9ea1eea0851eaebebdab21d206556233400e59d2e361",   # Cryptex1,SystemTrustCache (087-86593-047.dmg.trustcache)
+  "eb1475f643f45a974ebd40596f6e2b1cdf40205d2ca3c6094d774886099399c3",   # original-trust.bundle (2760+61 entries, loader-rule PASS)
 ]
 # text_fixups are inherited from the OS profile (the nx729j set for the same
 # donor build: AWAttentionAwareness init, PosterBoard file protection,

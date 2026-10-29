@@ -117,10 +117,10 @@ def main():
     ipsw = board.get('ipsw')
     if ipsw is None:
         record(WARN, 'ipsw identity', 'no [ipsw] visible: OS profile not merged (standalone board) — identity check skipped')
-    elif (ipsw['product'], ipsw['build'], ipsw['device_class']) != ('iPad7,1', '21H461', 'j120ap'):
-        record(FAIL, 'ipsw identity', 'm2381 targets iPad7,1 / 21H461 / j120ap (user decision 2026-10-24: fuxi-proven same-train donor while the fileset-KC rebinder is pending)')
-    elif ipsw.get('chip_id') != 0x8011 or ipsw.get('board_id') != 12:
-        record(FAIL, 'ipsw chip/board id', f"expected 0x8011/12 (j120ap BuildManifest), got {ipsw.get('chip_id')}/{ipsw.get('board_id')}")
+    elif (ipsw['product'], ipsw['build'], ipsw['device_class']) != ('iPhone10,3', '20H392', 'd22ap'):
+        record(FAIL, 'ipsw identity', 'm2381 targets iPhone10,3 / 20H392 / d22ap (user decision 2026-10-29: the original cross-generation pairing, entropy/Image4 walls tamed on device at r11)')
+    elif ipsw.get('chip_id') != 0x8015 or ipsw.get('board_id') != 6:
+        record(FAIL, 'ipsw chip/board id', f"expected 0x8015/6 (d22ap BuildManifest), got {ipsw.get('chip_id')}/{ipsw.get('board_id')}")
     else:
         record(OK, 'ipsw identity', f"{ipsw['product']} {ipsw['version']} {ipsw['build']} chip {ipsw['chip_id']:#x} board {ipsw['board_id']}")
 

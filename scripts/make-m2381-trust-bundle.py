@@ -22,6 +22,10 @@ args = parser.parse_args()
 PINNED_INPUTS = {
     '4563bdbf6ed8f72237d45dbba3ccde432634338f95c10d79d5d4631678a97c7c': 'StaticTrustCache',
     '9742f3d566369e6c48f63b3dc0740b06c243d13c6650e25bbf44616e13d6d097': 'Cryptex1,SystemTrustCache',
+    # The 20H392 donor pair (iPhone10,3 iOS 16.7.16, extracted from the local
+    # IPSW 2026-10-29; same DER/IM4P shape, version-2 modules).
+    '63e01c03b31e1532a5581a24865490673f0b5c297b0199fe0095637c6100ef4b': 'StaticTrustCache',
+    '9cc478fe3525e2683b5b9ea1eea0851eaebebdab21d206556233400e59d2e361': 'Cryptex1,SystemTrustCache',
 }
 
 
