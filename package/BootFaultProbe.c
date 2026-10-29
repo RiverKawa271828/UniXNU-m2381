@@ -8,6 +8,14 @@
 #include <kdp/kdp_dyld.h>
 #include <string.h>
 #include <vm/vm_map.h>
+/* xnu-12377 moved these declarations out of vm_map.h (port of the sheng
+ * feat/ipados27-gpu-parity fix; our probe bodies stay the m2381 forensic set). */
+#if __has_include(<vm/vm_map_xnu.h>)
+#include <vm/vm_map_xnu.h>
+#endif
+#if __has_include(<vm/vm_map_internal.h>)
+#include <vm/vm_map_internal.h>
+#endif
 extern int proc_selfpid(void);
 extern void proc_selfname(char *, int);
 extern char boot_progress_ext_wide[2][112]; // W1 wide row carries the SS stack-ash scan

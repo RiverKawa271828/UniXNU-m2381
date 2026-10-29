@@ -9,7 +9,7 @@ extern "C" {
 #define VR_HEADER_BYTES 160u
 #define VR_SIGNATURE_BYTES 384u
 #define VR_KEY_BYTES 395u
-#define VR_BLOCK_BYTES 16384u   /* m2381: 16 KiB verification blocks - the 100 MiB recovery_a payload cannot hold the 4 KiB manifests of both windows (73 MiB of hashes); 16 KiB keeps the same-anchor dual-policy model at a 4x read amplification. */
+#define VR_BLOCK_BYTES 16384u   /* m2381: 16 KiB verification blocks - the 96 MiB recovery_a payload cannot hold the 4 KiB manifests of both windows (73 MiB of hashes); 16 KiB keeps the same-anchor dual-policy model at a 4x read amplification. Ported onto feat ed368a8 (vr_open_header era) 2026-10-29. */
 
 enum vr_status { VR_OK, VR_FORMAT, VR_KEY, VR_SIGNATURE, VR_HASH_TABLE, VR_BLOCK };
 struct vr_crypto {
@@ -25,6 +25,10 @@ struct vr_view {
  * must remain immutable for the lifetime of the returned authenticated view. */
 int vr_open(const uint8_t *, size_t, const uint8_t[VR_KEY_BYTES], uint64_t,
             const struct vr_crypto *, struct vr_view *);
+/* Authenticate only the signed header (exactly VR_HEADER_BYTES + VR_SIGNATURE_BYTES); the view has no
+ * hashes. vr_open must still authenticate the full envelope before any block is verified. */
+int vr_open_header(const uint8_t *, size_t, const uint8_t[VR_KEY_BYTES], uint64_t,
+                   const struct vr_crypto *, struct vr_view *);
 int vr_verify_block(const struct vr_view *, uint64_t, const void *, size_t,
                     const struct vr_crypto *);
 #ifdef __cplusplus

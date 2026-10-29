@@ -87,6 +87,24 @@ int main(int argc,char **argv) {
   expect([]{put32(manifest+24+52,0);},true,7);
   // A final physical 4K read may include padding, but cannot enter another window.
   expect([]{put64(manifest+24+40,4096+512);put64(manifest+24+128+32,8192);},true,6);
+  // Version 2: data objects (flags 3, 4096-byte blocks) are kept apart from the windows.
+  auto object=[](unsigned slot,const char *name,uint64_t offset,uint64_t size){
+    uint8_t *e=manifest+24+slot*128;memset(e,0,128);strcpy(reinterpret_cast<char *>(e),name);
+    put64(e+32,offset);put64(e+40,size);put32(e+48,4096);put32(e+52,3);
+  };
+  {
+    fixture();put32(manifest+8,2);put32(manifest+12,4);
+    object(2,"OS.vroot",40960,4064);object(3,"SystemOS.vroot",45056,8192);checksums();
+    RootLayout layout;const char *why=nullptr;
+    assert(findRootLayout(&layout,&why) && layout.manifestStatus==0 && layout.windows==2 && layout.objects==2);
+    assert(!strcmp(layout.object[0].name,"OS.vroot") && layout.object[0].size==4064 && layout.object[1].offset==45056);
+  }
+  expect([&]{put32(manifest+12,3);object(2,"OS.vroot",40960,4096);},true,7);           // objects need version 2
+  expect([&]{put32(manifest+8,2);put32(manifest+12,1);object(0,"OS.vroot",40960,4096);},true,7);  // no window
+  expect([&]{put32(manifest+8,2);put32(manifest+12,3);object(2,"OS.vroot",8192,4096);},true,6);   // overlaps a window
+  expect([&]{put32(manifest+8,2);put32(manifest+12,3);object(2,"OS",40960,4096);},true,5);        // name taken
+  expect([&]{put32(manifest+8,2);put32(manifest+12,9);},true,2);
+  expect([&]{put32(manifest+8,2);put32(manifest+12,3);object(2,"OS.vroot",40960,4096);put32(manifest+24+256+48,512);},true,7);
   // Bounded mutation pass checks parser memory safety, not semantic correctness.
   for(unsigned i=0;i<2048;++i) {
     fixture(); unsigned at=(i*313)%4064;manifest[at]^=uint8_t(1+(i%255));checksums();
@@ -103,5 +121,5 @@ int main(int argc,char **argv) {
     printf("PASS: existing root image's 4096-byte manifest, OS=%llu SystemOS=%llu; synthetic GPT uses recorded geometry, no full-image rehash\n",
            (unsigned long long)layout.window[0].size,(unsigned long long)layout.window[1].size);
   }
-  puts("PASS: GPT CRC/geometry/partition faults, manifest hashes/names/attributes/overlap/overflow, 2048 bounded mutations");
+  puts("PASS: GPT CRC/geometry/partition faults, manifest hashes/names/attributes/overlap/overflow, version 2 objects, 2048 bounded mutations");
 }

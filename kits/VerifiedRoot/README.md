@@ -1,7 +1,12 @@
+> **m2381 fork of UniXNU/VerifiedRoot**: upstream `feat/ipados27-gpu-parity`
+> (ed368a8) with one local line — `VR_BLOCK_BYTES 16384` (16 KiB verification
+> blocks; see the comment in include/verified_root.h) and a block_bytes-
+> parameterized tools/manifest.py. Keep both when re-porting newer upstream.
+
 # VerifiedRoot
 
-Verified root trust tooling. Builds and checks owner trust bundles and signature chains.
+Authenticated block reads.
 
-Current state: used by the owner root path.
+used by the owner root path.
 
-Run by the UniXNU trust and payload steps.
+Build and interface details: [documentation](https://unixnu.com/drivers/verified-root). Component sources and dependencies: [catalog](https://unixnu.com/reference/components).

@@ -34,7 +34,12 @@ void sheng_cpufreq_poll(void) {}
 unsigned boot_ui_trace_hot_rows(char rows[][120], unsigned cap) {
     (void)rows; (void)cap; return 0;
 }
+// 2026-10-30: on the source-storage lane the libShengUfs.a archive carries the
+// real NativeUfs (native_ufs_extra_fault) and the real BootReset kit, so these
+// zero stubs must stay out of that link.
+#ifndef XNU_SOURCE_STORAGE
 int native_ufs_extra_fault(uint32_t *fault) { (void)fault; return 0; }
+#endif
 #ifndef XNU_NATIVE_LEGACY_DISPLAY_QUALIFIED
 unsigned native_legacy_properties_now(char *out, unsigned cap) { (void)out; (void)cap; return 0; }
 unsigned native_legacy_clients_dump(char *out, unsigned cap) { (void)out; (void)cap; return 0; }
@@ -42,14 +47,17 @@ unsigned native_legacy_swap_timeline(char *out, unsigned cap) { (void)out; (void
 unsigned native_legacy_prepare_report(char *out, unsigned cap) { (void)out; (void)cap; return 0; }
 unsigned native_legacy_state_words(char *out, unsigned cap) { (void)out; (void)cap; return 0; }
 #endif
-// The fastboot reset kit (BootReset.c) is not compiled on this board; a
-// refused probe keeps every sheng-autoreset path on its "skipped" branch.
+// The fastboot reset kit (BootReset.c) is not compiled on the classic lanes; a
+// refused probe keeps every sheng-autoreset path on its "skipped" branch. The
+// source-storage archive provides the real kit.
+#ifndef XNU_SOURCE_STORAGE
 int boot_reset_probe(char *out, unsigned cap) { (void)out; (void)cap; return -1; }
 int boot_reset_bootloader(char *out, unsigned cap) { (void)out; (void)cap; return -1; }
 int boot_reset_mark_bootloader(char *out, unsigned cap) { (void)out; (void)cap; return -1; }
 int boot_reset_watchdog(uint32_t seconds, char *out, unsigned cap) {
     (void)seconds; (void)out; (void)cap; return -1;
 }
+#endif
 
 // Boot process and UI trace state
 volatile unsigned boot_process_attempts = 0;
@@ -265,3 +273,24 @@ int (*native_adreno_cached_read32)(uint64_t, uint32_t *) = 0;
 #ifndef XNU_NATIVE_LEGACY_DISPLAY_QUALIFIED
 volatile uint64_t native_gop_wait_stats[7] = {0};
 #endif
+
+// 2026-10-30 (ipados-26.5.2 arm64e link): the resolved dangling list of this
+// lane's link. NativeUfs/VirtioMmioBlock provides the virtio counters when the
+// virtio topic returns; the PGO runtime never links in a non-instrumented
+// kernel, and a zero-size profile is exactly OSKext's "no PGO data" outcome.
+volatile uint32_t native_virtio_ready = 0, native_virtio_read_requests = 0, native_virtio_read_failures = 0;
+volatile uint64_t native_virtio_verified_blocks = 0;
+/* Signatures mirror OSKext.cpp's declarations (the kext-PGO collector); the
+ * kernel never links an instrumented profile runtime, and a zero-size profile
+ * is OSKext's own "no PGO data" outcome (err=ENOTSUP path). */
+uint64_t __llvm_profile_get_size_for_buffer_internal(const char *dataBegin, const char *dataEnd,
+    const char *countersBegin, const char *countersEnd, const char *bitmapBegin, const char *bitmapEnd,
+    const char *namesBegin, const char *namesEnd, const char *vtableBegin, const char *vtableEnd,
+    const char *vnamesBegin, const char *vnamesEnd) { (void)dataBegin; (void)dataEnd; (void)countersBegin;
+    (void)countersEnd; (void)bitmapBegin; (void)bitmapEnd; (void)namesBegin; (void)namesEnd;
+    (void)vtableBegin; (void)vtableEnd; (void)vnamesBegin; (void)vnamesEnd; return 0; }
+int __llvm_profile_write_buffer_internal(char *buffer, const char *dataBegin, const char *dataEnd,
+    const char *countersBegin, const char *countersEnd, const char *bitmapBegin, const char *bitmapEnd,
+    const char *namesBegin, const char *namesEnd) { (void)buffer;
+    (void)dataBegin; (void)dataEnd; (void)countersBegin; (void)countersEnd; (void)bitmapBegin;
+    (void)bitmapEnd; (void)namesBegin; (void)namesEnd; return 0; }

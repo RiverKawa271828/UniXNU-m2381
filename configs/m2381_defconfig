@@ -19,7 +19,10 @@ CONFIG_XNU_SOURCE_PTHREAD=y
 CONFIG_XNU_ARM_DT_PLATFORM=y
 CONFIG_XNU_ARMCPU=y
 CONFIG_XNU_NATIVE_UFS=y
-CONFIG_XNU_NATIVE_AES=y
+# 2026-10-29: off with the sheng arm64e shape — the NativeAES guard requires
+# CRYPTO_BOOTSTRAP=prelinked, and this lane runs "source"; the SoftwareAES
+# component (archive-05) provides the AES surface.
+# CONFIG_XNU_NATIVE_AES is not set
 CONFIG_XNU_NATIVE_RAM_BLOCK=y
 CONFIG_XNU_TRUST_CACHE_RUNTIME=y
 CONFIG_XNU_NATIVE_CS_HASH_CACHE=y
@@ -27,9 +30,12 @@ CONFIG_XNU_NATIVE_CS_HASH_CACHE=y
 # CONFIG_XNU_NATIVE_VIRTIO_BLOCK is not set
 # CONFIG_XNU_SOURCE_MOCKFS is not set
 # CONFIG_XNU_VERIFIED_ROOT_PROBE is not set
-# CONFIG_XNU_OWNER_ROOT_AUDIT is not set
-# CONFIG_XNU_OWNER_ROOT_TRUST is not set
 # CONFIG_XNU_NATIVE_LEGACY_DISPLAY is not set
+# OWNER_ROOT_AUDIT/TRUST stay ON (sheng_ipados26_defconfig parity): the
+# owner-root kernel paths bind to the source-storage archive's
+# SourceRootBinding.cpp queries, not to the dropped probe/stub archives.
+CONFIG_XNU_OWNER_ROOT_AUDIT=y
+CONFIG_XNU_OWNER_ROOT_TRUST=y
 # 2026-10-29 (ipados-26.5.2 lane): off — the 23F84 fileset prelinks the original
 # com.apple.driver.ApplePMGR (profile roots), so the board-side ShengPlatformPower
 # nub publisher is not built (its vtable audit + AON pins are 21H461-donor
@@ -56,9 +62,13 @@ CONFIG_XNU_BOOT_PROGRESS=y
 CONFIG_XNU_NATIVE_ADRENO=n
 
 # arm64e lane shape (sheng_ipados26/27_defconfig): corecrypto from source (the
-# seal step in payload.py is arm64e-required) and chained fixups.
+# seal step in payload.py is arm64e-required) and chained fixups. The root
+# authorization is the upstream source-storage model: on arm64e the ShengUfs
+# component recipe IS build-sheng-source-storage.py (build-arm-driver.py
+# routes it), whose archive embeds the verified-root-23F84 policy pair.
 CONFIG_XNU_CRYPTO_BOOTSTRAP="source"
 CONFIG_XNU_KERNEL_CHAINED_FIXUPS=y
+CONFIG_XNU_SOURCE_STORAGE=y
 # The owner RAM Data seed volume UUID (built by the payload step, donor
 # independent). The donor cryptex volume rides XNU_OWNER_CACHE_VOLUME_UUID.
 CONFIG_XNU_OWNER_DATA_VOLUME_UUID="18AB5557-DC2D-469B-8758-855E60F5B0DF"
@@ -68,6 +78,10 @@ CONFIG_XNU_OWNER_DATA_VOLUME_UUID="18AB5557-DC2D-469B-8758-855E60F5B0DF"
 # back to the in-tree patched value. The 20H392 value (96096B28…) retired
 # with that frozen lane (git history, 2026-10-29).
 CONFIG_XNU_OWNER_CACHE_VOLUME_UUID="7A23BAC7-E86D-4DF4-B181-E6D80F212AE5"
+# The source-storage archive rides the NATIVE_UFS gate (build/sheng-ufs/
+# libShengUfs.a is the same object set as libShengSourceStorage.a — forcing
+# both duplicates every symbol, 2026-10-30). Only the telemetry zero-defs need
+# the explicit force_load.
 CONFIG_XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,{tree}/build/boot-progress-telemetry/libBootProgressTelemetry.a"
 CONFIG_XNU_NATIVE_MOBILE_DISPLAY=n
 CONFIG_XNU_ARMVIRT_PLATFORM=n

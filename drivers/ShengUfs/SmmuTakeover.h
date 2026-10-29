@@ -3,7 +3,7 @@
 struct UfsSmmuPlan {
   unsigned slot = 0xffffffffU, bank = 0, pages = 0;
   uint32_t smr = 0, s2cr = 0;
-  bool reuse = false, takeover = false;
+  bool reuse = false;
   const char *error = nullptr;
 };
 // ARM IHI 0062D.c sections 1.6 and 3.7: VA64=0 still rejects inputs above
@@ -47,7 +47,7 @@ static UfsSmmuPlan planUfsSmmuBank(uint16_t stream, uint64_t dma, uint64_t bytes
   for (unsigned i = 0; i < count; ++i) {
     uint32_t smr = read(0x800 + 4 * i);
     if (!(smr & 0x80000000U)) {
-      if (!p.reuse && !p.takeover) p.slot = i;
+      if (!p.reuse) p.slot = i;
       continue;
     }
     uint32_t s2cr = read(0xc00 + 4 * i);
@@ -56,22 +56,11 @@ static UfsSmmuPlan planUfsSmmuBank(uint16_t stream, uint64_t dma, uint64_t bytes
     bool ourBank = ((s2cr >> 16) & 3) == 0 && (s2cr & 255) == p.bank;
     if (match) {
       ++matches;
-      if (matches > 1 || mask) {
+      if (matches > 1 || mask || !ourBank) {
         p.slot = i; p.smr = smr; p.s2cr = s2cr;
         p.error = "conflicting UFS stream mapping"; return p;
       }
-      if (ourBank) {
-        p.reuse = true; p.slot = i;
-      } else {
-        // m2381: ABL hands apps_smmu over with our own stream already mapped
-        // in its own encoding (SMR=0x80000060, S2CR=2 on the first boot,
-        // 2026-10-25). fuxi's ABL leaves no UFS entry, which is what the
-        // reuse check above was written against. The UFS queue is quiesced
-        // before this runs and no other master shares the UFS host's stream
-        // id, so the stale mapping has no referent: clear it and allocate
-        // the slot fresh (takeover, handled in configureUfsSmmu).
-        p.takeover = true; p.slot = i;
-      }
+      p.reuse = true; p.slot = i;
     } else if (ourBank) {
       p.slot = i; p.smr = smr; p.s2cr = s2cr;
       p.error = "reserved context bank already used"; return p;
@@ -118,14 +107,6 @@ static const char *configureUfsSmmu(const UfsSmmuPlan &p, uint16_t stream, Read 
 {
   if (p.error) return p.error;
   unsigned cb = (p.pages + p.bank) * 4096;
-  if (p.takeover) {
-    // Detach the stale ABL mapping of our own stream before any new write;
-    // SMR first so the stream stops matching, then the stale selector.
-    write(0x800 + 4 * p.slot, 0);
-    write(0xc00 + 4 * p.slot, 0);
-    if (read(0x800 + 4 * p.slot) || read(0xc00 + 4 * p.slot))
-      return "SMMU takeover clear readback";
-  }
   if (!p.reuse) write(cb, 0);
   if (read(cb) != 0) return "SMMU bypass disable readback";
   // Set VA64 before exposing a newly allocated stream. Repair an exclusive

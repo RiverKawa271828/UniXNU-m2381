@@ -188,6 +188,9 @@ struct boot_log_header {
 };
 // Writer state for the board page: 0 off, 1 waiting for the window, 2 writing, 3 stopped after errors, 4 stopped (GPT changed).
 volatile uint32_t boot_log_state, boot_log_rounds, boot_log_errors;
+// Why the last open attempt refused (SourceStorage's boot_log_check prints it
+// when the writer never reached round 1; sheng feat27's BootLog.c contract).
+const char *volatile boot_log_open_refusal;
 volatile uint64_t boot_log_first_lba;
 static int boot_log_started;
 static uint8_t *boot_log_buffer;   // LogMsgBlocks blocks: the message buffer, then reused for a slot and the header
@@ -1062,7 +1065,7 @@ static void writer(void *arg, wait_result_t result) {
   boot_log_state = 1;
   // The window exists once NativeUfs has read the root layout; until then the open is refused ("no root layout").
   while (!native_ufs_log_open(&first, &blocks, &why)) {
-    if (strcmp(why, "no root layout")) {boot_log_state = 3; return;}
+    if (strcmp(why, "no root layout")) {boot_log_state = 3; boot_log_open_refusal = why; return;}
     IOSleep(1000);
   }
   boot_log_first_lba = first;

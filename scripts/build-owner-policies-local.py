@@ -25,16 +25,18 @@ image = Path(sys.argv[1])
 fw = Path(sys.argv[2])
 keys = ROOT / 'keys'
 WINDOWS = [
-    # The 20H392 windows (userdata-root.json, 2026-10-29): the offsets/sizes/
-    # digests are the image manifest's own pins, the volume UUIDs were derived
-    # from the windows' volume superblocks (temp/scan-apfs-volume-uuids.py,
-    # gold-checked against the 21H461 userdata before use).
-    dict(name='os', out='build/verified-root-os', offset=1048576, size=5635081728,
-         uuid='DADD93F8-DBBF-4B17-A1DF-0F11E64172F7',
-         sha='6e87bfcaa8eca952e00b719f333d1f1060715a63566112267ad8730e1ed98906'),
-    dict(name='systemos', out='build/verified-root-systemos', offset=5637144576, size=2743074816,
-         uuid='96096B28-B6DC-4BC7-9D3A-2632A0FE53F1',
-         sha='9cd738f3b0169055549df84ad6d8d13e50a2da39af618ce0522ca4e06df86849'),
+    # The ipados-26.5.2-23F84 windows (2026-10-29): the offsets/sizes are the
+    # userdata step's own output (userdata-root.json), the digests and volume
+    # UUIDs are the OS profile's [root] pins (os 546DFF4A/b4e40913…, SystemOS
+    # 7A23BAC7/eadb838d…), both re-verified end to end by the policy build.
+    # The 20H392 windows (DADD93F8/96096B28) retired with that frozen lane
+    # (git history).
+    dict(name='os', out='build/verified-root-os', offset=1048576, size=8753512448,
+         uuid='546DFF4A-4172-4026-9F1B-7FDAD45F3D2E',
+         sha='b4e40913f9908f6b68e554bd79b4b95362cade0c3ce210dc378a151bc3387716'),
+    dict(name='systemos', out='build/verified-root-systemos', offset=8754561024, size=5224005632,
+         uuid='7A23BAC7-E86D-4DF4-B181-E6D80F212AE5',
+         sha='eadb838d10f05ff2404b6d6cbc4012e9376c90e16f0283ed6a19bd7ac8753daf'),
 ]
 if not image.is_file():
     raise SystemExit(f'Require the dual-window userdata image: {image}')

@@ -289,20 +289,42 @@ static bool hostStoreOpen (uint64_t first, uint64_t blocks)
   return true;
 }
 
+// Set once by the panic path (native_ufs_log_panic): the CPUs that still run may hold the host lock forever, so it is tried for 200 ms
+// and the command is then issued without it. Commands only poll (TransferPoll.h), so they also run with interrupts masked.
+static bool gHostPanic = false;
+
+static bool hostLock (void)
+{
+  if (!gHostPanic) {
+    IOLockLock (gHost.lock);
+    return true;
+  }
+  for (unsigned tries = 0; tries < 200000; tries++) {
+    if (IOLockTryLock (gHost.lock)) return true;
+    IODelay (1);
+  }
+  return false;
+}
+
+static void hostUnlock (bool held)
+{
+  if (held) IOLockUnlock (gHost.lock);
+}
+
 // WRITE(10) of `blocks` 4096-byte blocks from src to lba on LUN 0; the range must lie inside one open window.
 static IOReturn hostWrite4k (uint8_t lun, uint64_t lba, uint32_t blocks, const void *src, bool fua = false)
 {
   if (!gHost.ready || !src || !blocks || blocks > kDataMax / 4096 || lun != 0 || !hostInWindow (lba, blocks)) {
     return kIOReturnBadArgument;
   }
-  IOLockLock (gHost.lock);
+  const bool held = hostLock ();
   gRootDiagnostic.lba = lba;
   memcpy (gHost.virt + kDataOffset, src, blocks * 4096U);
   uint8_t cdb[10] = { 0x2a, uint8_t (fua ? 0x08 : 0), uint8_t (lba >> 24), uint8_t (lba >> 16), uint8_t (lba >> 8), uint8_t (lba),
                       0, uint8_t (blocks >> 8), uint8_t (blocks), 0 };
   uint32_t scsi = 0;
   IOReturn status = hostScsiDir (0, cdb, 10, 1, blocks * 4096U, 2000000, &scsi);
-  IOLockUnlock (gHost.lock);
+  hostUnlock (held);
   return status;
 }
 
@@ -310,11 +332,11 @@ static IOReturn hostWrite4k (uint8_t lun, uint64_t lba, uint32_t blocks, const v
 static IOReturn hostSyncCache (void)
 {
   if (!gHost.ready || (!gStoreOpen && !gLogOpen)) return kIOReturnNotReady;
-  IOLockLock (gHost.lock);
+  const bool held = hostLock ();
   uint8_t cdb[10] = { 0x35 };
   uint32_t scsi = 0;
   IOReturn status = hostScsiDir (0, cdb, 10, 0, 0, 10000000, &scsi);
-  IOLockUnlock (gHost.lock);
+  hostUnlock (held);
   return status;
 }
 
