@@ -84,7 +84,13 @@ raw = obj.read_bytes()
 info = macho(raw)
 require(info['kind'] == 1, 'Require actual ARM64 subtype-0 Mach-O object')
 build_version = [struct.unpack_from('<2I', raw, at + 8) for cmd, at, _ in info['commands'] if cmd == 0x32]
-require(build_version == [(2, 0x110000)], 'Require iOS17 build target')
+# The object must carry the deployment the replayed kernel record compiled with
+# (UNIXNU_IOS_VERSION: 17.7 on the 21H461 lane, 26.0 on ipados-26.5.2), not a pinned era.
+import os
+_ios = os.environ.get('UNIXNU_IOS_VERSION', '17.0')
+_major, _minor = (_ios.split('.') + ['0'])[:2]
+require(build_version == [(2, int(_major) << 16 | int(_minor) << 8)],
+        f'Require iOS{_ios} build target')
 sym_at = next(at for cmd, at, _ in info['commands'] if cmd == 2)
 at, count, strings, _ = struct.unpack_from('<4I', raw, sym_at + 8)
 symbols = []

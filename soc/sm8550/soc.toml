@@ -1,0 +1,12 @@
+"schema_version" = 2
+
+["soc"]
+"name" = "sm8550"
+"description" = "Qualcomm SM8550"
+"source_repository" = "https://github.com/ianchb/sm8550-mainline"
+"source_revision" = "42f3b40c702abbc37c3a04c95af008cd283aeaf3"
+
+
+["components"]
+"include" = ["ArmCpu", "ArmDTPlatform", "Adreno740", "AdrenoMetal"]
+

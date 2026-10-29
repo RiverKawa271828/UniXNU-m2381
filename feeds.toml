@@ -8,3 +8,9 @@ kind = "soc"
 name = "sm8550"
 git = "https://github.com/UniXNU/UniXNU-sm8550-common.git"
 commit = "23b2049fcd9e30356161def84231334fb55ecca9"
+# 2026-10-29: resolved locally as soc/sm8550 (same content; the feed's
+# native-smp-secondary.patch hunk 1 predates the xnu-12377 arch series, which
+# already sets MAX_CPUS 8 in its bcm2837-machine-config.patch, so only the
+# start.s Affinity1 hunk is carried). See soc/sm8550/README.md. Drop `local`
+# and return to the commit pin when upstream reworks the feed for xnu-12377.
+local = "soc/sm8550"

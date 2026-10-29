@@ -1,0 +1,41 @@
+# m2381 (Linux-host lane): Apple's 4-argument __ptrauth extra-qualifier form
+# ("authenticates-null-values", os/base.h:358) exists only in Apple clang;
+# the setup-toolchain.py LLVM rejects it ("qualifier must take between 1 and
+# 3 arguments"). Falling back to an UNSIGNED pointer is the functionally safe
+# direction: the field then never gets SIGN/AUT instructions at all, so a
+# zero-initialized null cannot be auto-authenticated into a poisoned pointer
+# (a bare 3-argument fallback would do exactly that). The only in-tree user
+# is bsd/sys/ucred.h cr_label. Both definition sites patched; revisit when
+# upstream meets the Linux host or the toolchain grows the extra-qualifier
+# form. Detection = __apple_build_version__ (defined only by Apple clang).
+
+--- a/libkern/os/base.h
++++ b/libkern/os/base.h
+@@ -355,6 +355,12 @@
+ #if __has_feature(ptrauth_calls)
+ #include <ptrauth.h>
+ #define OS_PTRAUTH_SIGNED_PTR(type) __ptrauth(ptrauth_key_process_independent_data, 1, ptrauth_string_discriminator(type))
++#if defined(__apple_build_version__)
++/* Apple clang only: the 4-argument extra-qualifier form below does not
++ * exist in upstream clang; unsigned is the functionally safe fallback. */
+ #define OS_PTRAUTH_SIGNED_PTR_AUTH_NULL(type) __ptrauth(ptrauth_key_process_independent_data, 1, ptrauth_string_discriminator(type), "authenticates-null-values")
++#else
++#define OS_PTRAUTH_SIGNED_PTR_AUTH_NULL(type)
++#endif
+ #define OS_PTRAUTH_DISCRIMINATOR(str) ptrauth_string_discriminator(str)
+ #define __ptrauth_only
+--- a/iokit/IOKit/IOCircularDataQueueImplementation.h
++++ b/iokit/IOKit/IOCircularDataQueueImplementation.h
+@@ -306,6 +306,12 @@
+ #if __has_feature(ptrauth_calls)
+ #include <ptrauth.h>
+ #define OS_PTRAUTH_SIGNED_PTR(type) __ptrauth(ptrauth_key_process_independent_data, 1, ptrauth_string_discriminator(type))
++#if defined(__apple_build_version__)
++/* Apple clang only: the 4-argument extra-qualifier form below does not
++ * exist in upstream clang; unsigned is the functionally safe fallback. */
+ #define OS_PTRAUTH_SIGNED_PTR_AUTH_NULL(type) __ptrauth(ptrauth_key_process_independent_data, 1, ptrauth_string_discriminator(type), "authenticates-null-values")
++#else
++#define OS_PTRAUTH_SIGNED_PTR_AUTH_NULL(type)
++#endif
+ #define OS_PTRAUTH_DISCRIMINATOR(str) ptrauth_string_discriminator(str)
+ #define __ptrauth_only

@@ -111,6 +111,19 @@ patch_series = ["arch:patches/xnu/series", "soc:patches/xnu/series", "os:patches
 # placeholders when no policy evidence is staged; build-verified-root-
 # if-evidenced.py replaces it with the real probe archive when ci-owner-
 # policy.sh (macos.yml pre_build) has staged the OS/SystemOS policies.
+# 2026-10-29 (ipados-26.5.2-23F84 arm64e lane): reshaped onto the proven sheng
+# arm64e subset. Dropped with their defconfig gates (m2381_defconfig) — every
+# entry below is a 21H461-donor-pinned provider and returns per-topic when
+# re-derived for the 23F84 donor (phase 2):
+#   build-storage-bindings.py (190-slot pin + arm64e AUTH vtable relocs),
+#   build-verified-root-stub.py / build-verified-root-if-evidenced.py
+#     (20H392/21H461 policies; this lane's root model is upstream
+#     source-storage — not yet wired for m2381),
+#   component:VirtioMmioBlock + its verified-root bundle + transport record,
+#   build-storage-transport-record.py NativeRamBlock, build-mockfs-fixture.py,
+#   build-sheng-platform-power.py (PMGR prelinked from the fileset roots),
+#   build-native-legacy-display.py (358-slot gates are 21H461; the only
+#     upstream arm64e display fixture is 24A446-only).
 archives = [
   "build-corecrypto-14.py",
   "build-corecrypto-14.py --namespace",
@@ -118,29 +131,8 @@ archives = [
   "component:ArmCpu",
   "component:SoftwareAES",
   "build-software-aes-bindings.py",
-  # Publishes the ApplePMGRNub the donor AMFI's ConfigurationSettings waits on
-  # (30 s timeout, then panic "AMFI: No PMGR?" @ConfigurationSettings.cpp:235,
-  # first observed on hardware 2026-10-25). Board-side ShengPlatformPower,
-  # mode 2 = publish the original nub via sheng-pmgr=2.
-  "build-sheng-platform-power.py",
-  # Static storage ABI: absolute symbols for IOBlockStorageDevice's 190
-  # dispatch slots + destructor, resolved into the prelinked original kext.
-  "build-storage-bindings.py",
   "component:ShengUfs",
-  "build-verified-root-stub.py",
-  "build-verified-root-if-evidenced.py",
-  "component:VirtioMmioBlock",
-  # The verified-block root authorizer bundle (single policy per device);
-  # needs the signed policies ci-owner-policy.sh stages in .cache/firmware.
-  "build-arm-driver.py VirtioMmioBlock --verified-root --verified-root-bundle",
-  # The kernel link cross-checks the two transports against bindings.json
-  # records (build-xnu-4k-baseline.sh PY_BINDINGS); this lane writes them
-  # from the static prelink-storage-bindings.json pin instead of the
-  # upstream live-device interface audit.
-  "build-storage-transport-record.py NativeVirtioBlock --archive build/virtio-mmio-block-verified-bundle",
   "component:RamBlock",
-  "build-storage-transport-record.py NativeRamBlock --archive build/ram-block",
-  "build-mockfs-fixture.py",
   # The real BootProgress diagnostic (XNU_BOOT_PROGRESS=1: BootWatchdogPolicy
   # answers launchd's watchdogd panic-on-crash) reads the sheng monitor
   # surfaces this board leaves off (legacy display, touch, Adreno, cpufreq,
@@ -148,19 +140,11 @@ archives = [
   # binds them to zero. BootProgressTelemetryDefs.c links those zeros
   # explicitly; the qualified providers replace them with their topics.
   "build-boot-progress-telemetry.py",
-  # The display lane (CONFIG_XNU_NATIVE_LEGACY_DISPLAY=y, 2026-10-27): the
-  # owned IOMobileFramebufferLegacy backend over the UEFI GOP framebuffer.
-  # Qualifies the 358-slot vtable + original-code byte gates against the
-  # donor candidate, stages the runtime-pinned audit product, and archives
-  # libNativeLegacyDisplay.late.a (force_loaded by the baseline). The
-  # displayless assert war (r43-r50) had no mechanism alternative — every
-  # SpringBoard-reaching board runs this lane (PLAN-display-lane.md).
-  # The AppleKeyStoreState component recipe (the v2 archive contract for the
-  # include above): produces build/apple-key-store-state/{AppleKeyStoreState.o,
-  # libAppleKeyStoreState.a}. The late-staged object rides in the display
-  # archive below; the baseline link has no direct keystore gate.
+  # The AppleKeyStoreState component recipe (the v2 archive contract):
+  # produces build/apple-key-store-state/{AppleKeyStoreState.o,
+  # libAppleKeyStoreState.a}. The late-staged object rides in the prelink
+  # staging; the baseline link has no direct keystore gate.
   "component:AppleKeyStoreState",
-  "build-native-legacy-display.py",
   "build-libpthread-kernel.py",
   # Adreno740 (component + build-adreno740-kits.py) is deferred: the kit
   # embeds the board-local GPU inputs that upstream keeps out of git
@@ -169,12 +153,11 @@ archives = [
   # skips the libAdreno740.a link requirement. Bring-up to launchd needs no
   # GPU; the chain returns with its own topic once those inputs are ported.
 ]
-# [kernel.prelink] is inherited from the OS profile: tool kits/XnuPrelink/
-# emit_prelink.py (the kits/XnuPrelink fork of this repository shadows the
-# upstream submodule in the assembled tree), the 21H461 kernelcache sha,
-# slide -0x1000000 and the AMFI early-init pointer 0xfffffff005ab4ae0
-# (verified two ways: the fuxi/nx729j on-device value AND the sole hit of
-# the three-build fingerprint in this cache's AMFI __TEXT_EXEC).
+# [kernel.prelink] is inherited from the OS profile (ipados-26.5.2-23F84):
+# tool kits/XnuPrelink/emit_prelink.py (the kits/XnuPrelink fork of this
+# repository shadows the upstream submodule in the assembled tree), the 23F84
+# kernelcache sha 0f7d50ac…, slide -0x1000000, the AMFI early-init pointer and
+# the fileset reference workflow (--fileset-reference, MH_FILESET donor).
 
 [device_tree]
 source = "device:dts/m2381.dts"

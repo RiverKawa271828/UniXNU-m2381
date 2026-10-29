@@ -162,8 +162,12 @@ for obj in objects:
         if command == 0x32:
             deployment = struct.unpack_from('<II', data, cursor + 8)
         cursor += length
-    if deployment != (2, 0x110000):
-        raise SystemExit('Every probe object must target iOS 17')
+    # Deployment follows the lane (UNIXNU_IOS_VERSION: 17.7 on 21H461, 26.0 on ipados-26.5.2).
+    import os as _os
+    _ios = _os.environ.get('UNIXNU_IOS_VERSION', '17.0')
+    _major, _minor = (_ios.split('.') + ['0'])[:2]
+    if deployment != (2, int(_major) << 16 | int(_minor) << 8):
+        raise SystemExit(f'Every probe object must target iOS {_ios}')
 archive = out / 'libVerifiedRootProbe.a'
 archive.unlink(missing_ok=True)
 subprocess.run(['xcrun', 'ar', 'rcs', archive, *objects], check=True)

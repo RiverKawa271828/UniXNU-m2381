@@ -1,0 +1,8 @@
+# 2026-10-29 (ipados-26.5.2 lane): sheng-platform-power.patch STAYS (upstream-identical;
+# the os zzz-boot-progress.patch hunks match on its XNU_SHENG_PMGR insertion), but
+# its call sites compile out with CONFIG_XNU_SHENG_PMGR unset in m2381_defconfig —
+# the archive is dropped from board.toml [kernel] archives (23F84 donor prelinks
+# the original ApplePMGR; the archive's vtable audit + AON pins are 21H461 constants).
+# Phase 2 re-adds the archive + config when the charging stack is re-derived.
+native-smp-secondary.patch
+sheng-platform-power.patch

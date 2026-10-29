@@ -1,10 +1,17 @@
 # Kernel configuration of the m2381 image. CONFIG_XNU_<NAME> becomes XNU_<NAME> for the kernel build.
-# Schema v2 (2026-10-26): archive paths use the upstream component names
-# (VirtioMmioBlock), the storage ABI comes from the static nx729j binding
-# (build-storage-bindings.py → libStorageBindings.a, force-loaded below).
-# 2026-10-27: NATIVE_LEGACY_DISPLAY=y — the display-analysis ABI audit is
-# staged from the device repository pin and the display path runs through
-# the UEFI GOP offline-legacy-* arguments (PLAN-display-lane.md).
+#
+# 2026-10-29 (ipados-26.5.2-23F84 arm64e lane): reshaped onto the proven sheng
+# arm64e subset (their feat/ipados27-gpu-parity configs/sheng_ipados26_defconfig).
+# The 21H461-lane constructs whose provider archives are 21H461-donor-pinned are
+# OFF and return per-topic when re-derived for the 23F84 donor:
+#   storage bindings (190-slot IOBlockStorageDevice pin + arm64e AUTH vtable
+#   relocs), verified-root probe/stub (20H392/21H461 policies), VirtioMmioBlock
+#   transport, mockfs fixture, native legacy display (no 23F84 ABI fixture
+#   exists upstream; sheng's display lane is 24A446-only), ShengPlatformPower
+#   (PMGR is prelinked from the 23F84 fileset roots).
+# Root/storage authorization on this lane is the upstream source-storage model
+# (CONFIG_XNU_SOURCE_STORAGE + a source storage archive) — not yet wired for
+# m2381; the kernel itself builds and the fileset emitter runs.
 
 CONFIG_XNU_BUILD_ARCHIVES=y
 CONFIG_XNU_SOURCE_CORECRYPTO14=y
@@ -13,15 +20,22 @@ CONFIG_XNU_ARM_DT_PLATFORM=y
 CONFIG_XNU_ARMCPU=y
 CONFIG_XNU_NATIVE_UFS=y
 CONFIG_XNU_NATIVE_AES=y
-CONFIG_XNU_NATIVE_VIRTIO_BLOCK=y
 CONFIG_XNU_NATIVE_RAM_BLOCK=y
 CONFIG_XNU_TRUST_CACHE_RUNTIME=y
-CONFIG_XNU_SOURCE_MOCKFS=y
 CONFIG_XNU_NATIVE_CS_HASH_CACHE=y
-CONFIG_XNU_VERIFIED_ROOT_PROBE=y
-CONFIG_XNU_OWNER_ROOT_AUDIT=y
-CONFIG_XNU_OWNER_ROOT_TRUST=y
-CONFIG_XNU_SHENG_PMGR=y
+# 2026-10-29: off with the archives above (21H461-donor providers).
+# CONFIG_XNU_NATIVE_VIRTIO_BLOCK is not set
+# CONFIG_XNU_SOURCE_MOCKFS is not set
+# CONFIG_XNU_VERIFIED_ROOT_PROBE is not set
+# CONFIG_XNU_OWNER_ROOT_AUDIT is not set
+# CONFIG_XNU_OWNER_ROOT_TRUST is not set
+# CONFIG_XNU_NATIVE_LEGACY_DISPLAY is not set
+# 2026-10-29 (ipados-26.5.2 lane): off — the 23F84 fileset prelinks the original
+# com.apple.driver.ApplePMGR (profile roots), so the board-side ShengPlatformPower
+# nub publisher is not built (its vtable audit + AON pins are 21H461-donor
+# constants; phase 2 re-derives the charging stack). The soc patch's guarded
+# call sites compile out with this unset.
+# CONFIG_XNU_SHENG_PMGR is not set
 CONFIG_XNU_OWNER_CACHE_MOUNT=y
 CONFIG_XNU_OWNER_CACHE_STARTUP=y
 CONFIG_XNU_OWNER_BOOT_MANIFEST=y
@@ -31,31 +45,20 @@ CONFIG_XNU_DT_PANIC_REGION=y
 CONFIG_XNU_ZONE_PGZ_ALIGNMENT_PROBE=y
 CONFIG_XNU_NATIVE_ARCH_TIMER=y
 CONFIG_XNU_NATIVE_PAN=y
-# The full BootProgress diagnostic: the kern_exec hook (XNU_OWNER_DATA_MOUNT
-# path) calls sheng_boot_watchdog_policy — BootWatchdogPolicy.c, which writes
-# launchd's disabled.plist so the unavailable watchdogd cannot panic the
-# kernel. Without the flag the hook compiles out and watchdogd SIGTRAPs
-# launchd into a kernel panic (observed on hardware 2026-10-26). This ld64
-# errors on unresolved weak references (Apple's binds them to zero), so the
-# diagnostic's telemetry providers are linked as explicit zeros from
-# build-boot-progress-telemetry.py (force_loaded below) minus the
-# legacy-display block, which the qualified lane provides for real.
+# The full BootProgress diagnostic (donor-agnostic; the telemetry providers the
+# baseline cannot weak-resolve are linked as explicit zeros by
+# build-boot-progress-telemetry.py — force_loaded below).
 CONFIG_XNU_BOOT_PROGRESS=y
-# The display lane (2026-10-27, displayless 断言墙的机制解): the original
-# IOMobileFramebufferLegacy ABI is bound by build-native-legacy-display.py
-# (audit + 358-slot vtable + byte gates, same donor constants sheng runs),
-# the CPU presentation publishes displayConfiguration from the UEFI GOP
-# framebuffer, and SpringBoard's display-assert family stops firing. The
-# displayless fixup war (r43-r50) has no upstream mechanism alternative:
-# every SpringBoard-reaching board runs this lane.
-CONFIG_XNU_NATIVE_LEGACY_DISPLAY=y
 # n until the board-local GPU inputs exist: libAdreno740.a needs the
 # ShengGmu*Source.h OPP/bandwidth policy (docs/porting/gpu.md; kept out of
 # git upstream too) plus the .cache/firmware/sheng-gpu pinned blobs. Flip
 # with the Adreno740 component/archive entries in one GPU topic.
 CONFIG_XNU_NATIVE_ADRENO=n
 
-CONFIG_XNU_CRYPTO_BOOTSTRAP="prelinked"
+# arm64e lane shape (sheng_ipados26/27_defconfig): corecrypto from source (the
+# seal step in payload.py is arm64e-required) and chained fixups.
+CONFIG_XNU_CRYPTO_BOOTSTRAP="source"
+CONFIG_XNU_KERNEL_CHAINED_FIXUPS=y
 # The owner RAM Data seed volume UUID (built by the payload step, donor
 # independent). The donor cryptex volume rides XNU_OWNER_CACHE_VOLUME_UUID.
 CONFIG_XNU_OWNER_DATA_VOLUME_UUID="18AB5557-DC2D-469B-8758-855E60F5B0DF"
@@ -65,10 +68,6 @@ CONFIG_XNU_OWNER_DATA_VOLUME_UUID="18AB5557-DC2D-469B-8758-855E60F5B0DF"
 # back to the in-tree patched value. The 20H392 value (96096B28…) retired
 # with that frozen lane (git history, 2026-10-29).
 CONFIG_XNU_OWNER_CACHE_VOLUME_UUID="7A23BAC7-E86D-4DF4-B181-E6D80F212AE5"
-CONFIG_XNU_NATIVE_VIRTIO_BLOCK_ARCHIVE="{tree}/build/virtio-mmio-block-verified-bundle/libVirtioMmioBlock.a"
-CONFIG_XNU_VERIFIED_ROOT_ARCHIVE="{tree}/build/verified-root-os-xnu-bundle/libVerifiedRootProbe.a"
-# The static storage ABI archive: absolute symbols for IOBlockStorageDevice's
-# 190 dispatch slots, force-loaded next to the drivers that subclass it.
-CONFIG_XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,{tree}/build/io-storage-family/libStorageBindings.a -Wl,-force_load,{tree}/build/boot-progress-telemetry/libBootProgressTelemetry.a"
+CONFIG_XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,{tree}/build/boot-progress-telemetry/libBootProgressTelemetry.a"
 CONFIG_XNU_NATIVE_MOBILE_DISPLAY=n
 CONFIG_XNU_ARMVIRT_PLATFORM=n

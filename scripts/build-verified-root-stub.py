@@ -139,8 +139,11 @@ for _ in range(count):
     if cmd == 0x32:
         deployment = struct.unpack_from('<II', data, offset + 8)
     offset += length
-if deployment != (2, 0x110000):
-    raise SystemExit('Stub requires the iOS 17 deployment target')
+# Deployment follows the lane (UNIXNU_IOS_VERSION: 17.7 on 21H461, 26.0 on ipados-26.5.2).
+_ios = _os.environ.get('UNIXNU_IOS_VERSION', '17.0')
+_major, _minor = (_ios.split('.') + ['0'])[:2]
+if deployment != (2, int(_major) << 16 | int(_minor) << 8):
+    raise SystemExit(f'Stub requires the iOS {_ios} deployment target')
 
 # Every symbol NativeUfs.cpp asks for must be present *and externally visible*.
 # N_TYPE == N_SECT (0x0e) is not enough: a local definition satisfies that, and a
