@@ -934,6 +934,13 @@
    "original_sha256": "ea1b4bf0f11105e511859f2004df5ad91e5c453840686a9ee52cee6bb7f12fa3",
    "native_symbol": "__ZNK7OSArray13getLastObjectEv",
    "evidence": "count==0 returns NULL, else array[count-1] with the same PAC'd array (disc 0xfeb9) — byte-shape identical to our native OSArray::getLastObject at 0x7a21df8. Source: libkern/c++/OSArray.cpp."
+  },
+  {
+   "original": "0xfffffe000ae8a26c",
+   "original_size": 1408,
+   "original_sha256": "e59211ce52fbcdf2cf0d12c8370b80f7efe2a308e3cd3bf26673a4fc6602d862",
+   "native_symbol": "_os_log_create",
+   "evidence": "os_log_create(subsystem, category): AMFI calls it with ('com.apple.MobileFileIntegrity', 'library_validation_failure') at 0xfffffff008f0dfd0 and falls back to a cached default handle via csel when it returns NULL (crc 0x88a9cb7 boot). Donor body sits in donor order between _os_log_equ and __os_log_internal and reads the CNTVCT-class register for the log timestamp; our native _os_log_create at 0x7a66f78 is the only candidate in that interval. Twelve call sites across AppleARMPlatform/AppleMobileFileIntegrity/IOAVFamily/IOHIDFamily/sandbox."
   }
  ],
  "data": [
