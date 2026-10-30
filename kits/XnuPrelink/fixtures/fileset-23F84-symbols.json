@@ -764,22 +764,22 @@
    "original": "0xfffffe000a7f3548",
    "original_size": 44,
    "original_sha256": "d94e8f2868939336593d8822eef5d992f8fe3cb74ca43e833e4bc19c59b0ef5f",
-   "native_symbol": "_lck_spin_lock",
-   "evidence": "Fast path CASes the cpu number (tpidr_el1 per-cpu +0x4f0) into lock+8 from zero and tail-jumps the slow path on contention. lck_spin_t is opaque to kexts; our kernel's DEVELOPMENT wrapper asserts the same object then locks."
+   "native_symbol": "_lck_mtx_lock",
+   "evidence": "Fast path is a compare-swap of 0 to the cpu number at lock+8, i.e. the mutex data word; lck_spin_t keeps its data at +0 and its type at +8, so this body is a mutex lock, not a spin lock (the earlier lck-spin label read the same CAS shape). Corecrypto allocates the mutex with lck_mtx_alloc_init and locks it here."
   },
   {
    "original": "0xfffffe000a7f3fe4",
    "original_size": 36,
    "original_sha256": "53042381cf8a054a2b491c62581386abfcb8e56fc27ef0a10f5b510a3512eee1",
-   "native_symbol": "_lck_spin_try_lock",
-   "evidence": "Compare-swap of lock+8 from zero to the cpu number with eq return = try-acquire semantics."
+   "native_symbol": "_lck_mtx_try_lock",
+   "evidence": "Try-lock of the same mutex data word at lock+8, returning whether it was acquired. Same layout argument as lck_mtx_lock."
   },
   {
    "original": "0xfffffe000a7f4128",
    "original_size": 40,
    "original_sha256": "9681f8780df54ae5699ab615fde7c9d97064a00deaa2b04913fdf33fbe78047f",
-   "native_symbol": "_lck_spin_unlock",
-   "evidence": "Compare-swap of lock+8 from the cpu number back to zero = release. Sits between the reviewed lck_rw entries in the same donor lck code region."
+   "native_symbol": "_lck_mtx_unlock",
+   "evidence": "Compare-swap releases the mutex data word at lock+8 back to zero, matching lck_mtx_unlock; a spin unlock would release the word at lock+0."
   },
   {
    "original": "0xfffffe000a96a0c4",
