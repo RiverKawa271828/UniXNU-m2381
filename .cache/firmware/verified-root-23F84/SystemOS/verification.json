@@ -1,0 +1,31 @@
+{
+  "image_bytes": 5224005632,
+  "blocks_verified": 318848,
+  "image_sha256": "eadb838d10f05ff2404b6d6cbc4012e9376c90e16f0283ed6a19bd7ac8753daf",
+  "volume_uuid": "7A23BAC7-E86D-4DF4-B181-E6D80F212AE5",
+  "generation": 1,
+  "block_bytes": 16384,
+  "source_compressed_sha256": "eadb838d10f05ff2404b6d6cbc4012e9376c90e16f0283ed6a19bd7ac8753daf",
+  "source_format": "userdata window",
+  "host_bus_protocol": "local file",
+  "host_media_writable": false,
+  "trusted_key_sha256": "74e60348fb0999f3d8459b0570acb9a58af0b7f41b1e123ef13ea03800b087dc",
+  "actual_sample_indices": [
+    0,
+    1,
+    159424,
+    318847
+  ],
+  "actual_sample_lengths": [
+    16384,
+    16384,
+    16384,
+    16384
+  ],
+  "real_c_signature_and_block_verification": true,
+  "original_image_modified": false,
+  "host_only": true,
+  "boot_root_authenticated": false,
+  "qemu_tested": false,
+  "hardware_tested": false
+}
