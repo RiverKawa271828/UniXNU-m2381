@@ -780,6 +780,55 @@
    "original_sha256": "9681f8780df54ae5699ab615fde7c9d97064a00deaa2b04913fdf33fbe78047f",
    "native_symbol": "_lck_spin_unlock",
    "evidence": "Compare-swap of lock+8 from the cpu number back to zero = release. Sits between the reviewed lck_rw entries in the same donor lck code region."
+  },
+  {
+   "original": "0xfffffe000a96a0c4",
+   "original_size": 24,
+   "original_sha256": "1e38de2206b1d0426a3a65d507fb22f7e98b15d486e4ff35c4a1ce894745d41c",
+   "native_symbol": "_clock_timebase_info",
+   "evidence": "Copies the 8-byte timebase value at __DATA+8 into *x0 and returns. Native _clock_timebase_info is the same five-instruction getter reading gTimebaseInfo; only the adrp/add constants differ, so neither body-hash nor shape can pair it. corecrypto's tick-to-time conversions call it at 0xa6d2844 and eighteen more sites; panic IMG_20261030_090251.jpg returned from 0xa6d2848 with the out-parameter on the stack."
+  },
+  {
+   "original": "0xfffffe000a7b50f8",
+   "original_size": 28,
+   "original_sha256": "1feffe6b9b49a63946093b2383cea20ebcdcce385d64277ec73a57f8df3c8a24",
+   "native_symbol": "_panic_active",
+   "evidence": "Loads panic_state at __DATA+0xcb4 and returns (state - 3) < 2 with cset. Native _panic_active has the identical body; only the state slot address differs. Called from corecrypto at 0xa6e171c and 0xa6e17b8."
+  },
+  {
+   "original": "0xfffffe000ae96de0",
+   "original_size": 52,
+   "original_sha256": "b34757aaec49eac7b2c5f543644dba1cd7b9d0e9f4a3d807623ccddd86471c32",
+   "native_symbol": "_register_crypto_functions",
+   "evidence": "Claim-once registration: returns -1 when the pointer slot at __DATA+0xaf0 is already set, else stores the argument there, sets the byte at +0xae8 and returns 0. Native _register_crypto_functions runs the same sequence with its own slot offsets. Called from corecrypto at 0xa72d4a4."
+  },
+  {
+   "original": "0xfffffe000b007294",
+   "original_size": 616,
+   "original_sha256": "f44268d5d94c3a0667f63845cae0978f0d21dd3ee617e8be44a77e4c35e70342",
+   "native_symbol": "_register_and_init_prng",
+   "evidence": "entropy_init(64, entropyseed), stores ctx in prng_ctx, copies cckprng_funcs while authenticating each slot with the same discriminators as native (0x6961/0xf60a/0x5d01/0x4d5f/0xedeb/0x3051), then four cc_clear scrubs. Native _register_and_init_prng is the same sequence plus inline boot_cpu/prng_ready asserts. Source: osfmk/prng/prng_random.c; called from corecrypto at 0xa72dc28."
+  },
+  {
+   "original": "0xfffffe000a938124",
+   "original_size": 164,
+   "original_sha256": "dc52ad3961a2142a80c8decd7e8a9d3feb2672731c150a4bea07d011d8350755",
+   "native_symbol": "_read_random",
+   "evidence": "prng_funcs.refresh(prng_ctx) (discriminator 0x4d5f) then the generate loop in 0x100-byte chunks (discriminator 0xedeb) with cpu_number read from tpidr_el1. Native _read_random runs the same sequence; the native build calls cpu_number instead of inlining it. Called from corecrypto at 0xa708e50."
+  },
+  {
+   "original": "0xfffffe000a7f3364",
+   "original_size": 112,
+   "original_sha256": "83d28714e169f19a4ef4ed52b6a7b8601f32816c9b2237448a20ec1e6a18028b",
+   "native_symbol": "_lck_mtx_alloc_init",
+   "evidence": "kalloc_type of the lock, tag 0x22000000|flags into the new object, then references the lock group (donor inlines the group reference; the RELEASE reference build calls _lck_grp_reference). Our reference build orders _lck_mtx_alloc_init immediately before _lck_mtx_init with that same body. Called from corecrypto at 0xa713910 right after lck_grp_alloc_init."
+  },
+  {
+   "original": "0xfffffe000acf9870",
+   "original_size": 188,
+   "original_sha256": "8a1b2149f85f4f0f1cc4b16e2148e637989cc60808b461f624eb1720f86e0484",
+   "native_symbol": "_sysctl_handle_string",
+   "evidence": "strlen(arg1)+1, then req->oldfunc, then the req->newfunc path with the truncating store, i.e. the reference build's _sysctl_handle_string byte for byte except that the donor build authenticates the function pointers with string discriminators (0x6827) and hardens the store address with a PAC'd pointer; it also sits between sysctl_handle_long and sysctl_handle_opaque in the donor order. Source: bsd/kern/kern_sysctl.c."
   }
  ],
  "data": [
