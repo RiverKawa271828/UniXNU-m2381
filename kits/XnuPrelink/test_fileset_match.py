@@ -70,6 +70,31 @@ class FunctionMatchingTests(unittest.TestCase):
         self.assertEqual(matcher.anchor_shapes(), 0)
         self.assertNotIn(2, matcher.pairs)
 
+    def test_a_body_differing_only_by_its_bti_prefix_still_pairs(self):
+        donor = {'digest': 'with-bti', 'length': 5, 'bti_digest': 'body', 'bti_length': 4}
+        native = {'digest': 'body', 'length': 4, 'bti_digest': 'body', 'bti_length': 4}
+        matcher = Matcher(self.make_side({1: donor}), self.make_side({10: native}))
+        self.assertEqual(matcher.anchor_shapes(), 0)
+        self.assertEqual(matcher.anchor_bti_shapes(), 1)
+        self.assertEqual(matcher.pairs, {1: 10})
+        self.assertEqual(matcher.how, {1: 'bti-shape'})
+
+    def test_a_shared_bti_shape_chooses_nothing(self):
+        donor = {'digest': 'with-bti', 'length': 5, 'bti_digest': 'body', 'bti_length': 4}
+        native = {'digest': 'body', 'length': 4, 'bti_digest': 'body', 'bti_length': 4}
+        matcher = Matcher(self.make_side({1: donor, 2: donor}),
+                          self.make_side({10: native, 20: native}))
+        self.assertEqual(matcher.anchor_bti_shapes(), 0)
+        self.assertFalse(matcher.pairs)
+
+    def test_without_bti_drops_the_entry_hint_and_the_padding(self):
+        from fileset_match import without_bti
+        from kc_image import scan
+        body = bytes.fromhex('5f2403d5c0035fd61f2003d5')    # bti c; ret; nop
+        shape, length = without_bti(body, 0x1000, scan(body, 0x1000)[2])
+        self.assertEqual(length, 1)
+        self.assertEqual(shape, [0xd65f03c0])
+
     def test_cold_string_anchors_parent_and_cannot_bind_nonmatching_body(self):
         a = self.make_side({1: {'digest': 'body', 'length': 50}})
         b = self.make_side({10: {'digest': 'parent', 'length': 45}, 20: {'digest': 'panic', 'length': 8}},

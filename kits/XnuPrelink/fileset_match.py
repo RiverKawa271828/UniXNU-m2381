@@ -13,7 +13,9 @@ from kc_image import Image, scan
 from fileset_shape import checked_shape
 
 EXEC_SEGMENTS = ('__TEXT_EXEC', '__TEXT_BOOT_EXEC', '__KLD', '__LAST')
-MATCHER_VERSION = 8
+MATCHER_VERSION = 9
+BTI = (0xd503245f, 0xd503249f, 0xd50324df, 0xd50324ff, 0xd503241f)  # bti [c|j|jc|]
+NOP = 0xd503201f
 
 
 def matcher_signature():
@@ -33,6 +35,26 @@ def vtable_slots(side, base):
             return result
         result.append(pointer)
     return []  # unterminated, so no proven table extent
+
+
+def without_bti(body, start, shape):
+    """Shape of a body without the entry hint a non-Apple compile does not emit.
+
+    The donor build marks every function entry with BTI; this compiler emits
+    none. Dropping that leading hint, and the padding after the last
+    instruction, leaves the same sequence of instructions both builds agree on.
+    """
+    words = array('I')
+    words.frombytes(body[:len(body) // 4 * 4])
+    if (words[0] not in BTI if words else True) and (words[-1] != NOP if words else True):
+        return shape, len(shape)
+    while words and words[0] in BTI:
+        del words[0]
+    while words and words[-1] == NOP:
+        words.pop()
+    if not words:
+        return [], 0
+    return scan(words.tobytes(), start)[2], len(words)
 
 
 class Side:
@@ -57,18 +79,22 @@ class Side:
                     end = min(end, e)
             if end - start < 4:
                 continue
-            calls, refs, shape = scan(image.read(start, end - start), start)
+            body = image.read(start, end - start)
+            calls, refs, shape = scan(body, start)
             strings = {}
             for site, address, _ in refs:
                 if not self.in_exec(address):
                     text = image.cstring(address)
                     if text is not None and len(text) >= 4:
                         strings[site] = text
+            bti_shape, bti_length = without_bti(body, start, shape)
             self.functions[start] = {
                 'end': end,
                 'refs': [(site - start, address) for site, address, _ in refs],
                 'length': len(shape),
                 'digest': hashlib.md5(array('I', shape)).hexdigest(),
+                'bti_length': bti_length,
+                'bti_digest': hashlib.md5(array('I', bti_shape)).hexdigest(),
                 'strings': strings,
                 'calls': [(site - start, target) for site, target, _ in calls],
             }
@@ -199,7 +225,7 @@ class Matcher:
         The additional image is only a naming reference. Final addresses always
         come from the actual native kernel; graph/string guesses do not transfer.
         """
-        accepted = {'shape', 'pac-checked-shape', 'reference-shape', 'reviewed'}
+        accepted = {'shape', 'bti-shape', 'pac-checked-shape', 'reference-shape', 'reviewed'}
         bound = 0
         for key, value in pairing['functions'].items():
             if value['how'] not in accepted:
@@ -555,6 +581,25 @@ class Matcher:
         for originals, natives in groups.values():
             if len(originals) == 1 and len(natives) == 1:
                 bound += self.bind(originals[0], natives[0], 'shape')
+        return bound
+
+    def anchor_bti_shapes(self):
+        """Match unique bodies that differ only in the donor's BTI entry hints.
+
+        anchor_shapes compares these bodies byte for byte after masking
+        relocations, so a donor body that starts with BTI never reaches a native
+        body that does not. Dropping the hint first restores the comparison, and
+        the same rule applies: one function with that body on each side.
+        """
+        groups = defaultdict(lambda: ([], []))
+        for orig, fn in self.original.functions.items():
+            groups[(fn['bti_digest'], fn['bti_length'])][0].append(orig)
+        for native, fn in self.native.functions.items():
+            groups[(fn['bti_digest'], fn['bti_length'])][1].append(native)
+        bound = 0
+        for originals, natives in groups.values():
+            if len(originals) == 1 and len(natives) == 1:
+                bound += self.bind(originals[0], natives[0], 'bti-shape')
         return bound
 
     def anchor_checked_shapes(self):
@@ -964,7 +1009,7 @@ class Matcher:
                            for name in self.native.symbol_names.get(method,())):
                     continue
                 originals = [o for o,n in self.pairs.items() if n == method and
-                             self.how[o] in ('reference-shape','shape','vtable','reviewed','metaclass-getter')]
+                             self.how[o] in ('reference-shape','shape','bti-shape','vtable','reviewed','metaclass-getter')]
                 for orig_method in originals:
                     left_fn,right_fn = self.original.functions[orig_method],self.native.functions[method]
                     if left_fn['digest'] != right_fn['digest'] or len(left_fn['refs']) != 1 or len(right_fn['refs']) != 1:
@@ -1076,7 +1121,7 @@ def match_images(raw, native_data, entry_name='com.apple.kernel', max_rounds=40,
     if reference_data is not None:
         print(f'reference data names: {matcher.reference_data(reference, reference_pairing, targets, data)}')
     for _ in range(max_rounds):
-        bound = matcher.anchor_shapes() + matcher.propagate()
+        bound = matcher.anchor_shapes() + matcher.anchor_bti_shapes() + matcher.propagate()
         split = matcher.pair_data(data)
         bound += matcher.pair_metaclass_getters(data) + matcher.pair_metaclass_vtables(data) + matcher.pair_vtable_users(data)
         bound += matcher.pair_vtables(data) + matcher.anchor_vtables(data)
