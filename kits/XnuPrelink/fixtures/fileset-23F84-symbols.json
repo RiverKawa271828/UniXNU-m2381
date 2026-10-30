@@ -836,6 +836,48 @@
    "original_sha256": "8f5a72c06a05286ac703a2b40ea3f6e6e2467e515c86672c730c8750ffb5d8a1",
    "native_symbol": "_kalloc_type_impl_external",
    "evidence": "AppleImage4 calls it as (static kalloc_type_view in __DATA_CONST 0x7f64320, zflags 4) during early init; body builds KT_VIEW flags 0xd001000|(flags&7), reads ktv view fields at +0/+8/+40, indexes the per-cpu zone array at cpu<<14 (cpu from tpidr_el1+424) and tail-calls zalloc_ext with (zone, size&0xffffff, flags). Source order in kalloc.c sits exactly between _kalloc_data_require and _kalloc_type_var_impl (= kalloc_type_impl_external at kalloc.c:2720); our native body at 0x7334c20 has the same 0xd001000|flags construction and [x0] null-check. First live call site 0xfffffff008d419e8 was the fileset unmapped-call diagnostic of the r83 boot."
+  },
+  {
+   "original": "0xfffffe000ae3efd0",
+   "original_size": 228,
+   "original_sha256": "48727ada26515ce90509601444ae828f8271deb757a2d8b50711bd94292cc5c9",
+   "native_symbol": "_bdevsw_isfree",
+   "evidence": "One int arg, two-sided free-slot scan over bdevsw[] at 0xb2ebf70 (stride 0x38 = sizeof(struct bdevsw)): -1 starts at 1 (volfs collision avoidance), other negatives start at -index, memcmp against the nobdev template at 0x7d5f438 (56 bytes) and returns the index or -1; forward bound cmp 0x17 = nblkdev-1. Source: bsd/kern/bsd_stubs.c bdevsw_isfree. IOStorageFamily registers its media device from here; first live call 0xfffffff009f84d8c passed w0=-1 and fired the fileset unmapped-call diagnostic of the batchfix boot (crc 0x20c30dfb)."
+  },
+  {
+   "original": "0xfffffe000ae3f0b4",
+   "original_size": 404,
+   "original_sha256": "524acc1eadc8fac91531cd7a2e82fe2f7aa538b01fd8ff8c81ee477f81ef8cb2",
+   "native_symbol": "_bdevsw_add",
+   "evidence": "Two args (index, const struct bdevsw *): devsw_lock_list_mtx spin lock (tpidr_el1+0x1b8 counter + casa on 0xb418c00), inlined bdevsw_isfree scan over the 0x38-stride table, then ldp q0/q1 + ldr q2 copies the 56-byte bdevsw into the slot. Source: bsd/kern/bsd_stubs.c bdevsw_add."
+  },
+  {
+   "original": "0xfffffe000ae3f248",
+   "original_size": 300,
+   "original_sha256": "58486f2f988f62eaf51d4c38268b41ce44b9c4a40bb6994b6f361a50388f80f0",
+   "native_symbol": "_bdevsw_remove",
+   "evidence": "Two args (index, const struct bdevsw *): bounds cmp 0x17 (nblkdev-1), entry = bdevsw+index*0x38, devsw_lock_list_mtx lock, memcmp against the caller's bsw and on match restores nobdev. Donor IOStorageFamily calls it to roll the bdevsw_add back when cdevsw_add_with_bdev fails. Source: bsd/kern/bsd_stubs.c bdevsw_remove."
+  },
+  {
+   "original": "0xfffffe000ae3f44c",
+   "original_size": 376,
+   "original_sha256": "4ad6f51681683524f3b5f78c32d53437bc31201a9c3c3f72bd195765a4041568",
+   "native_symbol": "_cdevsw_add",
+   "evidence": "Two args (index, const struct cdevsw *): devsw_lock_list_mtx lock, inlined cdevsw_isfree scan, copies the caller's csw into cdevsw[] (0x70 = sizeof(struct cdevsw) stride, table at 0xb2ec4b0). Donor inlines cdevsw_isfree here, so it is absent as a separate donor function. Source: bsd/kern/bsd_stubs.c cdevsw_add. Internal callee of donor cdevsw_add_with_bdev (0xfffffe000ae3f70c)."
+  },
+  {
+   "original": "0xfffffe000ae3f5c4",
+   "original_size": 328,
+   "original_sha256": "5e5fcfe079a57b1a6d88f3319ca6d77fcc578faf797ce0c910e25fc318dbc430",
+   "native_symbol": "_cdevsw_remove",
+   "evidence": "Two args (index, const struct cdevsw *): memcmp against the caller's csw on the 0x70-stride cdevsw[] table and on match restores nocdev and clears cdevsw_flags[index]. Source: bsd/kern/bsd_stubs.c cdevsw_remove."
+  },
+  {
+   "original": "0xfffffe000ae3f70c",
+   "original_size": 360,
+   "original_sha256": "bb6fdf83105b401664a4761d2f392ad3110a1f30003b562cad2bb9e167b10668",
+   "native_symbol": "_cdevsw_add_with_bdev",
+   "evidence": "Three args (index, const struct cdevsw *csw, int bdev): calls cdevsw_add (0xfffffe000ae3f44c), bounds-checks the bdev major (cmp 0x17), re-verifies the cdevsw slot free at 0x70 stride and wires the chrtoblk mapping; on failure the caller rolls back with bdevsw_remove. Source: bsd/kern/bsd_stubs.c cdevsw_add_with_bdev."
   }
  ],
  "data": [
