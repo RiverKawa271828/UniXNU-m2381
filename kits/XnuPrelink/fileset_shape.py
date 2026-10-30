@@ -16,8 +16,9 @@ def checked_shape(code, pc):
         block = words[i:i + 5]
         if block in ([0xaa1003f1, 0xdac147f1, 0xeb11021f, 0x54000040, 0xd4388e40],
                      [0xaa1003f1, 0xdac143f1, 0xeb11021f, 0x54000040, 0xd4388e00]):
-            # AUTIA/AUTDA x16,x17 must immediately precede the check.
-            if i and words[i - 1] in (0xdac11230, 0xdac11a30):
+            # An AUTIA/AUTDA x16,<reg> must immediately precede the check; the
+            # authenticated address may live in any register, not only x17.
+            if i and (words[i - 1] & 0xfffffc1f) in (0xdac11010, 0xdac11810):
                 removed.update(range(i, i + 5))
         # Compiler's LR authentication check before a tail branch.
         if (words[i:i + 3] == [0xca1e07d0, 0xb6f00050, 0xd4388e20] and

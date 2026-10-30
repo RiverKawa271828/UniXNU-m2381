@@ -13,7 +13,7 @@ from kc_image import Image, scan
 from fileset_shape import checked_shape
 
 EXEC_SEGMENTS = ('__TEXT_EXEC', '__TEXT_BOOT_EXEC', '__KLD', '__LAST')
-MATCHER_VERSION = 9
+MATCHER_VERSION = 10
 BTI = (0xd503245f, 0xd503249f, 0xd50324df, 0xd50324ff, 0xd503241f)  # bti [c|j|jc|]
 NOP = 0xd503201f
 
@@ -70,6 +70,7 @@ class Side:
         starts = sorted(a for a in set(image.function_starts()) if self.in_exec(a))
         self.starts = starts
         self.checked_functions = {}
+        self.bti_checked_functions = {}
         self.functions, self.callees, self.callers = {}, defaultdict(set), defaultdict(set)
         for index, start in enumerate(starts):
             end = min([e for b, e in self.exec_ranges if b <= start < e] +
@@ -104,6 +105,19 @@ class Side:
                 'refs': [(positions[site-start], address) for site,address,_ in refs if site-start in positions],
                 'calls': [(positions[site-start], target) for site,target,_ in calls if site-start in positions],
             }
+            # Bodies that differ from the donor in both its BTI entry hint and its
+            # explicit PAC check need both normalizations before they compare equal.
+            bc = list(array('I', body[:len(body) // 4 * 4]))
+            while bc and bc[0] in BTI:
+                del bc[0]
+            while bc and bc[-1] == NOP:
+                bc.pop()
+            if bc:
+                checked_b, _, _, _ = checked_shape(array('I', bc).tobytes(), start)
+                self.bti_checked_functions[start] = {
+                    'digest': hashlib.md5(array('I', checked_b)).hexdigest(),
+                    'length': len(checked_b),
+                }
             for _, target, _ in calls:
                 if self.in_exec(target):
                     at = bisect_right(starts, target) - 1
@@ -167,7 +181,7 @@ class Matcher:
             left, right = self.original.functions.get(orig), self.native.functions.get(native)
             if left and right and left['digest'] != right['digest']:
                 return False
-        if orig in self.pairs or native in self.reverse and how not in ('vtable', 'reviewed', 'metaclass-getter'):
+        if orig in self.pairs or native in self.reverse and how not in ('vtable', 'reviewed', 'metaclass-getter', 'alias-thunk'):
             self.conflicts.append({'kind': 'double-bind', 'orig': f'{orig:#x}',
                                    'native': f'{native:#x}', 'via': how})
             return False
@@ -214,6 +228,33 @@ class Matcher:
                 bound += self.bind(orig, pool[body].pop(0), 'pure-leaf')
         return bound
 
+    def alias_thunks(self):
+        """Pair `bti c; b X` alias thunks with the native target of X.
+
+        The donor compiler emits entry-hinted tail-branch aliases next to heavily
+        referenced functions. The alias body has no behavior of its own, so every
+        reference to it can go straight to the paired native of X, including the
+        alias's own internal branch when the emit rewrites it.
+        """
+        bound = 0
+        for orig in sorted(self.original.functions):
+            target = orig
+            for _ in range(8):  # tolerate thunk chains
+                body = self.original.functions.get(target)
+                if body is None or target in self.pairs or body['end'] - target != 8:
+                    break
+                first, second = struct.unpack('<2I', self.original.image.read(target, 8))
+                if first not in BTI or second >> 26 != 0b000101:
+                    break
+                offset = second & 0x3ffffff
+                if offset & 0x2000000:
+                    offset -= 0x4000000
+                target = target + 4 + offset * 4
+                if target in self.pairs:
+                    bound += self.bind(orig, self.pairs[target], 'alias-thunk')
+                    break
+        return bound
+
     def canon(self, native_start):
         # Local symbols and LLVM outlined names can repeat across object files.
         # Two such names are not one call-graph node.
@@ -225,7 +266,7 @@ class Matcher:
         The additional image is only a naming reference. Final addresses always
         come from the actual native kernel; graph/string guesses do not transfer.
         """
-        accepted = {'shape', 'bti-shape', 'pac-checked-shape', 'reference-shape', 'reviewed'}
+        accepted = {'shape', 'bti-shape', 'pac-checked-shape', 'bti-checked-shape', 'reference-shape', 'reviewed'}
         bound = 0
         for key, value in pairing['functions'].items():
             if value['how'] not in accepted:
@@ -609,6 +650,20 @@ class Matcher:
             for address, fn in side.checked_functions.items():
                 groups[fn['digest'], fn['length']][index].append(address)
         return sum(self.bind(a[0], b[0], 'pac-checked-shape')
+                   for a,b in groups.values() if len(a) == len(b) == 1)
+
+    def anchor_bti_checked_shapes(self):
+        """Match unique bodies that differ in both BTI entry hints and explicit PAC checks.
+
+        anchor_bti_shapes only drops the BTI hint; anchor_checked_shapes only removes
+        the compiler's software PAC checks. A donor body carries both, so every
+        function needing both normalizations fell through those channels.
+        """
+        groups = defaultdict(lambda: ([], []))
+        for index, side in enumerate((self.original, self.native)):
+            for address, fn in side.bti_checked_functions.items():
+                groups[fn['digest'], fn['length']][index].append(address)
+        return sum(self.bind(a[0], b[0], 'bti-checked-shape')
                    for a,b in groups.values() if len(a) == len(b) == 1)
 
     def comparable_functions(self, orig, native):
@@ -1112,6 +1167,7 @@ def match_images(raw, native_data, entry_name='com.apple.kernel', max_rounds=40,
         print(f'reference order anchors: {matcher.anchor_reference_order(reference, reference_pairing)}')
     print(f'string anchors: {matcher.anchor_strings()}')
     print(f'PAC checked shape anchors: {matcher.anchor_checked_shapes()}')
+    print(f'BTI+checked shape anchors: {matcher.anchor_bti_checked_shapes()}')
     data = {}
     split = 0
     kernel = entry.mapped()
@@ -1122,6 +1178,7 @@ def match_images(raw, native_data, entry_name='com.apple.kernel', max_rounds=40,
         print(f'reference data names: {matcher.reference_data(reference, reference_pairing, targets, data)}')
     for _ in range(max_rounds):
         bound = matcher.anchor_shapes() + matcher.anchor_bti_shapes() + matcher.propagate()
+        bound += matcher.alias_thunks()
         split = matcher.pair_data(data)
         bound += matcher.pair_metaclass_getters(data) + matcher.pair_metaclass_vtables(data) + matcher.pair_vtable_users(data)
         bound += matcher.pair_vtables(data) + matcher.anchor_vtables(data)

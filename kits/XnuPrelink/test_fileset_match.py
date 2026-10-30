@@ -87,6 +87,51 @@ class FunctionMatchingTests(unittest.TestCase):
         self.assertEqual(matcher.anchor_bti_shapes(), 0)
         self.assertFalse(matcher.pairs)
 
+    def test_a_bti_and_check_differing_body_still_pairs(self):
+        donor = self.make_side({})
+        donor.bti_checked_functions = {1: {'digest': 'bc', 'length': 4}}
+        native = self.make_side({})
+        native.bti_checked_functions = {10: {'digest': 'bc', 'length': 4}}
+        matcher = Matcher(donor, native)
+        self.assertEqual(matcher.anchor_bti_checked_shapes(), 1)
+        self.assertEqual(matcher.how, {1: 'bti-checked-shape'})
+
+    def test_a_shared_bti_checked_shape_chooses_nothing(self):
+        donor = self.make_side({})
+        donor.bti_checked_functions = {1: {'digest': 'bc', 'length': 4}, 2: {'digest': 'bc', 'length': 4}}
+        native = self.make_side({})
+        native.bti_checked_functions = {10: {'digest': 'bc', 'length': 4}}
+        matcher = Matcher(donor, native)
+        self.assertEqual(matcher.anchor_bti_checked_shapes(), 0)
+        self.assertFalse(matcher.pairs)
+
+    def test_alias_thunk_follows_its_target_and_chains(self):
+        import struct
+        from fileset_match import BTI
+        branch = lambda frm, to: 0x14000000 | (((to - frm) // 4) & 0x3ffffff)
+        thunk = {0x1000: {'end': 0x1008}}
+        chain = {0x3000: {'end': 0x3008}}
+        real = {0x2000: {'end': 0x2100}}
+        reads = {0x1000: struct.pack('<2I', 0xd503245f, branch(0x1004, 0x3000)),
+                 0x3000: struct.pack('<2I', 0xd503245f, branch(0x3004, 0x2000))}
+        donor = self.make_side({**thunk, **chain, **real})
+        donor.image = SimpleNamespace(read=lambda a, l: reads[a])
+        native = self.make_side({})
+        matcher = Matcher(donor, native)
+        matcher.bind(0x2000, 0xa000, 'shape')
+        self.assertEqual(matcher.alias_thunks(), 2)
+        self.assertEqual(matcher.pairs, {0x2000: 0xa000, 0x3000: 0xa000, 0x1000: 0xa000})
+        self.assertEqual(matcher.how[0x1000], 'alias-thunk')
+
+    def test_alias_thunk_without_a_paired_target_binds_nothing(self):
+        import struct
+        branch = lambda frm, to: 0x14000000 | (((to - frm) // 4) & 0x3ffffff)
+        donor = self.make_side({0x1000: {'end': 0x1008}, 0x2000: {'end': 0x2100}})
+        donor.image = SimpleNamespace(read=lambda a, l: struct.pack('<2I', 0xd503245f, branch(0x1004, 0x2000)))
+        matcher = Matcher(donor, self.make_side({}))
+        self.assertEqual(matcher.alias_thunks(), 0)
+        self.assertFalse(matcher.pairs)
+
     def test_without_bti_drops_the_entry_hint_and_the_padding(self):
         from fileset_match import without_bti
         from kc_image import scan
