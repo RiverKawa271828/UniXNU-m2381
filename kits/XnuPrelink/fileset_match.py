@@ -454,6 +454,46 @@ class Matcher:
                     added += self.bind(orig, native, 'reviewed')
         return added
 
+    def anchor_body_hash(self):
+        """Pair a donor function whose bytes, up to and including the first terminating return, are
+        found verbatim in exactly one native function start. Padding after the return is
+        build-specific, so bodies compare only up to the return; identical bytes are identical
+        behaviour, and body-identical code cannot carry image-relative references (those would
+        encode different addresses)."""
+        rets = (b'\xc0\x03\x5f\xd6', b'\xff\x0b\x5f\xd6', b'\xff\x0f\x5f\xd6')
+        starts = set(self.native.functions)
+        added = 0
+        for orig, fn in self.original.functions.items():
+            if orig in self.pairs:
+                continue
+            body = self.original.image.read(orig, fn['end'] - orig)
+            cut = -1
+            for ret in rets:
+                at = body.find(ret)
+                while at != -1:
+                    if at % 4 == 0:
+                        cut = at if cut == -1 else min(cut, at)
+                        break
+                    at = body.find(ret, at + 1)
+            if cut != -1:
+                body = body[:cut + 4]
+            if len(body) < 0x20:
+                continue
+            hits = []
+            for segment in self.native.image.segments:
+                if not segment['size'] or not segment['filesize']:
+                    continue
+                n = min(segment['size'], segment['filesize'])
+                at = self.native.image.data.find(body, segment['fileoff'], segment['fileoff'] + n)
+                while at != -1 and len(hits) < 2:
+                    va = segment['va'] + (at - segment['fileoff'])
+                    if va in starts:
+                        hits.append(va)
+                    at = self.native.image.data.find(body, at + 4, segment['fileoff'] + n)
+            if len(hits) == 1:
+                added += self.bind(orig, hits[0], 'body-hash')
+        return added
+
     def reviewed_data(self, inputs, known):
         """Reviewed data identities: original address -> native symbol plus addend."""
         names = defaultdict(set)
@@ -1017,6 +1057,7 @@ def match_images(raw, native_data, entry_name='com.apple.kernel', max_rounds=40,
     inputs = {'kernelcache_sha256': hashlib.sha256(raw).hexdigest(),
               'native_sha256': hashlib.sha256(native_data).hexdigest(), 'entry': entry_name}
     print(f'reviewed anchors: {matcher.anchor_reviewed(inputs)}')
+    print(f'body-hash anchors: {matcher.anchor_body_hash()}')
     if reference_data is not None:
         # Pure-leaf binds carry behaviour, not identity, so the naming reference must not use them.
         reference_pairing = match_images(raw, reference_data, entry_name, max_rounds, pure_leaves=False)
