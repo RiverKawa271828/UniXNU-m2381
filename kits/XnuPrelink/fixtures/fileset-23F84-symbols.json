@@ -878,6 +878,62 @@
    "original_sha256": "bb6fdf83105b401664a4761d2f392ad3110a1f30003b562cad2bb9e167b10668",
    "native_symbol": "_cdevsw_add_with_bdev",
    "evidence": "Three args (index, const struct cdevsw *csw, int bdev): calls cdevsw_add (0xfffffe000ae3f44c), bounds-checks the bdev major (cmp 0x17), re-verifies the cdevsw slot free at 0x70 stride and wires the chrtoblk mapping; on failure the caller rolls back with bdevsw_remove. Source: bsd/kern/bsd_stubs.c cdevsw_add_with_bdev."
+  },
+  {
+   "original": "0xfffffe000ae40a90",
+   "original_size": 340,
+   "original_sha256": "550e7aaf3f2a7364fd27b2a5aa03c7c98d11c640c8d504c7bcd1c5f2034ac022",
+   "native_symbol": "__ZN11OSMetaClass21checkMetaCastWithNameEPK8OSSymbolPK15OSMetaClassBase",
+   "evidence": "Registry walk under the metaclass lock: first entry's virtual slot 0x128 resolves the name, unlock, then the object's getMetaClass (slot 0x38) and a super-chain walk via [meta+0x10]; 0x154 bytes between donor checkMetaCast(OSMetaClassBase) and metaCast(const char*). Source: libkern/c++/OSMetaClass.cpp checkMetaCastWithName(const OSSymbol*, const OSMetaClassBase*)."
+  },
+  {
+   "original": "0xfffffe000ae411c8",
+   "original_size": 112,
+   "original_sha256": "efa863996be5969e1eb459290602e58b7b0aae40061cb65cd3b74f592da7839e",
+   "native_symbol": "__ZN11OSMetaClassC2EPKcPKS_jPP4zoneS1_19zone_create_flags_t",
+   "evidence": "The delegating OSMetaClass constructor: base ctor call, gIOKitDebug flag-byte check bit 6, then zone_create(zone_name=x5, size=x3, flags|x6 orr #0x2000000 = ZC_ZFREE_CLEARMEM, 0xffff, 0) stored into *zone=x4. AMFI calls it from its class constructor with (this, className, super, 0x28, &zone, zoneName, flags); the returned pointer gets a pacda x17(0xcda1)-signed vtable store. Source: libkern/c++/OSMetaClass.cpp OSMetaClass(inClassName, inSuperClass, inClassSize, inZone, zone_name, zflags). Live call site 0xfffffff008f1b14c fired the kernconf-boot wall (crc 0xbfe4144d)."
+  },
+  {
+   "original": "0xfffffe000ae42a64",
+   "original_size": 80,
+   "original_sha256": "7cf843929ba4edc617e83dcd2b4a4651d5a3ca4a7cc00df224bfb1d44a3bbfff",
+   "native_symbol": "__ZN11OSMetaClass18allocClassWithNameEPK8OSString",
+   "evidence": "Shape-identical to our native allocClassWithName(const OSString*): OSSymbol::withString(x0) (its OSDynamicCast against gOSSymbolMetaClass with retain-or-construct via flags bit 0 kOSStringNoCopy is donor 0xfffffe000ae7fcac, paired), then allocClassWithName(const OSSymbol*) (donor 0xfffffe000ae42928, paired), then release the temp symbol through virtual slot 0x28 and return the alloc result. Source: libkern/c++/OSMetaClass.cpp."
+  },
+  {
+   "original": "0xfffffe000ae42ab4",
+   "original_size": 80,
+   "original_sha256": "ee9dac0780dfb76dd2b8dfc48ec8747ff4a8020d25d1b1cade0f85301a06fe09",
+   "native_symbol": "__ZN11OSMetaClass18allocClassWithNameEPKc",
+   "evidence": "Same wrapper as our native allocClassWithName(const char*): OSSymbol::withCStringNoCopy(x0) (donor 0xfffffe000ae7fd88, strnlen against kMaxStringLength 0x3fffe, paired), then allocClassWithName(const OSSymbol*) (donor 0xfffffe000ae42928, paired), release temp, return result. Source: libkern/c++/OSMetaClass.cpp."
+  },
+  {
+   "original": "0xfffffe000ae42dbc",
+   "original_size": 12,
+   "original_sha256": "eacee867bca8bd548e83141056717c7521637cf58fc5b0f7a6a52051439ece7b",
+   "native_symbol": "__ZNK11OSMetaClass13getSuperClassEv",
+   "evidence": "bti c; ldr x0, [x0, #0x10]; ret — identical to our native getSuperClass; the same +0x10 super link is walked by donor checkMetaCastWithName (0xfffffe000ae40a90). Source: libkern/c++/OSMetaClass.cpp."
+  },
+  {
+   "original": "0xfffffe000ae43d58",
+   "original_size": 72,
+   "original_sha256": "172ae88dfbb8880dfa59751446fa27c48cf84347281a29dccc3e57cafa129cf0",
+   "native_symbol": "__ZN8OSObjectnwEm",
+   "evidence": "OSObject::operator new: gIOKitDebug flag-byte check bit 6, then kalloc_type(OSObject name at 0x7d62688, size=x0, flags 0x4001004, 0) and an atomic instance-count bump (ldadd) at the gOSObject counter; donor order sits directly before _OSObject_typed_operator_new (reviewed), exactly like our native operator new at 0x7a201f8. Source: libkern/c++/OSObject.cpp."
+  },
+  {
+   "original": "0xfffffe000ae43fa4",
+   "original_size": 72,
+   "original_sha256": "67174f0666a19ad79f46717529eabdb26fe64cd49b8b0ff17a7f609421ac020b",
+   "native_symbol": "__ZNK7OSArray20getNextIndexOfObjectEPK15OSMetaClassBasej",
+   "evidence": "count at [x0+0x14], PAC'd array at [x0+0x20] (disc 0xfeb9), scans slots from index w2 comparing raw [x1] pointers and returns the index or -1 — byte-shape identical to our native OSArray::getNextIndexOfObject at 0x7a21e38. Source: libkern/c++/OSArray.cpp."
+  },
+  {
+   "original": "0xfffffe000ae43fec",
+   "original_size": 72,
+   "original_sha256": "ea1b4bf0f11105e511859f2004df5ad91e5c453840686a9ee52cee6bb7f12fa3",
+   "native_symbol": "__ZNK7OSArray13getLastObjectEv",
+   "evidence": "count==0 returns NULL, else array[count-1] with the same PAC'd array (disc 0xfeb9) — byte-shape identical to our native OSArray::getLastObject at 0x7a21df8. Source: libkern/c++/OSArray.cpp."
   }
  ],
  "data": [
