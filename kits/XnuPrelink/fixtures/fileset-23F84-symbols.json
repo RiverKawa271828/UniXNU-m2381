@@ -829,6 +829,13 @@
    "original_sha256": "8a1b2149f85f4f0f1cc4b16e2148e637989cc60808b461f624eb1720f86e0484",
    "native_symbol": "_sysctl_handle_string",
    "evidence": "strlen(arg1)+1, then req->oldfunc, then the req->newfunc path with the truncating store, i.e. the reference build's _sysctl_handle_string byte for byte except that the donor build authenticates the function pointers with string discriminators (0x6827) and hardens the store address with a PAC'd pointer; it also sits between sysctl_handle_long and sysctl_handle_opaque in the donor order. Source: bsd/kern/kern_sysctl.c."
+  },
+  {
+   "original": "0xfffffe000a7ee2b8",
+   "original_size": 160,
+   "original_sha256": "8f5a72c06a05286ac703a2b40ea3f6e6e2467e515c86672c730c8750ffb5d8a1",
+   "native_symbol": "_kalloc_type_impl_external",
+   "evidence": "AppleImage4 calls it as (static kalloc_type_view in __DATA_CONST 0x7f64320, zflags 4) during early init; body builds KT_VIEW flags 0xd001000|(flags&7), reads ktv view fields at +0/+8/+40, indexes the per-cpu zone array at cpu<<14 (cpu from tpidr_el1+424) and tail-calls zalloc_ext with (zone, size&0xffffff, flags). Source order in kalloc.c sits exactly between _kalloc_data_require and _kalloc_type_var_impl (= kalloc_type_impl_external at kalloc.c:2720); our native body at 0x7334c20 has the same 0xd001000|flags construction and [x0] null-check. First live call site 0xfffffff008d419e8 was the fileset unmapped-call diagnostic of the r83 boot."
   }
  ],
  "data": [
