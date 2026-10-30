@@ -941,6 +941,20 @@
    "original_sha256": "e59211ce52fbcdf2cf0d12c8370b80f7efe2a308e3cd3bf26673a4fc6602d862",
    "native_symbol": "_os_log_create",
    "evidence": "os_log_create(subsystem, category): AMFI calls it with ('com.apple.MobileFileIntegrity', 'library_validation_failure') at 0xfffffff008f0dfd0 and falls back to a cached default handle via csel when it returns NULL (crc 0x88a9cb7 boot). Donor body sits in donor order between _os_log_equ and __os_log_internal and reads the CNTVCT-class register for the log timestamp; our native _os_log_create at 0x7a66f78 is the only candidate in that interval. Twelve call sites across AppleARMPlatform/AppleMobileFileIntegrity/IOAVFamily/IOHIDFamily/sandbox."
+  },
+  {
+   "original": "0xfffffe000aeadd18",
+   "original_size": 20,
+   "original_sha256": "2e5f982e96cffbd729dd2ddff5cd5549b4b33f03ace9cbbed50105a36cce8628",
+   "native_symbol": "_IORWLockAlloc",
+   "evidence": "20-byte tail thunk: bti c; adrp the lock-group global at 0xb375058; ldr x0; mov x1,#0; b the rw-lock allocator (donor 0xfffffe000a7f4a44, itself paired). Shape-identical to our native _IORWLockAlloc at 0x7a934cc which loads the group at 0x7d61410 and tails _lck_rw_alloc_init at 0x733dd38; the donor tail target sits directly before donor _lck_rw_init (reviewed) exactly like the native one. AMFI calls it from 0xfffffff008f18b9c (crc 0xc4e8e4a6 boot); 8 sites, 3 comps."
+  },
+  {
+   "original": "0xfffffe000a7f4a44",
+   "original_size": 172,
+   "original_sha256": "8cb6ab5271a731f502bcff2b927494e565eebe72e5f922b5948747ac7d765409",
+   "native_symbol": "_lck_rw_alloc_init",
+   "evidence": "Allocates the rw lock via kalloc_type (name at 0x7da6950, w1=4 flags) then initializes from the group — near byte-shape of our native _lck_rw_alloc_init at 0x733dd38 (same kalloc_type call shape, w1=4); donor order directly before reviewed _lck_rw_init. 2 sites."
   }
  ],
  "data": [
