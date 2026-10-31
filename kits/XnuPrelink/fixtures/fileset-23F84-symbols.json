@@ -1151,6 +1151,13 @@
    "original_sha256": "d3855e37def0181c71e0c283a61e20b64413e26c6749c4a5fb6c7af23f054434",
    "native_symbol": "_proc_get_syscall_filter_mask_size",
    "evidence": "proc_get_syscall_filter_mask_size(int which), kern_proc.c:5285-5296 (CONFIG_MACF). Donor leaf 0x34: bti c; cmp w0,#2; b.eq mach_kobj_count load; mov w8,#0x80; mov w9,#0x22e; csel pair -> which=0 returns 0x22e(=558 nsysent), which=1 returns 0x80(=128 mach_trap_count), else 0; tail adrp+ldrsw mach_kobj_count. Apple build const-folds nsysent/mach_trap_count; our clang emits loads instead (native 0x7896078: adrp/ldr nsysent@0x7023a30 read=558, mach_kobj_count@0x71b836c read=0 = donor file state 0) so body-hash and bti-shape channels both miss; source-identity verified by exact case/constant match plus native symbol. Caller = Sandbox kext startup syscallmasks init: bl f(0)/f(1)/f(2) sizes stored [0x82d0de8/dec/df0] each cbz-fail-guarded, max(.., 115 floor) then ceil/8 = BITMAP_SIZE stored 0xdf8 (SR_MASK_SIZE=BITMAP_SIZE(mach_trap_count+nsysent) family, kern_debug.c:120); cluster strings 'sb_serial_reporting', os_log 'com.apple.sandbox.reporting'/'violation', 'sandbox.syscallmasks'. 4 ledger sites / 1 kext (com.apple.security.sandbox)."
+  },
+  {
+   "original": "0xfffffe000ae84130",
+   "original_size": 168,
+   "original_sha256": "bb24cecb66806467794fec9167ea47cb5eb8513300c0f817edac98ecc27ca756",
+   "native_symbol": "__Z16OSUnserializeXMLPKcmPP8OSString",
+   "evidence": "OSUnserializeXML(const char*, size_t, OSString**) 3-arg dispatcher, OSUnserializeXMLSharedImplementation.h:3054 KERNEL branch. Donor (pacibsp frame, ends 0xae841d8): cbz x0 null check + cmp x1,#4 (bufferSize < sizeof(kOSSerializeBinarySignature)=4); strcmp(kOSSerializeBinarySignature=\"\\323\\0\\0\" @0x7043a44, buffer) via _strcmp 0xa91f7bc, || buffer[0]==0xd4 (kOSSerializeIndexedBinarySignature) -> tail 0xae84cf4 = OSUnserializeBinary(PKc,m,PP8OSString) (already paired natively); else last byte NUL check (ldurb [x19+x21-1], cbz) -> tail 0xae83f50 = OSUnserializeXML(PKc,PP8OSString) 2-arg (already paired); else mov x0,#0. Native 0x7a5c944 identical logic but clang merged null+len into cmp+ccmp -> body-hash/bti-shape miss. Source line-for-line: OSSerializeBinary.h:47 sig, cbz/cmp/ccmp/b.NE structure matches donor instruction order. Caller = Sandbox startup parsing embedded XML default profile ('<?xml version=\"1.0\" encoding=\"UTF-8\"?><!DOCTYPE' @donor 0x7c07819, strlen+1, &out on stack). 22 ledger sites / 6 kexts (IOSurface 8, IOHIDFamily 5, IOAVFamily 3, AMFI 2, CoreAnalyticsFamily 2, sandbox 2)."
   }
  ],
  "data": [
