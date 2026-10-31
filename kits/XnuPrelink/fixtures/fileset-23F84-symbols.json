@@ -912,7 +912,7 @@
    "original_size": 12,
    "original_sha256": "eacee867bca8bd548e83141056717c7521637cf58fc5b0f7a6a52051439ece7b",
    "native_symbol": "__ZNK11OSMetaClass13getSuperClassEv",
-   "evidence": "bti c; ldr x0, [x0, #0x10]; ret — identical to our native getSuperClass; the same +0x10 super link is walked by donor checkMetaCastWithName (0xfffffe000ae40a90). Source: libkern/c++/OSMetaClass.cpp."
+   "evidence": "bti c; ldr x0, [x0, #0x10]; ret \u2014 identical to our native getSuperClass; the same +0x10 super link is walked by donor checkMetaCastWithName (0xfffffe000ae40a90). Source: libkern/c++/OSMetaClass.cpp."
   },
   {
    "original": "0xfffffe000ae43d58",
@@ -926,14 +926,14 @@
    "original_size": 72,
    "original_sha256": "67174f0666a19ad79f46717529eabdb26fe64cd49b8b0ff17a7f609421ac020b",
    "native_symbol": "__ZNK7OSArray20getNextIndexOfObjectEPK15OSMetaClassBasej",
-   "evidence": "count at [x0+0x14], PAC'd array at [x0+0x20] (disc 0xfeb9), scans slots from index w2 comparing raw [x1] pointers and returns the index or -1 — byte-shape identical to our native OSArray::getNextIndexOfObject at 0x7a21e38. Source: libkern/c++/OSArray.cpp."
+   "evidence": "count at [x0+0x14], PAC'd array at [x0+0x20] (disc 0xfeb9), scans slots from index w2 comparing raw [x1] pointers and returns the index or -1 \u2014 byte-shape identical to our native OSArray::getNextIndexOfObject at 0x7a21e38. Source: libkern/c++/OSArray.cpp."
   },
   {
    "original": "0xfffffe000ae43fec",
    "original_size": 72,
    "original_sha256": "ea1b4bf0f11105e511859f2004df5ad91e5c453840686a9ee52cee6bb7f12fa3",
    "native_symbol": "__ZNK7OSArray13getLastObjectEv",
-   "evidence": "count==0 returns NULL, else array[count-1] with the same PAC'd array (disc 0xfeb9) — byte-shape identical to our native OSArray::getLastObject at 0x7a21df8. Source: libkern/c++/OSArray.cpp."
+   "evidence": "count==0 returns NULL, else array[count-1] with the same PAC'd array (disc 0xfeb9) \u2014 byte-shape identical to our native OSArray::getLastObject at 0x7a21df8. Source: libkern/c++/OSArray.cpp."
   },
   {
    "original": "0xfffffe000ae8a26c",
@@ -954,7 +954,7 @@
    "original_size": 172,
    "original_sha256": "8cb6ab5271a731f502bcff2b927494e565eebe72e5f922b5948747ac7d765409",
    "native_symbol": "_lck_rw_alloc_init",
-   "evidence": "Allocates the rw lock via kalloc_type (name at 0x7da6950, w1=4 flags) then initializes from the group — near byte-shape of our native _lck_rw_alloc_init at 0x733dd38 (same kalloc_type call shape, w1=4); donor order directly before reviewed _lck_rw_init. 2 sites."
+   "evidence": "Allocates the rw lock via kalloc_type (name at 0x7da6950, w1=4 flags) then initializes from the group \u2014 near byte-shape of our native _lck_rw_alloc_init at 0x733dd38 (same kalloc_type call shape, w1=4); donor order directly before reviewed _lck_rw_init. 2 sites."
   },
   {
    "original": "0xfffffe000afc0740",
@@ -962,6 +962,13 @@
    "original_sha256": "e69892fc34d6ee2e2c943bb1c1e1c16bddf070099ea1e66d81cb2b0cbedeb6c2",
    "native_symbol": "_SecureDTLookupEntry",
    "evidence": "SecureDTLookupEntry(entry, name, &child): AMFI calls it as (0, \"/chosen\", &out) from 0xfffffff008f0d480 and compares the return to 1 (crc 0xc8730321 boot). Donor body 664 bytes in the IODT block between SecureDTFindNodeWithPropertyEqualToValueHelper (reference-symbol) and SecureDTInitEntryIterator (reference-order); our native _SecureDTLookupEntry at 0x7babbf4 is the only candidate in that interval with the (entry, path, out) shape. 13 sites across AppleARMWatchdogTimer/AppleImage4/AppleMobileFileIntegrity/sandbox. The donor's separate sub-entry helper 0xfffffe000afc09d8 has no native counterpart (inlined) and stays for the B.2 batch."
+  },
+  {
+   "original": "0xfffffe000afc09d8",
+   "original_size": 412,
+   "original_sha256": "89831e0f4cb2be2121211ffb8004feaf5bdb884d5b862dd94ef555f042128778",
+   "native_symbol": "_SecureDTGetProperty",
+   "evidence": "SecureDTGetProperty(entry, name, &value, &size): the donor 412-byte IODT body directly below SecureDTLookupEntry (both sub-entry helpers of the SecureDT family, donor 0xfffffe000afc09d8..0xafc0b74). Donor ABI = 4 args reading the DT region bounds from globals [0x7da4b18]/[0x7da4b28]; iterates props at entry+8, prop header 0x24 (name[32]+u32 len), 4-byte aligned stride (cur+len+0x27 & ~3), strcmp via 0xa91f7bc, hit writes *value=prop+0x24 *size=len returns 1, exhausted returns -1. Our native _SecureDTGetProperty (0x7bac004, 24B) loads the same pair of region globals and tail-calls _SecureDTGetPropertyInternal (0x7bac01c, 424B) whose loop body is instruction-for-instruction the donor body (bounds ccmp idiom, +0x24 header, +0x27&~fc stride, strcmp, *value=*size=..., ret 1/-1). Callers pass entries obtained from _SecureDTLookupEntry (already bound native), so pointers live in OUR DT region and our globals are the right bounds. 9 ledger sites in AMFI/sandbox/AppleImage4/ARMWatchdogTimer; first live site 0xfffffff008f0d4a8 reported on the 2b8b8258 flash (expected remainder). bootpath.py d=0 wall, the only wall reachable from AMFI early_security_init at depth<=1."
   }
  ],
  "data": [
