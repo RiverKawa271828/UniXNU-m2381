@@ -1000,8 +1000,8 @@
   },
   {
    "original": "0xfffffe000af4e544",
-   "original_size": 300,
-   "original_sha256": "e5b85b67c3ebd2f2798e862e2c67367d2563688d2e381007628da6e8310cabd8",
+   "original_size": 284,
+   "original_sha256": "168a27b8b581acee8e447c03515d568b1039a224a5059af94bbafe987e5f5478",
    "native_symbol": "__ZN12IOUserClient4initEv",
    "evidence": "IOUserClient::init(): same IOUserClient vtable block, OSObject::init() slot position (between Dispatch slot 0xaea0bf8 and free slot 0xaf4e460). Body = IOUserClient.cpp:1632: if (getPropertyTable() /* [x0+0x20] */) skip; else IOService::init(NULL) (x1=0); then the same reserve() ExpansionData lazy alloc. 255 ledger sites. Native twin __ZN12IOUserClient4initEv present."
   },
@@ -1077,8 +1077,8 @@
   },
   {
    "original": "0xfffffe000a866894",
-   "original_size": 120,
-   "original_sha256": "ef0b44f5b367f5ece25102e3e76d5f16b402e5db701ba35a3ccfee93dbaf2035",
+   "original_size": 140,
+   "original_sha256": "a436fcad1f5b3d4e3d8f44b42b740111061143f7cb316ffdc93a44061bed957a",
    "native_symbol": "_get_bsdtask_info",
    "evidence": "get_bsdtask_info(task), donor 122.8 hardened/inlined form. True entry (bti c, 0x78B) inside function_starts merged blob 0xa8664f0(_zdestroy, paired)..0xa86690c (interior entry; donor order _zinit/_zdestroy/[this]/_get_thread_ro). Caller context: donor copyClientEntitlement 0xaf510ac calls it exactly at the source position of proc = (proc_t)get_bsdtask_info(task) (IOUserClient.cpp:1586); native twin calls _get_bsdtask_info 0x73bb474 at the same position. Body: kernel_task global equality -> NULL; tasks-zone validation (page metadata zone index == 0x19); tail ldr [task+0x3f0]; tst #0x800000; csel x0,xzr,eq - bit-identical tail to native _get_bsdtask_info (ldr [task+0x5a8]; tst #0x800000; csel x0,xzr,eq; native form = task_get_proc_raw + proc_require + flag test, field offset drift 122.8 vs 121.6). 38 ledger sites / 7 kexts."
   }
