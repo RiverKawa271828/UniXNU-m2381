@@ -1357,8 +1357,8 @@
   },
   {
    "original": "0xfffffe000a9c1f24",
-   "original_size": 24,
-   "original_sha256": "ac17dfbec2889fe0221bc8e5f85b37cee92c3d47abcc5a9cf40c193680ffe810",
+   "original_size": 112,
+   "original_sha256": "5875722eaf2058bb286f93f1caca6f0507d1439bf22851b60d9dffc64ebaa141",
    "native_symbol": "_vnode_authorize",
    "evidence": "vnode_authorize, bsd/vfs/vfs_subr.c:8997 (xnu-12377). KDK shape match: masked 14-word head of donor 0xfffffe000a9c1f24 hits KDK 26.5.2_25F84 (xnu-12377.121.10.1, same train as donor 23F84) _vnode_authorize @ 0xfffffe000756d130 uniquely. Map-gap clamp: unnamed sorts between _vnode_authattr_new (0xfffffe000a9c2dec) and _vnode_clearfsnode (0xfffffe000a9e9bf4) in window 0xfffffe00082d8470, between _vn_open_auth and _vnode_close in window 0xfffffe00082d0c28, between _vnode_authattr_new and _vnode_close in window 0xfffffe0008103840 \u2014 the exact alphabetical slot of vnode_authorize (attr_authorize sorts BEFORE authattr_new so is excluded; nearest-label ~_vnode_authorize_callback+0x1850 is noise). Element-for-element body: fast path 'ldrb w8,[vp+0x71]; cmp w8,#8; mov w0,#0; ret' = 'if (vp->v_type == VBAD) return 0;' (VNON=0..VBAD=8, v_type u_char at 0x71, same offset as donor2's panic args); error=0 (stur wzr [x29-4]); kauth_authorize_action 7-arg call (vfs_subr.c:9004-9005): x0 = vnode_scope global [0xfffffe000b40e5d8] (kauth_register_scope(KAUTH_SCOPE_VNODE,...) at vfs_subr.c:8145), x1 = vfs_context_ucred(ctx) = ldr [x3+8], x2 = action passthrough, x3 = (uintptr_t)ctx, x4 = (uintptr_t)vp, x5 = (uintptr_t)dvp, x6 = &error \u2014 exactly the 7-arg prototype (scope, cred, action, ctx, vp, dvp, int *errp); tail 'if (result != 0 && error != 0) return error; else return (result ? EACCES : 0)' lowered as ldur error -> csel EACCES(0xd)/error on error==0 -> csel 0 on result==0 (donor train folds the EPERM->EACCES xlate of vfs_subr.c:9006-9007 into the error==0 arm; 121.10.1 revision drift vs 121.6 feed, semantics equal for the vnode scope's 0/EPERM results). Native symtab _vnode_authorize @ 0xfffffff0075c4474. 15 ledger sites."
   },
