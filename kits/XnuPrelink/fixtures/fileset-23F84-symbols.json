@@ -955,6 +955,13 @@
    "original_sha256": "8cb6ab5271a731f502bcff2b927494e565eebe72e5f922b5948747ac7d765409",
    "native_symbol": "_lck_rw_alloc_init",
    "evidence": "Allocates the rw lock via kalloc_type (name at 0x7da6950, w1=4 flags) then initializes from the group — near byte-shape of our native _lck_rw_alloc_init at 0x733dd38 (same kalloc_type call shape, w1=4); donor order directly before reviewed _lck_rw_init. 2 sites."
+  },
+  {
+   "original": "0xfffffe000afc0740",
+   "original_size": 664,
+   "original_sha256": "e69892fc34d6ee2e2c943bb1c1e1c16bddf070099ea1e66d81cb2b0cbedeb6c2",
+   "native_symbol": "_SecureDTLookupEntry",
+   "evidence": "SecureDTLookupEntry(entry, name, &child): AMFI calls it as (0, \"/chosen\", &out) from 0xfffffff008f0d480 and compares the return to 1 (crc 0xc8730321 boot). Donor body 664 bytes in the IODT block between SecureDTFindNodeWithPropertyEqualToValueHelper (reference-symbol) and SecureDTInitEntryIterator (reference-order); our native _SecureDTLookupEntry at 0x7babbf4 is the only candidate in that interval with the (entry, path, out) shape. 13 sites across AppleARMWatchdogTimer/AppleImage4/AppleMobileFileIntegrity/sandbox. The donor's separate sub-entry helper 0xfffffe000afc09d8 has no native counterpart (inlined) and stays for the B.2 batch."
   }
  ],
  "data": [
