@@ -1018,6 +1018,69 @@
    "original_sha256": "3d5d53d2f301bc7c2efe8eb678db84a4906814e794755b99d6133229a9116a17",
    "native_symbol": "__ZN12IOUserClient8DispatchE5IORPC",
    "evidence": "IOUserClient::Dispatch(IORPC): Dispatch-slot position of the same ~250 vtable block. Body: copies the 32-byte IORPC (ldp q0,q1,[x1]; stp to stack) and tail-calls the Dispatch implementation 0xaea0c24 \u2014 IORPC passed by value. 255 ledger sites across 19 components. Native twin __ZN12IOUserClient8DispatchE5IORPC present (mangled param class IORPC)."
+  },
+  {
+   "original": "0xfffffe000af4babc",
+   "original_size": 84,
+   "original_sha256": "e16932a4832fb0831041cdccb338aae21313fa6da11aa85f0c85bc66c5d4769d",
+   "native_symbol": "__ZN12IOUserClient26getTargetAndMethodForIndexEPP9IOServicej",
+   "evidence": "IOUserClient::getTargetAndMethodForIndex(IOService**, UInt32). Donor body 0x54B: x1=targetP, x2=index; vtable+0x5a0 slot call (mov x17,#0x5a0; blraa disc 0x3565); result first word (IOExternalMethod::object) stored to *targetP, returns method ptr (IOUserClient.cpp:2178 getTargetAndMethodForIndex calls getExternalMethodForIndex). vtable alignment: donor kext-vtable slot at 0x7d72ac8 (~242 vtables, 17 kexts) sits between two NULL-return stubs and getAsyncTargetAndMethodForIndex/getTargetAndTrapForIndex; native __ZTV12IOUserClient vptr+0x5b0 = __ZN12IOUserClient26getTargetAndMethodForIndexEPP9IOServicej. vtpair.py 4-anchor alignment uniform (registerNotificationPort +0x548 / exportObjectToClient +0x598 / getAsyncTargetAndMethodForIndex +0x5b8 / getTargetAndTrapForIndex +0x5c8, spacing constant, donor window 0x7d72a60..0x7d72ae0 maps linearly). Callee slot check: native vptr+0x5a0 = __ZN12IOUserClient25getExternalMethodForIndexEj = exactly the function source says this method calls. 46 ledger sites / 17 kexts."
+  },
+  {
+   "original": "0xfffffe000af4bbd8",
+   "original_size": 88,
+   "original_sha256": "b1c43321c37da309a7fd95520e0469fc3d1c36166af24189bccbc36ed92616e6",
+   "native_symbol": "__ZN12IOUserClient10clientDiedEv",
+   "evidence": "IOUserClient::clientDied(). Donor body 100B: once-guard ldrb [x0+0x98] / casalb 1->[x0+0x99] (race lost returns iokit err 0xe00002d8), else tail call vtable+0x560 slot (braa disc 0x18b8). vtable alignment (vtpair 4-anchor uniform): native __ZTV12IOUserClient vptr+0x568 = __ZN12IOUserClient10clientDiedEv. Cross-check: vptr+0x560 = __ZN12IOUserClient11clientCloseEv = exactly the function clientDied tail-calls (first-death -> clientClose semantics); race-lost error return matches a 'already died' path. 43 ledger sites / 17 kexts."
+  },
+  {
+   "original": "0xfffffe000af4bc40",
+   "original_size": 284,
+   "original_sha256": "34d12453d279653117dcc99c26b887c9eba41f679716e199f0e2cd3e465bfa44",
+   "native_symbol": "__ZN12IOUserClient12initWithTaskEP4taskPvj",
+   "evidence": "IOUserClient::initWithTask(task, securityID, type) 4-arg overload. Donor body 284B: if (![this+0x20]) IOService::init(NULL) (bl 0xaed0930 __ZN9IOService4initEP12OSDictionary), then kalloc_type lazy reserve into [this+0x88] (IOUserClient.cpp:1614/1642 region init/reserve preamble shared by initWithTask overloads); later vtable+0x300 call (native vptr+0x300 = __ZN9IOService18lockForArbitrationEb) and io_connect_method shim family in callees. vtable alignment (vtpair uniform): donor kext-vtable slot 0x7d72a70 two below registerNotificationPort -> native __ZTV12IOUserClient vptr+0x558 = __ZN12IOUserClient12initWithTaskEP4taskPvj; sibling slot +0x550 = 5-arg initWithTask(OSDictionary) overload (0xaf4bd5c). 40 ledger sites / 16 kexts."
+  },
+  {
+   "original": "0xfffffe000af4bd5c",
+   "original_size": 128,
+   "original_sha256": "a9ff89bf3e0f31abbbb5ed1b909b3bb70178e83e8e8f67c35c6ca941bfa8d6ff",
+   "native_symbol": "__ZN12IOUserClient12initWithTaskEP4taskPvjP12OSDictionary",
+   "evidence": "IOUserClient::initWithTask(task, securityID, type, OSDictionary*) 5-arg overload. vtable alignment (vtpair 4-anchor uniform): donor kext-vtable slot 0x7d72a68 -> native __ZTV12IOUserClient vptr+0x550 = __ZN12IOUserClient12initWithTaskEP4taskPvjP12OSDictionary; adjacent to 4-arg overload slot +0x558 (0xaf4bc40). Bonus pairing from the IOUserClient batch (vtable rebinding target, no direct ledger bl sites but fixup sites reference it)."
+  },
+  {
+   "original": "0xfffffe000af510ac",
+   "original_size": 140,
+   "original_sha256": "eb09e3300a80c77d51b22e8cd14d87ef47da5eca36fdfc7521b11ae684625d80",
+   "native_symbol": "__ZN12IOUserClient21copyClientEntitlementEP4taskPKc",
+   "evidence": "IOUserClient::copyClientEntitlement(task, entitlement), source IOUserClient.cpp:1575. Donor body 140B matches source line-by-line: task NULL -> current_task (mrs tpidr_el1 + bl 0xa8672d4 _get_threadtask); task == [kernel_task global 0x7da2648] -> NULL; entitlement (x19) NULL -> NULL; bl 0xa866894 at the exact source position of proc = (proc_t)get_bsdtask_info(task) (native twin __ZN12IOUserClient21copyClientEntitlementEP4taskPKc 0x7b2d330 calls _get_bsdtask_info 0x73bb474 at the same position); then amfi->OSEntitlements.copyEntitlementAsOSObjectWithProc(proc, entitlement, &out) via global [0x7d9f298]+0x1e0 slot, blraa disc 0xbcad (type-discriminated function pointer), result csel to NULL on failure. Nearest-symbol approx in donor = copyClientEntitlements+0x4c region. 47 ledger sites / 12 kexts."
+  },
+  {
+   "original": "0xfffffe000af5b9b4",
+   "original_size": 64,
+   "original_sha256": "20dcc02f240c9ce2e8088986637df38ac03bb2df44c0c20c5469bfe6413aa60e",
+   "native_symbol": "__ZN12IOUserClient11clientCloseEv",
+   "evidence": "IOUserClient::clientClose(). vtable alignment (vtpair 4-anchor uniform): donor kext-vtable slot 0x7d72a78 -> native __ZTV12IOUserClient vptr+0x560 = __ZN12IOUserClient11clientCloseEv. Cross-check: donor 0xaf4bbd8 (clientDied, independently identified by body) tail-calls the vptr+0x560 slot = this function, closing the semantic loop. Bonus pairing from the IOUserClient batch."
+  },
+  {
+   "original": "0xfffffe000a95ca30",
+   "original_size": 60,
+   "original_sha256": "1fdf3435fd21a88e90de70ca34ad66abebb8ba97816fe8d94f137652cc0c9ca5",
+   "native_symbol": "_IOSimpleLockLock",
+   "evidence": "IOSimpleLockLock = lck_spin_lock (native dual-named _lck_spin_lock/_IOSimpleLockLock at 0x7545e00). Donor: true entry (bti c) inside function_starts merged blob 0xa95c938..0xa95cab8 (interior entry, session-21 idsize pitfall); bracket = _lck_spin_assert (paired, blob start) before and _IOSimpleLockUnlock (map-paired at 0xa95cab8, +0x88) after. Native source order identical: _lck_spin_assert 0x7545d08 -> _lck_spin_lock/_IOSimpleLockLock 0x7545e00 -> _lck_spin_unlock/_IOSimpleLockUnlock 0x7545ff0. Body: per-cpu preemption counter tpidr_el1+0x1b8 (native hw_lock_lock uses tpidr+0x240, struct drift 122.8 vs 121.6), FAST path ldxr/casa [x0] 0->tpidr (native _hw_lock_lock 0x73464e8: ldaxr/stxr 0->tpidr, same lockword convention), slow path tail-b 0xa7f960c = _hw_lock_lock_contended (paired). 127 ledger sites / 8 kexts (session-26 B.1 half-drill closed)."
+  },
+  {
+   "original": "0xfffffe000a95ca6c",
+   "original_size": 60,
+   "original_sha256": "b318741a49032c03377235897c8ddd8493c06494e0f56b59dc40b274d8f4bf95",
+   "native_symbol": "_IOSimpleLockTryLock",
+   "evidence": "IOSimpleLockTryLock = lck_spin_try_lock (native dual-named 0x7545ef8). Same merged blob as 0xa95ca30, entry immediately after lock, identical FAST CAS shape (casa [x0] 0->tpidr, counter tpidr+0x1b8), contended tail hw_lock_lock_contended+0x128 (try/fail path, vs lock's +0x0). Native order matches: _IOSimpleLockLock 0x7545e00 -> _IOSimpleLockTryLock 0x7545ef8 -> _IOSimpleLockUnlock 0x7545ff0. Companion fixture to the lock entry."
+  },
+  {
+   "original": "0xfffffe000a866894",
+   "original_size": 120,
+   "original_sha256": "ef0b44f5b367f5ece25102e3e76d5f16b402e5db701ba35a3ccfee93dbaf2035",
+   "native_symbol": "_get_bsdtask_info",
+   "evidence": "get_bsdtask_info(task), donor 122.8 hardened/inlined form. True entry (bti c, 0x78B) inside function_starts merged blob 0xa8664f0(_zdestroy, paired)..0xa86690c (interior entry; donor order _zinit/_zdestroy/[this]/_get_thread_ro). Caller context: donor copyClientEntitlement 0xaf510ac calls it exactly at the source position of proc = (proc_t)get_bsdtask_info(task) (IOUserClient.cpp:1586); native twin calls _get_bsdtask_info 0x73bb474 at the same position. Body: kernel_task global equality -> NULL; tasks-zone validation (page metadata zone index == 0x19); tail ldr [task+0x3f0]; tst #0x800000; csel x0,xzr,eq - bit-identical tail to native _get_bsdtask_info (ldr [task+0x5a8]; tst #0x800000; csel x0,xzr,eq; native form = task_get_proc_raw + proc_require + flag test, field offset drift 122.8 vs 121.6). 38 ledger sites / 7 kexts."
   }
  ],
  "data": [
