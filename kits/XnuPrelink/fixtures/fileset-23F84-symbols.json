@@ -969,6 +969,13 @@
    "original_sha256": "89831e0f4cb2be2121211ffb8004feaf5bdb884d5b862dd94ef555f042128778",
    "native_symbol": "_SecureDTGetProperty",
    "evidence": "SecureDTGetProperty(entry, name, &value, &size): the donor 412-byte IODT body directly below SecureDTLookupEntry (both sub-entry helpers of the SecureDT family, donor 0xfffffe000afc09d8..0xafc0b74). Donor ABI = 4 args reading the DT region bounds from globals [0x7da4b18]/[0x7da4b28]; iterates props at entry+8, prop header 0x24 (name[32]+u32 len), 4-byte aligned stride (cur+len+0x27 & ~3), strcmp via 0xa91f7bc, hit writes *value=prop+0x24 *size=len returns 1, exhausted returns -1. Our native _SecureDTGetProperty (0x7bac004, 24B) loads the same pair of region globals and tail-calls _SecureDTGetPropertyInternal (0x7bac01c, 424B) whose loop body is instruction-for-instruction the donor body (bounds ccmp idiom, +0x24 header, +0x27&~fc stride, strcmp, *value=*size=..., ret 1/-1). Callers pass entries obtained from _SecureDTLookupEntry (already bound native), so pointers live in OUR DT region and our globals are the right bounds. 9 ledger sites in AMFI/sandbox/AppleImage4/ARMWatchdogTimer; first live site 0xfffffff008f0d4a8 reported on the 2b8b8258 flash (expected remainder). bootpath.py d=0 wall, the only wall reachable from AMFI early_security_init at depth<=1."
+  },
+  {
+   "original": "0xfffffe000a7f2e40",
+   "original_size": 48,
+   "original_sha256": "97a7e7359defc14bdb0b15cf968bb59c659b56694a99510d6d9c18b6719ed009",
+   "native_symbol": "_lck_grp_attr_alloc_init",
+   "evidence": "lck_grp_attr_alloc_init(void): first stub hit inside donor sandbox mpo_policy_init (site 0xfffffff00a52e140, boot 104947) -- sandbox allocates its lock-group attr first (result stored to sandbox global 0xb5e27b8), then _lck_grp_attr_setstat (paired), _lck_grp_alloc_init(name, attr) (paired), lck_mtx_init/lck_rw_init (paired). Donor 48B body and our native _lck_grp_attr_alloc_init (0x733b258, 48B) are instruction-for-instruction identical: kalloc_type_impl_internal(lck_grp_attr zone view, zflags 0) then copy the lck_grp_attr_default u32 into *result; only the global addresses differ."
   }
  ],
  "data": [

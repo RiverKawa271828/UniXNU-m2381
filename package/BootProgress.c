@@ -616,7 +616,11 @@ void boot_progress_bind(uintptr_t base,unsigned w,unsigned h,unsigned rb,unsigne
   if (base >= 0xffff000000000000ULL && depth == 32 && w >= 720 && w <= 4096 &&
       h >= 560 && h <= 4096 && rb >= w*4 && rb <= 65536 &&
       base <= UINTPTR_MAX-(uint64_t)h*rb) {
-    display.frame=base;display.width=w;display.height=h;display.stride=rb;display.scale=w>=2160 && h>=1400?3:1;
+    display.frame=base;display.width=w;display.height=h;display.stride=rb;// 2026-10-31: 1080-class panels (Meizu 20 1080x2400) landed on scale 1 and the
+  // 6x14 diagnostic font was unreadable; give any >=1000x>=1400 (either orientation)
+  // panel scale 2. The pixel loops clamp columns to the framebuffer width, and the
+  // right-side ext overlay skips itself via its width guard when 120 cols no longer fit.
+    display.scale=(w>=2160 && h>=1400)?3:((w>=1000 && h>=1400)||(w>=1400 && h>=1000))?2:1;
     memset(display.previous,0xff,sizeof(display.previous));
     // Terminate the sentinels before strcmp.
     for(unsigned i=0;i<48;++i) display.previous[i][BP_COLS-1]=0;
