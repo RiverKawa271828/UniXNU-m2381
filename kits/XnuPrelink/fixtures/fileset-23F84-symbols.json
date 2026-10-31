@@ -1081,6 +1081,69 @@
    "original_sha256": "a436fcad1f5b3d4e3d8f44b42b740111061143f7cb316ffdc93a44061bed957a",
    "native_symbol": "_get_bsdtask_info",
    "evidence": "get_bsdtask_info(task), donor 122.8 hardened/inlined form. True entry (bti c, 0x78B) inside function_starts merged blob 0xa8664f0(_zdestroy, paired)..0xa86690c (interior entry; donor order _zinit/_zdestroy/[this]/_get_thread_ro). Caller context: donor copyClientEntitlement 0xaf510ac calls it exactly at the source position of proc = (proc_t)get_bsdtask_info(task) (IOUserClient.cpp:1586); native twin calls _get_bsdtask_info 0x73bb474 at the same position. Body: kernel_task global equality -> NULL; tasks-zone validation (page metadata zone index == 0x19); tail ldr [task+0x3f0]; tst #0x800000; csel x0,xzr,eq - bit-identical tail to native _get_bsdtask_info (ldr [task+0x5a8]; tst #0x800000; csel x0,xzr,eq; native form = task_get_proc_raw + proc_require + flag test, field offset drift 122.8 vs 121.6). 38 ledger sites / 7 kexts."
+  },
+  {
+   "original": "0xfffffe000af6236c",
+   "original_size": 704,
+   "original_sha256": "12ea61b778c508f1e7c691b63bb6b4351db9267efa4c4ca7b574e30b33314b8c",
+   "native_symbol": "__ZN10IOReporter10addChannelEyPKc",
+   "evidence": "IOReporter::addChannel(nchannels, channelName), IOReporter.cpp:274-337. Body: overflow path cmp w25,#0x7ffffffe then w23+0x2b = 0xe00002e8 kIOReturnOverrun (oldNChannels > INT_MAX-1), ensureCapacity, OSSymbol::withCString(channelName) with gIOReportNoChannelName fallback, lockReporter + handleAddChannelSwap sequence. vtable div check: donor IOReporter vtable slots 0x80/0x88/0x90 movk #0x8a1d/#0x770f/#0x6283 all equal native __ZTV10IOReporter +0x80 handleSwapPrepare/+0x88 handleAddChannelSwap/+0x90 handleSwapCleanup. 92 ledger sites / 6 kexts."
+  },
+  {
+   "original": "0xfffffe000af63734",
+   "original_size": 240,
+   "original_sha256": "d5d4553f5d07117abd9529b51a2e7f1a665a97581d3525a04245f9c445060dea",
+   "native_symbol": "__ZN16IOSimpleReporter8setValueEyx",
+   "evidence": "IOSimpleReporter::setValue(unsigned long long, unsigned long long). Body tail-calls vtable slots 0xc8 (movk #0x55fd = getFirstElementIndex), 0xe0 (#0x735d = copyElementValues), 0xb8 (#0xea10 = setElementValues), all divs equal to native vtable; str x21,[sp,#0x10] = copy old value before writing new. KDK (12377.121.10.1) shape match unique: __ZN16IOSimpleReporter8setValueEyx. Source order: donor with(0x63680) < target(0x63734) < createLegend(0x639cc) = KDK order with < setValue < incrementValue < getValue < createLegend. 65 ledger sites / 5 kexts."
+  },
+  {
+   "original": "0xfffffe000af65b14",
+   "original_size": 132,
+   "original_sha256": "54acb8683e14bc6bda358e1cf9e5231eebde68e695d3da79c141793c6232d59a",
+   "native_symbol": "__ZN15IOStateReporter10setStateIDEyiy",
+   "evidence": "IOStateReporter::setStateID(channel_id, state_index, state_id), IOStateReporter.cpp:534-545 = lockReporter(); handleSetStateID(...); unlockReporter(). KDK skip=0 unique hit. Source order bracket: donor incrementChannelState(0x65774) < target(0x65b14) < getStateInTransitions(0x65ca0) matches KDK order incrementChannelState < setState < setStateID < setStateByIndices < getStateInTransitions. 53 ledger sites / 2 kexts."
+  },
+  {
+   "original": "0xfffffe000af6898c",
+   "original_size": 140,
+   "original_sha256": "bc6497d9e7d3c24fae40c594869a644a7696ad50f1e8a22e63239912966c2c09",
+   "native_symbol": "__ZN14IOReportLegend17addReporterLegendEP10IOReporterPKcS3_",
+   "evidence": "IOReportLegend::addReporterLegend(IOReporter*, groupName, subGroupName) member overload, IOReportLegend.cpp:165-183. KDK skip=0..4 unique hit (3-arg member overload; note the sibling (IOService*, IOReporter*, ...) overload is already map-paired at 0xaf68424). Source order: donor addLegendEntry(0x686dc) < organizeLegend(0x687c8) < target < IORTC::setUTCTimeOfDay(0x68a48) = KDK order. 49 ledger sites / 3 kexts."
+  },
+  {
+   "original": "0xfffffe000af0a514",
+   "original_size": 80,
+   "original_sha256": "5919880eb90963785063d1dac6aabd9eb54b36d1fc70ab852828016e93d20c95",
+   "native_symbol": "__ZN13IOCommandGate14runActionBlockEU13block_pointerFivE",
+   "evidence": "IOCommandGate::runActionBlock(ActionBlock), IOCommandGate.cpp:190-194 = runAction(&IOCommandGateActionToBlock, _action). Body: bti c; mov x2,x1 then tail-call vtable slot 0xe8 (movk vptr #0xf9ff = runAction div, equal to native __ZTV13IOCommandGate +0xe8) with args (this, &trampoline@0xaf0a564, block, 0,0,0). Trampoline 0xaf0a564 = mov x0,x1; ldr x16,[x1,#0x10]!; braa x16 = invokes the block function pointer = native static __ZL26IOCommandGateActionToBlock (static, hence unnamed in donor map). 44 ledger sites / 5 kexts."
+  },
+  {
+   "original": "0xfffffe000af06d34",
+   "original_size": 248,
+   "original_sha256": "fb01af3b30753ed4af3886707321d08112569e41834c4410e8583afad83e2846",
+   "native_symbol": "__ZN10IOWorkLoop8workLoopEv",
+   "evidence": "IOWorkLoop::workLoop(), IOWorkLoop.cpp:189-193 = workLoopWithOptions(0). Body: kalloc_type 0x48 bytes, stores vptr = donor 0x7d67838 whose slot0/1 decode to IOWorkLoop D0/D1 (donor 0xaf06564/0xaf06500, adjacent to map anchor _maintRequest_vfpthunk_@0xaf064c4), slot2-9 = OSObject base (release(i)/getRetainCount/retain/release/serialize/getMetaClass/isEqualTo/taggedRetain). Calls: slot 0x68 movk #0x4a6a = OSObject::init; failure path slot 0x28 movk #0x3a87 = OSObject::release then NULL - i.e. new IOWorkLoop; init(); release(); return NULL. Options variant = donor 0x6e2c (bonus neighbor = workLoopWithOptions). 41 ledger sites / 12 kexts."
+  },
+  {
+   "original": "0xfffffe000ac9bfd8",
+   "original_size": 12,
+   "original_sha256": "616e3b44557d7376926e8ebd973895cf8ac7fe13cc148d0c3862c5e546e300b7",
+   "native_symbol": "_kauth_cred_getuid",
+   "evidence": "kauth_cred_getuid(cred), kern_credential.c:1922-1925 = posix_cred_get(cred)->cr_uid. Body: bti c; ldr w0,[x0,#0x18]; ret (field 0x18 = cr_uid). Six consecutive getters donor 0xbfd8(0x18)/0xbfe4(0x1c)/0xbff0(0x20)/0xbffc(0x28)/0xc008(0x68)/0xc014(0x6c), last one map-anchored as _kauth_cred_getsvgid (reference-symbol) = kern_credential.c:1922-1959 order getuid,getruid,getsvuid,getgid,getrgid,getsvgid -> first = getuid. KDK byte-identical. 39 ledger sites / 2 kexts."
+  },
+  {
+   "original": "0xfffffe000aead9cc",
+   "original_size": 20,
+   "original_sha256": "62cdd8add328db933e7ad443bebfc6fe836badee621cd999f48df3f14ae2a322",
+   "native_symbol": "_IOLockWakeup",
+   "evidence": "IOLockWakeup(lck, message, wakeOne=0?) 3-arg thin wrapper, IOLocks.cpp:106. Body (verbatim verified): bti c; mov x0,x1; mov x1,x2; mov w2,#0; b 0xa8150f0 (tail into the lock-wakeup implementation). Source order: map _IOLockSleep@0xead9a4 < _IOLockSleepDeadline@0xead9b8 < target@0xead9cc < IORecursiveLockFree@0xdb14 = IOLocks.cpp order Sleep(90) < SleepDeadline < Wakeup(106). KDK skip=0..4 unique hit _IOLockWakeup. 38 ledger sites / 6 kexts."
+  },
+  {
+   "original": "0xfffffe000ad15560",
+   "original_size": 64,
+   "original_sha256": "acdc73c5519af94bf639dbf96f8665aebf396eb77f1236e549f7214a8684f36b",
+   "native_symbol": "_nanotime",
+   "evidence": "nanotime(struct timespec *), kern_time.c:840. KDK skip=0 unique hit (14 masked words equal). Body: x19=x0 then two local pointer calls into 0xa7abee4 clock family, stp x8,w9,[x19] writes (tv_sec, tv_nsec). Source order: donor timevalfix(0x5514) < target(0x5560) < ratecheck(0x55fc) = kern_time.c order timevalfix(763) < nanotime(840) < ratecheck(893). 38 ledger sites / 1 kext."
   }
  ],
  "data": [
