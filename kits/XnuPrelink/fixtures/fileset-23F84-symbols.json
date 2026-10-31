@@ -1144,6 +1144,13 @@
    "original_sha256": "acdc73c5519af94bf639dbf96f8665aebf396eb77f1236e549f7214a8684f36b",
    "native_symbol": "_nanotime",
    "evidence": "nanotime(struct timespec *), kern_time.c:840. KDK skip=0 unique hit (14 masked words equal). Body: x19=x0 then two local pointer calls into 0xa7abee4 clock family, stp x8,w9,[x19] writes (tv_sec, tv_nsec). Source order: donor timevalfix(0x5514) < target(0x5560) < ratecheck(0x55fc) = kern_time.c order timevalfix(763) < nanotime(840) < ratecheck(893). 38 ledger sites / 1 kext."
+  },
+  {
+   "original": "0xfffffe000ace12a0",
+   "original_size": 52,
+   "original_sha256": "d3855e37def0181c71e0c283a61e20b64413e26c6749c4a5fb6c7af23f054434",
+   "native_symbol": "_proc_get_syscall_filter_mask_size",
+   "evidence": "proc_get_syscall_filter_mask_size(int which), kern_proc.c:5285-5296 (CONFIG_MACF). Donor leaf 0x34: bti c; cmp w0,#2; b.eq mach_kobj_count load; mov w8,#0x80; mov w9,#0x22e; csel pair -> which=0 returns 0x22e(=558 nsysent), which=1 returns 0x80(=128 mach_trap_count), else 0; tail adrp+ldrsw mach_kobj_count. Apple build const-folds nsysent/mach_trap_count; our clang emits loads instead (native 0x7896078: adrp/ldr nsysent@0x7023a30 read=558, mach_kobj_count@0x71b836c read=0 = donor file state 0) so body-hash and bti-shape channels both miss; source-identity verified by exact case/constant match plus native symbol. Caller = Sandbox kext startup syscallmasks init: bl f(0)/f(1)/f(2) sizes stored [0x82d0de8/dec/df0] each cbz-fail-guarded, max(.., 115 floor) then ceil/8 = BITMAP_SIZE stored 0xdf8 (SR_MASK_SIZE=BITMAP_SIZE(mach_trap_count+nsysent) family, kern_debug.c:120); cluster strings 'sb_serial_reporting', os_log 'com.apple.sandbox.reporting'/'violation', 'sandbox.syscallmasks'. 4 ledger sites / 1 kext (com.apple.security.sandbox)."
   }
  ],
  "data": [
