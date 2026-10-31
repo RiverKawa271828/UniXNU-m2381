@@ -976,6 +976,48 @@
    "original_sha256": "97a7e7359defc14bdb0b15cf968bb59c659b56694a99510d6d9c18b6719ed009",
    "native_symbol": "_lck_grp_attr_alloc_init",
    "evidence": "lck_grp_attr_alloc_init(void): first stub hit inside donor sandbox mpo_policy_init (site 0xfffffff00a52e140, boot 104947) -- sandbox allocates its lock-group attr first (result stored to sandbox global 0xb5e27b8), then _lck_grp_attr_setstat (paired), _lck_grp_alloc_init(name, attr) (paired), lck_mtx_init/lck_rw_init (paired). Donor 48B body and our native _lck_grp_attr_alloc_init (0x733b258, 48B) are instruction-for-instruction identical: kalloc_type_impl_internal(lck_grp_attr zone view, zflags 0) then copy the lck_grp_attr_default u32 into *result; only the global addresses differ."
+  },
+  {
+   "original": "0xfffffe000afc17fc",
+   "original_size": 36,
+   "original_sha256": "9d72d8189566014f66bf478a8ba6290df21a6f69b0fa36e4df9b012c9600dc2c",
+   "native_symbol": "_PE_parse_boot_arg_str",
+   "evidence": "PE_parse_boot_arg_str(arg_string, arg_ptr, strlen): bootargs.c:217 = PE_parse_boot_argn_internal(PE_boot_args(), arg_string, arg_ptr, strlen, TRUE). Donor 36B wrapper: bti c; shuffle x0->x1,x1->x2,x2->x3; x0=[PE_state global 0x7da4d00]+0x6c (PE_boot_args inlined); w4=1 (force_string=TRUE); tail-b internal body 0xafc1104. The force=0 twin 0xafc10e0 is already paired as _PE_parse_boot_argn. First live site 0xfffffff00a52e2b0 inside donor sandbox mpo_policy_init (boot diag crc 0x18815d36): parses a boot-arg string into a 16-byte stack buffer then cbz-tests the boolean. Native twin _PE_parse_boot_arg_str (0x7bac93c) has the identical wrapper shape (bl PE_boot_args accessor, shuffle, w4=1, tail internal). 2 ledger sites in sandbox."
+  },
+  {
+   "original": "0xfffffe000aeb8eb0",
+   "original_size": 296,
+   "original_sha256": "39331ce46e9d34ee9d7cc4cc32d7d834cdcc8995bb98e7e1293c96aa526a5627",
+   "native_symbol": "__ZNK15IORegistryEntry12copyPropertyEPKc",
+   "evidence": "IORegistryEntry::copyProperty(const char*): the vtable slot at 0x7d63370 (and 1599 more kext vtables, 24 components) sits exactly between copyProperty(const OSString*) (0xaeb8fd8) and dictionaryWithProperties (0xaeb8d30), matching IORegistryEntry.h declaration order (copyProperty(OSSymbol)/copyProperty(OSString)/copyProperty(const char*)/dictionaryWithProperties). Body: lock per-entry lock ([this+0x10]), virtual call to the getProperty(const char*) slot (vtable+0x118 = the slot at vtable_base+0x118 that targets 0xaeb97c8), retain the result via OSObject slot +0x20, unlock \u2014 exactly copyProperty = getProperty + retain. Hottest ledger target: 190 sites across 24 components. Native twin __ZNK15IORegistryEntry12copyPropertyEPKc present."
+  },
+  {
+   "original": "0xfffffe000af4e348",
+   "original_size": 280,
+   "original_sha256": "2b8fd729c4bd4f805c5ed64c9969c1f8efd1913daab00915433ef1a157669704",
+   "native_symbol": "__ZN12IOUserClient4initEP12OSDictionary",
+   "evidence": "IOUserClient::init(OSDictionary*): occupies the init(OSDictionary) vtable slot (between runPropertyAction and setPropertyTable) in 254 kext vtables whose Dispatch/init()/free slots also point to the unpaired 0xaea0bf8/0xaf4e544/0xaf4e460 \u2014 i.e. these four are the IOUserClient overrides inherited by ~250 user-client classes. Body matches IOUserClient.cpp:1642 exactly: if (getPropertyTable() /* [x0+0x20] */) skip super; else if (!IOService::init(dictionary) /* 0xaed0930, x1=dictionary passthrough */) return false; then reserve(): lazy kalloc_type of IOUserClient::ExpansionData into [this+0x88], PM vtable calls, gIOServicePM-ish global retain. Native twin __ZN12IOUserClient4initEP12OSDictionary present."
+  },
+  {
+   "original": "0xfffffe000af4e544",
+   "original_size": 300,
+   "original_sha256": "e5b85b67c3ebd2f2798e862e2c67367d2563688d2e381007628da6e8310cabd8",
+   "native_symbol": "__ZN12IOUserClient4initEv",
+   "evidence": "IOUserClient::init(): same IOUserClient vtable block, OSObject::init() slot position (between Dispatch slot 0xaea0bf8 and free slot 0xaf4e460). Body = IOUserClient.cpp:1632: if (getPropertyTable() /* [x0+0x20] */) skip; else IOService::init(NULL) (x1=0); then the same reserve() ExpansionData lazy alloc. 255 ledger sites. Native twin __ZN12IOUserClient4initEv present."
+  },
+  {
+   "original": "0xfffffe000af4e460",
+   "original_size": 228,
+   "original_sha256": "c78084fc762bdf0e2e38244cf7fcdc518339fcd84ee15d0927679bebccd6033b",
+   "native_symbol": "__ZN12IOUserClient4freeEv",
+   "evidence": "IOUserClient::free(): IOUserClient vtable free-slot position. Body matches IOUserClient.cpp:1943: kfree_type of filter-policy list elements and reserved ExpansionData (2x kfree_type_impl), IORWLockInlineDestroy -> _lck_rw_destroy, IOLockInlineDestroy -> _lck_mtx_destroy, then super::free chain. 255 ledger sites. Native twin __ZN12IOUserClient4freeEv present."
+  },
+  {
+   "original": "0xfffffe000aea0bf8",
+   "original_size": 44,
+   "original_sha256": "3d5d53d2f301bc7c2efe8eb678db84a4906814e794755b99d6133229a9116a17",
+   "native_symbol": "__ZN12IOUserClient8DispatchE5IORPC",
+   "evidence": "IOUserClient::Dispatch(IORPC): Dispatch-slot position of the same ~250 vtable block. Body: copies the 32-byte IORPC (ldp q0,q1,[x1]; stp to stack) and tail-calls the Dispatch implementation 0xaea0c24 \u2014 IORPC passed by value. 255 ledger sites across 19 components. Native twin __ZN12IOUserClient8DispatchE5IORPC present (mangled param class IORPC)."
   }
  ],
  "data": [
