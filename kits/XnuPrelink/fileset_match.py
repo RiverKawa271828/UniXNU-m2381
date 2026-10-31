@@ -13,7 +13,9 @@ from kc_image import Image, scan
 from fileset_shape import checked_shape
 
 EXEC_SEGMENTS = ('__TEXT_EXEC', '__TEXT_BOOT_EXEC', '__KLD', '__LAST')
-MATCHER_VERSION = 10
+MATCHER_VERSION = 11
+BRAA_BLRAA = (0xD71F0800, 0xD73F0800)  # (word & 0xFFFF0C00) for braa/blraa
+MOVK48 = 0x1E5  # word >> 23 for a 64-bit movk with lsl #48
 BTI = (0xd503245f, 0xd503249f, 0xd50324df, 0xd50324ff, 0xd503241f)  # bti [c|j|jc|]
 NOP = 0xd503201f
 
@@ -35,6 +37,26 @@ def vtable_slots(side, base):
             return result
         result.append(pointer)
     return []  # unterminated, so no proven table extent
+
+
+def slot_signature(body):
+    """Vtable-slot discriminators a function dispatches through.
+
+    A forwarding shell hardcodes the discriminators (movk immediates feeding
+    braa/blraa) of the vtable slots it tail-calls; the discriminators hash the
+    virtual slot, not the build, so both builds agree on the same set. Constants
+    other than discriminators never appear as movk lsl #48 in these small bodies.
+    """
+    words = array('I')
+    words.frombytes(body[:len(body) // 4 * 4])
+    dispatches = False
+    imms = set()
+    for word in words:
+        if word & 0xFFFF0C00 in BRAA_BLRAA:
+            dispatches = True
+        elif word >> 23 == MOVK48 and (word >> 21) & 3 == 3:
+            imms.add((word >> 5) & 0xFFFF)
+    return frozenset(imms) if dispatches and imms else None
 
 
 def without_bti(body, start, shape):
@@ -254,6 +276,40 @@ class Matcher:
                     bound += self.bind(orig, self.pairs[target], 'alias-thunk')
                     break
         return bound
+
+    def pair_family_by_vtable_slot(self):
+        """Pair a pure forwarding shell with the native function dispatching through the
+        same vtable slots.
+
+        The OSSharedPtr overloads and similar getters hardcode the discriminators of the
+        vtable slots they tail-call; the discriminators identify the slot across builds,
+        so an equal discriminator set identifies the same source function. Restricted to
+        short bodies without direct calls or data references, where neither build inlines
+        anything, so different code that happens to call the same slot cannot collide —
+        and the one native claiming several originals stays unclaimed.
+        """
+        table = defaultdict(list)
+        for native, fn in self.native.functions.items():
+            if fn['calls'] or fn['refs'] or fn['end'] - native > 0x80:
+                continue
+            signature = slot_signature(self.native.image.read(native, fn['end'] - native))
+            if signature:
+                table[signature].append(native)
+        claims = defaultdict(list)
+        for orig, fn in self.original.functions.items():
+            if orig in self.pairs or fn['calls'] or fn['refs'] or fn['end'] - orig > 0x80:
+                continue
+            signature = slot_signature(self.original.image.read(orig, fn['end'] - orig))
+            if not signature:
+                continue
+            for native in table.get(signature, ()):
+                if abs(self.native.functions[native]['end'] - native - (fn['end'] - orig)) <= 0x40:
+                    claims[native].append(orig)
+        added = 0
+        for native, origs in claims.items():
+            if len(origs) == 1:
+                added += self.bind(origs[0], native, 'vtable-slot')
+        return added
 
     def canon(self, native_start):
         # Local symbols and LLVM outlined names can repeat across object files.
@@ -1178,7 +1234,7 @@ def match_images(raw, native_data, entry_name='com.apple.kernel', max_rounds=40,
         print(f'reference data names: {matcher.reference_data(reference, reference_pairing, targets, data)}')
     for _ in range(max_rounds):
         bound = matcher.anchor_shapes() + matcher.anchor_bti_shapes() + matcher.propagate()
-        bound += matcher.alias_thunks()
+        bound += matcher.alias_thunks() + matcher.pair_family_by_vtable_slot()
         split = matcher.pair_data(data)
         bound += matcher.pair_metaclass_getters(data) + matcher.pair_metaclass_vtables(data) + matcher.pair_vtable_users(data)
         bound += matcher.pair_vtables(data) + matcher.anchor_vtables(data)

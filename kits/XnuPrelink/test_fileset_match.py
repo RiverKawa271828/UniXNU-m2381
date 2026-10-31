@@ -1,5 +1,6 @@
 """Require table identity and the full PAC layout before matching virtual methods."""
 from types import SimpleNamespace
+import struct
 import unittest
 
 from fileset_match import Matcher
@@ -234,3 +235,82 @@ class MetaclassIdentityTests(unittest.TestCase):
         self.assertEqual(matcher.pairs[0x9000],0xa000)
         self.assertNotIn(0xb000,matcher.reverse)
         self.assertEqual(matcher.conflicts[-1]['kind'],'vtable-correction')
+
+
+class VtableSlotForwarderTests(unittest.TestCase):
+    """A pure forwarding shell pairs by the slot discriminators it dispatches through."""
+    VPTR = 0xcda1
+
+    @staticmethod
+    def movk(register, immediate):
+        return 0xF2800000 | (3 << 21) | (immediate << 5) | register  # movk x?, #imm, lsl #48
+
+    @classmethod
+    def side(cls, functions):
+        """functions: {start: (words, extra-function-fields)}"""
+        bodies, fns = {}, {}
+        for start, (words, extra) in functions.items():
+            bodies[start] = b''.join(struct.pack('<I', word) for word in words)
+            fns[start] = {'end': start + 4 * len(words), 'refs': [], 'calls': [],
+                          'length': len(words), 'digest': '', **extra}
+        return SimpleNamespace(functions=fns, symbol_names={},
+                               image=SimpleNamespace(read=lambda address, length: bodies[address]))
+
+    @classmethod
+    def shell(cls, slot, *, tail=0xd71f0a11, checked=False, length_pad=0):
+        body = [0xd503245f,                                    # bti c
+                0xf9400042,                                    # ldr x2, [x2]
+                0xf9400010,                                    # ldr x16, [x0]
+                0xaa0003f1,                                    # mov x17, x0
+                cls.movk(17, cls.VPTR),
+                0xdac11a30]                                    # autda x16, x17
+        if checked:
+            body += [0xaa1003f1, 0xdac143f1, 0xeb11021f,       # mov/xpacd/cmp check
+                     0x54000040, 0xd4388e40]                   # b.eq +8, brk
+        body += [0xd2820011, 0x8b110210, 0xf9400200,           # slot #0x100 dispatch prep
+                 0xaa1003e3, 0xaa0803f0,
+                 cls.movk(17 if tail & 1 else 16, slot),
+                 tail]                                         # braa/blraa
+        return body + [0xd503201f] * length_pad                # padding
+
+    def test_shell_pairs_with_check_block_counterpart(self):
+        donor = self.shell(0xc323)
+        native = self.shell(0xc323, tail=0xd73f0890, checked=True, length_pad=2)
+        matcher = Matcher(self.side({0x9000: (donor, {})}),
+                          self.side({0xa000: (native, {})}))
+        self.assertEqual(matcher.pair_family_by_vtable_slot(), 1)
+        self.assertEqual(matcher.pairs, {0x9000: 0xa000})
+        self.assertEqual(matcher.how[0x9000], 'vtable-slot')
+
+    def test_a_calling_candidate_does_not_pair(self):
+        donor = self.shell(0xc323)
+        native = self.shell(0xc323, tail=0xd73f0890, checked=True)
+        matcher = Matcher(self.side({0x9000: (donor, {})}),
+                          self.side({0xa000: (native, {'calls': [(0x10, 0xb000)]})}))
+        self.assertEqual(matcher.pair_family_by_vtable_slot(), 0)
+        self.assertFalse(matcher.pairs)
+
+    def test_a_size_divergent_candidate_does_not_pair(self):
+        donor = self.shell(0xc323)
+        native = self.shell(0xc323, tail=0xd73f0890, checked=True, length_pad=17)
+        matcher = Matcher(self.side({0x9000: (donor, {})}),
+                          self.side({0xa000: (native, {})}))
+        self.assertEqual(matcher.pair_family_by_vtable_slot(), 0)
+        self.assertFalse(matcher.pairs)
+
+    def test_one_native_claimed_by_two_originals_stays_unclaimed(self):
+        donor = self.shell(0xc323)
+        native = self.shell(0xc323, tail=0xd73f0890, checked=True)
+        matcher = Matcher(self.side({0x9000: (donor, {}), 0x9100: (donor, {})}),
+                          self.side({0xa000: (native, {})}))
+        self.assertEqual(matcher.pair_family_by_vtable_slot(), 0)
+        self.assertFalse(matcher.pairs)
+
+    def test_an_unrelated_slot_or_a_non_dispatch_body_binds_nothing(self):
+        donor = self.shell(0xc323)
+        native = self.shell(0x7e26, tail=0xd73f0890, checked=True)
+        plain = [0xd503245f, 0xf9400042, 0xd65f03c0]           # no dispatch at all
+        matcher = Matcher(self.side({0x9000: (donor, {}), 0x9100: (plain, {})}),
+                          self.side({0xa000: (native, {}), 0xa100: (plain, {})}))
+        self.assertEqual(matcher.pair_family_by_vtable_slot(), 0)
+        self.assertFalse(matcher.pairs)
