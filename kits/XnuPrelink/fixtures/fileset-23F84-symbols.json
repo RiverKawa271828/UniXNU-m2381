@@ -1179,6 +1179,13 @@
    "original_sha256": "7b9845b08b951e7279a5635dc4da48ca13d599ba5b5b184889205f639010cc03",
    "native_symbol": "__ZN9IOService19getMatchingServicesEP12OSDictionary",
    "evidence": "IOService::getMatchingServices(OSDictionary *matching), IOService.cpp:6398. Wall 23 (payload 7fac1e57 first flash, CRC 0xcfcb40bc zlib-exact): sandbox site 0xa52ed60 (+0x3c from wall 22 site 0xa52ed24, same startup function advancing) bl 0xfffffe000aedcb48; x0 = heap OSDictionary* (matching), x1 = caller residue. Body identity: LOCKWRITENOTIFY inline (casa on [0xb419198] lock, owner +0x18, refcount +0x20) -> mov w1,#4 (kIOServiceMatchedState); mov w2,#0 (default options=0) -> bl copyExistingServices 0xaece088 -> UNLOCK inline (casl) -> return \u2014 element-for-element source 6398-6411. Apple map has no symbol between waitQuiet(mach_timespec) 0xaedc95c and addMatchingNotification 0xaedcf6c (nearest-name noise waitQuiet+0x1ec). Ledger key 0xfffffff00aedcb48, 13 sites / 5 kexts (ARMPlatform 4, IOGPUFamily 2, IOHIDFamily 2, IOStorageFamily 2, sandbox 3). Native named global 0xfffffff007aba788, 19-instr same semantic (out-of-line lock/unlock calls vs donor inline casa fast path)."
+  },
+  {
+   "original": "0xfffffe000af5afc8",
+   "original_size": 56,
+   "original_sha256": "23331d99c8cf44ac523f4f9803127a10de0c5e4be962cd4c618bfa365deba8e5",
+   "native_symbol": "__ZN12IOUserClient23registerFilterCallbacksEPK19io_filter_callbacksm",
+   "evidence": "IOUserClient::registerFilterCallbacks(const struct io_filter_callbacks *callbacks, size_t size), IOUserClient.cpp:6856. Wall 24 (payload b5f102ac first flash, CRC 0xbad103f6 zlib-exact): sandbox site 0xa52ee20 (wall 23 +0x2c0, same startup function) bl 0xfffffe000af5afc8; x0 = 0x82d0e80 = sandbox __DATA io_filter_callbacks struct ptr, x1 = 0x18 = sizeof(io_filter_callbacks). Body identity (13 instr): cmp x1,#0x18 -> kIOReturnBadArgument 0xe00002c2; casal x9,x8,[0x7d71b88 = gIOUCFilterCallbacks, file NULL] -> OSCompareAndSwapPtr(NULL, callbacks, &gIOUCFilterCallbacks); fail -> +0x13 = kIOReturnBusy 0xe00002d5; success -> 0. Apple map gap between is_io_device_tree_entry_exists_with_name 0xaf5ac1c and sysctl_debug_iokit 0xaf5b000. Ledger key 0xfffffff00af5afc8, 2 sites / 1 kext (sandbox). Native named global 0xfffffff007abdf4->0xfffffff007b39df4, same constants (0x2c2, cmp x1,#0x18, add #0x13), CAS lowered to OSCompareAndSwapPtr call 0x7a1c8e4 vs donor inline casal."
   }
  ],
  "data": [
