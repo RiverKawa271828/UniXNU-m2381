@@ -1424,6 +1424,342 @@
    "original_sha256": "f5c75cb10c128ce5feea3d0cfc0432b7d64ace51ac79041d5f627ae1a8aebfde",
    "native_symbol": "_vnode_lookup",
    "evidence": "bsd/vfs/vfs_subr.c:7802 vnode_lookup -> 7747 vnode_lookupat. Donor 0xfffffe000a9ba914 is the exact wrapper 'mov x4,#0; b impl' \u2014 byte-identical to native _vnode_lookup 0xfffffff0075ba95c; impl donor 0xa9ba920 matches native _vnode_lookupat 0xfffffff0075ba964 element-for-element: cbz x3 -> EINVAL(0x16); kalloc_type nameidata (same site flag 0x8000); IDENTICAL mnt-flag translation block lsr w8,w23,#2 / lsl w9,w23,#7 and 0x100 / bfi w9,w23,#6 / bfi w9,w8,#0x1d / eor w8,w9,#0x40 -> ni_flag +0x154 (+0x150=0); path+segflg store (donor str d0 const = native mov w9,#2 stp); +0x190=0, +0x158 stp ctx/nd, +0x198=-2, bit3 -> +0x190=0x1000; optional dev-path arg x4 with first-byte '/' check -> ni_dirp +0x30 + flag 0x400000; bl _namei (0xa9ae7a8); vp result [nd+0x28] -> *x2; kfree_type cleanup path. Map gap: donor unnamed between _mount_list_add 0xa9ba838 and _mount_list_lookupby_fsid 0xa9bab1c, with donor vfs_getvfs at 0xa9baa48 (fsid-val loop cmp +0xc0/+0xc4) matching the native cluster order vnode_lookup/vnode_lookupat/.../vfs_getvfs/mount_list_lookupby_fsid. Slots: sandbox import window 0x7ef5b48 (_vnode_get/_vnode_put_from_pager/_vnode_getattr(T3)/_vnode_put/_vnode_rdadvise) and 0x7fa4408 (_vnode_close/_vnode_open/_vnode_put) \u2014 classic sandbox path-resolution import set. Ledger: 12 stub sites \u2014 sandbox(8) + apfs(4). Confidence: high."
+  },
+  {
+   "original": "0xfffffe000a7f5850",
+   "original_size": 716,
+   "original_sha256": "4eb9e831303634ba9b6938c975b1d5b5c8977883782a95410ca31d0c05517774",
+   "native_symbol": "_lck_rw_lock_shared_to_exclusive",
+   "evidence": "osfmk/kern/lock_rw.c:1793. \u4f53\u5f62\u9010\u5143\u7d20\u5bf9\u8bfb native 0xfffffff00733e964: \u540c frame \u5e38\u91cf (0x3ffff=r_count-1, -0x210000 \u63a9\u7801, 0x20ffff, sub #0x200,lsl#12, cmp #1); atomic_exchange_begin32(x19+8) \u4f4d\u6d4b #0x10/#0x12 \u5bf9\u5e94 donor \u5728 [x0+8] \u4e0a\u7684 casa \u5faa\u73af (donor \u5185\u8054 LSE \u539f\u5b50); wakeup \u5224\u5b9a\u5757\u9010\u6307\u4ee4\u540c (and 0x20ffff / sub #0x200<<12 / cmp #1 / thread_wakeup_prim(x20+1,0,0) donor 0xa8150f0); lck_rw_drain_status(lck,0xffff,\u00b7) donor 0xa7f5434; assert_wait(lck+1,0x40000000) reader-event \u9010\u5b57\u8282\u540c (donor 0xa811e60); u_wanted \u5df2\u7f6e\u65f6 __lck_rw_unlock_shared + return false \u7684\u552f\u4e00 s2x \u5c3e (donor 0x5b0c\u21920xa7f6f98); \u6210\u529f\u8def\u5f84 str ctid\u2192[x20,#4] (owner) \u8fd4\u56de 1. Map \u7f3a\u53e3\u5939\u903c: donor \u4f4d\u4e8e _IORWLockRead 0xa7f5598 (=native lck_rw_lock_shared) \u4e0e __lck_rw_lock_type_panic 0xa7f5c5c \u4e4b\u95f4 = native lck_rw_lock_shared_b/shared_to_exclusive/exclusive_to_shared \u6e90\u5e8f\u7a97\u53e3; native \u5730\u5740\u5e8f lock_shared_b\u2192shared_to_exclusive\u2192exclusive_to_shared\u2192type_panic \u552f\u4e00\u653e\u7f6e. Panic \u951a: 0x4e6=1254 \u884c = machine_routines_common.c 'ml_set_interrupts_enabled_with_debug' (donor \u5185\u8054 ml_set_interrupts_enabled \u7684 daif \u65ad\u8a00, native \u8d70 _ml_set_interrupts_enabled \u5916\u8c03). native \u7b26\u53f7\u5b58\u5728. \u8d26\u672c 22 \u7ad9/2 kext (sandbox 7). \u7f6e\u4fe1\u5ea6: \u9ad8"
+  },
+  {
+   "original": "0xfffffe000acd4758",
+   "original_size": 96,
+   "original_sha256": "ee614c4eb4464dad0ba8693a920b2af8ee6821e4c9453c60644a138341f10054",
+   "native_symbol": "_persona_put",
+   "evidence": "bsd/kern/kern_persona.c:357. \u4f53\u5f62: bti c + cbz x0\u2192ret (persona==NULL \u65e9\u9000, native 0xfffffff00788b8c8 \u540c\u4e3a\u5e27\u5916 cbz); inline persona_lock = casa 0\u2194ctid on [x0+0x140] (pna_lock word), \u6162\u8def\u5f84 0xa7f3574 = lck_mtx_lock \u6162\u8def (\u4e0e T2 \u7c07\u540c\u4e00\u628a); \u5c3e\u8df3 persona_put_and_unlock (donor 0xacd47b8, map \u5df2\u914d\u540d native 0xfffffff00788b90c). \u6e90: if (persona) { persona_lock(persona); persona_put_and_unlock(persona); } \u9010\u53e5\u5bf9\u5e94. Map \u7f3a\u53e3: donor \u4f4d\u4e8e _persona_alloc 0xacd40f8 \u4e0e _persona_put_and_unlock 0xacd47b8 \u4e4b\u95f4; native \u5730\u5740\u5e8f _persona_put 0x788b8c8 \u7d27\u90bb _persona_put_and_unlock 0x788b90c \u540c\u6837 caller-before-callee \u653e\u7f6e (\u6e90\u5e8f put_and_unlock:320 \u5728 put:357 \u524d, \u4e24\u4ef6\u4e8c\u8fdb\u5236\u540c\u9006\u5e8f). \u4ee3\u7801\u5dee\u5f02 benign: donor \u5185\u8054 mutex fastpath casa, native \u5916\u8c03 lck_mtx_lock; donor \u6162\u8def\u591a\u4e00\u5c42\u5e27. native \u7b26\u53f7\u5b58\u5728. \u8d26\u672c 7 \u7ad9/1 kext (sandbox). \u7f6e\u4fe1\u5ea6: \u9ad8"
+  },
+  {
+   "original": "0xfffffe000acd79e8",
+   "original_size": 148,
+   "original_sha256": "791f490ac0dc356c4ba2a298a279b9d4946878d4a3c4f9e78afe3eb16ca7ad89",
+   "native_symbol": "_proc_pidversion",
+   "evidence": "bsd/kern/kern_proc.c:2109. \u4f53\u5f62\u9010\u5143\u7d20\u5bf9\u8bfb native 0xfffffff00788d65c: ldr [x0+0x18]=p_proc_ro; zone \u6821\u9a8c donor \u5185\u8054 (orr 0xf0<<48 \u5f52\u4e00 + ro-range [0x7c9cc20] + elem-tag [0x7c9cc80] lsr#0xa/ldrh/and 0x3ff == 5 = ZONE_ID_PROC_RO, native \u4e3a bl _zone_require_ro(w0=5,w1=0x60) \u540c\u53c2); backref \u6821\u9a8c [ro]==p else bl panic_proc_ro_proc_backref_mismatch (donor 0xb008bcc); \u8fd4\u56de [ro+0x18] = p_idversion (proc_ro.h:75, pr_proc@0/pr_task@8/p_uniqueid@0x10/p_idversion@0x18). Map \u7f3a\u53e3: donor _proc_pid 0xacd794c .. _proc_ident_equal 0xacd84e8 \u7a97\u53e3\u5185\u7d27\u968f proc_pid, native _proc_pid 0x788d5f8 \u2192 _proc_pidversion 0x788d65c \u540c\u90bb\u63a5. KDK: proc_pidversion kern_proc.c \u547d\u4e2d. \u540c\u7c07 recon2A \u5df2\u5b9e\u8bc1 proc_uniqueid (ro+0x10, tag 5) \u540c\u6784. native \u7b26\u53f7\u5b58\u5728. \u8d26\u672c 12 \u7ad9/2 kext (sandbox 7). \u7f6e\u4fe1\u5ea6: \u9ad8"
+  },
+  {
+   "original": "0xfffffe000a9b0b90",
+   "original_size": 292,
+   "original_sha256": "a5bde89aea1d3d66a059c80a46bf725528440f3f7fbdbb10b6c0ef39cb794afc",
+   "native_symbol": "_vfs_getbyid",
+   "evidence": "bsd/vfs/vfs_lookup.c:2498. \u4f53\u5f62\u9010\u5143\u7d20\u5bf9\u8bfb native 0xfffffff0075b6be0: ldr w0,[x0] = fsid->val[0]; bl 0xa9bf5c0 = mount_lookupby_volfsid(val0, withref=1) (donor \u5185\u8054\u5b9e\u73b0: mountlist \u9501 casa 0xb345878 + TAILQ \u8d70\u94fe [mp] \u5934 0xb373b48 + mnt_lflag \u4f4d\u6d4b [mp+0x74]&0x1010000==0x10000 + mount_iterref \u8ba1\u6570 [mp+0x9a4], \u5355\u5b57\u6bd4\u8f83\u4e0e volfsid \u8bed\u4e49\u4e00\u81f4); NULL \u2192 return 0x16 (EINVAL) \u2713; cmp x1,#2 \u2192 ino==2 \u8d70 VFS_ROOT: donor \u5185\u8054 VFS_ROOT \u5b8f (cmp mp,dead_mountp 0xb40db10 \u2192 ENOTSUP 0x2d; op NULL \u68c0\u67e5; ctx==NULL\u2192bl 0xa866a48=vfs_context_current; autda mnt_op [mp+0x28] ctx 0x5942; \u69fd +0x18=vfs_root, 3 \u53c2) else VFS_VGET (\u69fd +0x38, 4 \u53c2 mp,ino,vpp,ctx) \u2014 vfsops \u5e03\u5c40 vfs_root@0x18/vfs_vget@0x38 \u543b\u5408; \u5c3e\u90e8 vfs_unbusy \u5185\u8054 = IORWLockUnlock([mp+0x960]) donor 0xa7f6138. native \u5916\u8c03 _VFS_ROOT 0x75e7c0c/_VFS_VGET 0x75e7f30/_vfs_unbusy \u2014 \u63a7\u5236\u6d41\u5206\u652f\u7ed3\u6784\u9010\u5757\u540c (native \u5b9e\u6d4b: cbz\u21920x16, cmp x22,#2, \u540c\u53c2\u6570\u7f16\u7ec4). \u5bfc\u5165\u7a97\u53e3: sandbox kext vfs KPI \u65cf 0x82d0ba8 (vfs_context_ucred/vfs_devvp/vfs_flags/vfs_statfs/\u2026). native \u7b26\u53f7\u5b58\u5728. \u8d26\u672c 5 \u7ad9/1 kext (sandbox). \u7f6e\u4fe1\u5ea6: \u9ad8"
+  },
+  {
+   "original": "0xfffffe000ac9efd0",
+   "original_size": 164,
+   "original_sha256": "9542b7517eb632f4a2e382decbccb5808a4ba5afec5108f14d130644173ed18d",
+   "native_symbol": "_csproc_get_platform_binary",
+   "evidence": "bsd/kern/kern_cs.c:923. \u4f53\u5f62\u9010\u5143\u7d20\u5bf9\u8bfb native 0xfffffff007855110: donor \u5185\u8054 csproc_get_blob \u2014 cbz p\u21920; authed p_textvp [p+0x548] ctx 0x612c (native +0x5b0 \u540c ctx, \u540c autda \u5f62); proc_getcsflags & CS_SIGNED (bit 0x1d=0x20000000, cs_blobs.h:72) \u672a\u7f6e\u21920; bl 0xad3cd80 = ubc_cs_blob_get(vp,-1,-1,[p+0x550]=p_textoff) (w1=w2=-1 \u540c csvnode_get_teamid \u8c03\u7528\u5f62); \u8fd4\u56de [csblob+0xac] \u4f4d 0 = csb_platform_binary \u4f4d\u57df. \u53cc\u80de\u80ce: 0xac9f074 \u540c\u5f62\u4f46 ubfx #1 = csb_platform_path \u2192 donor \u4f4d\u5e8f platform_binary \u5148 platform_path \u540e, native \u540c\u5e8f (_csproc_get_platform_binary 0x7855110 \u2192 _csproc_get_platform_path 0x78551cc), \u6e90\u5e8f kern_cs.c:923/935 \u4f4d\u4e8e csvnode_get_teamid(900) \u4e0e csproc_get_prod_signed(1030) \u4e4b\u95f4, donor map \u7c07\u4e00\u81f4 (_csvnode_get_teamid 0xac9ef98 .. _csproc_get_prod_signed 0xac9f118). \u5bfc\u5165\u7a97\u53e3 0x82d06c0/0x7fa9270 = sandbox/AMFI cs KPI \u65cf (_csproc_get_teamid/_csvnode_get_blob \u90bb). \u5dee\u5f02 benign: donor \u5185\u8054 lck mutex fastpath + \u7701\u7565 xpacd \u81ea\u68c0. native \u7b26\u53f7\u5b58\u5728. \u8d26\u672c 7 \u7ad9/2 kext (sandbox 5). \u7f6e\u4fe1\u5ea6: \u9ad8"
+  },
+  {
+   "original": "0xfffffe000acd463c",
+   "original_size": 284,
+   "original_sha256": "69be02bb285b9fda106c50a1a518c5867061cfd53904d44df9da833f11a4ca74",
+   "native_symbol": "_proc_persona_get",
+   "evidence": "bsd/kern/kern_persona.c:310. \u4f53\u5f62\u9010\u5143\u7d20\u5bf9\u8bfb native 0xfffffff00788b874: proc_lock (donor \u5185\u8054 casa 0\u2194ctid on [p+0x58] p_mlock word; native bl _proc_lock 0x788938c\u2192lck_mtx_lock); x20=[p+0xa8]=p_persona \u2014 **offset 0xa8 \u4e24\u4ef6\u4e8c\u8fdb\u5236\u5b8c\u5168\u4e00\u81f4**; NULL\u2192\u8df3\u8fc7; persona_lock (donor casa [persona+0x140], native lck_mtx_lock(persona+0x148), 8B \u7ed3\u6784\u6f02\u79fb); os_ref_retain (donor ldadd 1 on [persona+0], native bl _os_ref_retain_internal(persona,[persona+8])); persona_unlock; proc_unlock (donor casl \u5f52\u96f6, native bl _proc_unlock); return persona. \u6e90\u5e8f: proc_persona_get(310) \u5728 persona_put_and_unlock(320) \u524d, donor \u5730\u5740\u5e8f T6@0xacd463c < persona_put_and_unlock@0xacd47b8 \u2713, native _proc_persona_get 0x788b874 \u7d27\u90bb _persona_put 0x788b8c8. \u5bfc\u5165\u7a97\u53e3 0x82d09c0 = sandbox proc KPI \u65cf (proc_pgrpid/proc_pid/proc_get_ro \u90bb). native \u7b26\u53f7\u5b58\u5728. \u8d26\u672c 5 \u7ad9/1 kext (sandbox). \u7f6e\u4fe1\u5ea6: \u9ad8"
+  },
+  {
+   "original": "0xfffffe000acd5290",
+   "original_size": 28,
+   "original_sha256": "c4c7a7c3eda397fcf2a047a7b32d1605d106851e6fa1282f840c67b49ec43a0e",
+   "native_symbol": "_current_persona_get",
+   "evidence": "bsd/kern/kern_persona.c:546. \u4f53\u5f62 = native 0xfffffff00788bf20 \u7684**\u9010\u6307\u4ee4\u7b49\u4ef7 wrapper**: pacibsp \u5e27 + bl <get_id> + \u64a4\u5e27 + autibsp + \u5c3e\u8df3 persona_lookup \u2014 native: bl _current_persona_get_id (0x788beb8) \u5c3e b _persona_lookup; donor: bl 0xacd51d8 \u5c3e b 0xacd4a54. callee \u5bf9\u8bfb: 0xacd51d8 = current_persona_get_id \u5185\u8054 (mov w20=-1 \u5b58 [sp+0xc]; bl 0xa841528 = thread_get_mach_voucher(current_thread,0,&voucher); [sp]=voucher; bl 0xa87a578 = bank_get_bank_ledger_thread_group_and_persona(voucher,0,0,&uid); ldaddl -1 [voucher] = ipc_voucher_release \u5185\u8054; \u56de\u9000\u8def\u5f84 vfs_context_current\u2192[ctx+0x18]\u2192[p+0xa8]\u2192[persona+8] = proc_persona_id \u5185\u8054; \u8fd4\u56de uid) \u2014 \u4e0e native current_persona_get_id \u9010\u5757\u540c (native: _thread_get_mach_voucher/_bank_get_bank_ledger_thread_group_and_persona/_ipc_voucher_release/_proc_persona_id). 0xacd4a54 = persona_lookup (all_personas \u9501 casa 0xb359448 = persona_put_and_unlock destroy \u8def\u5f84\u540c\u4e00\u628a; \u8d70 0xb416448 \u94fe\u8868, 0x5aa0/0xaa5<<16 magic \u6821\u9a8c). Map \u7f3a\u53e3: donor _persona_find 0xacd5084 .. _persona_proc_adopt 0xacd52ac, native \u6e90\u5e8f current_persona_get_id(522)/current_persona_get(546)/proc_reset_persona_internal(566) \u7a97\u53e3\u4e00\u81f4. \u5bfc\u5165\u7a97\u53e3 0x80106d8 sandbox \u65cf (_cs_get_cdhash/_current_proc/_kauth_cred_proc_ref \u90bb, current_persona_* \u5b57\u6bcd\u5e8f\u6070\u5728 current_proc \u524d). native \u7b26\u53f7\u5b58\u5728. \u8d26\u672c 4 \u7ad9/1 kext (sandbox). \u7f6e\u4fe1\u5ea6: \u9ad8"
+  },
+  {
+   "original": "0xfffffe000acd905c",
+   "original_size": 132,
+   "original_sha256": "2414d6c28a126d48f9336a74bd9802505dd8532849a08529f067287a12751950",
+   "native_symbol": "_proc_ppid",
+   "evidence": "bsd/kern/kern_proc.c:1418. \u4f53\u5f62\u9010\u5143\u7d20\u5bf9\u8bfb native 0xfffffff00788ebb4: cbz x0\u2192-1 (0xffffffff); zone \u6821\u9a8c donor \u5185\u8054 (x1=x0 \u81ea\u8eab\u6216\u5f52\u4e00 0xf0<<48, ro-range [0x7c9cbd0], elem-tag [0x7c9cc80]==0x19=25=ZONE_ID_PROC_TASK \u5373 proc \u672c\u4f53\u6821\u9a8c; native \u4e3a bl _zone_id_require(w0=0x19)); \u8fd4\u56de ldr w0,[p+0x20] = p_ppid (\u76f4\u8bfb proc \u53ef\u53d8\u5b57\u6bb5, \u975e\u8d70 proc_ro). \u53cc\u80de\u80ce 0xacd90e0 = proc_original_ppid (\u540c zone-25 \u6821\u9a8c + ro=[p+0x18] + zone-5 \u6821\u9a8c + backref + \u8fd4\u56de [ro+0x1c]=p_orig_ppid) \u4e0e native _proc_original_ppid 0x788ebfc \u9010\u5143\u7d20\u540c \u2014 donor \u7c07\u5e8f checkdeadrefs\u2192[T8 proc_ppid]\u2192[original_ppid]\u2192get_ro \u4e0e native proc_checkdeadrefs 0x788eb44\u2192proc_ppid 0x788ebb4\u2192proc_original_ppid 0x788ebfc\u2192proc_get_ro 0x788ec70 \u5b8c\u5168\u5e73\u884c. \u5dee\u5f02 benign: donor \u5185\u8054 zone_id_require. native \u7b26\u53f7\u5b58\u5728. \u8d26\u672c 6 \u7ad9/2 kext (sandbox 4). \u7f6e\u4fe1\u5ea6: \u9ad8"
+  },
+  {
+   "original": "0xfffffe000acd9678",
+   "original_size": 164,
+   "original_sha256": "925411a918975de88e72de2c208a94a0ab63cc724b92439f98d9496f1a006fed",
+   "native_symbol": "_proc_platform",
+   "evidence": "bsd/kern/kern_proc.c:1509. \u4f53\u5f62\u9010\u5143\u7d20\u5bf9\u8bfb native 0xfffffff00788eee4: cbz p\u2192-1; ro=[p+0x18]; zone \u6821\u9a8c donor \u5185\u8054 (ro-range [0x7c9cc20] + elem-tag==5 ZONE_ID_PROC_RO, \u5c3a\u5bf8\u5546 0x4000-((x1&0x3fff))*[0x7ca2f88] \u4f59\u68c0\u67e5 = inlined zone_require_ro \u5143\u7d20\u5f52\u5c5e, native bl _zone_require_ro(5,0x60)); backref [ro]==p else panic_proc_ro_proc_backref_mismatch; \u8fd4\u56de [ro+0x38] = p_platform_data.p_platform (proc_ro.h:81: proc_data \u7ec4 0x10 \u8d77: uniqueid@0x10/idversion@0x18/orig_ppid@0x1c/orig_ppidver@0x20/csflags@0x24/ucred@0x28/filter_mask@0x30/platform@0x38). \u4e0e T3 (proc_pidversion, ro+0x18) \u540c\u6784\u4e0d\u540c\u69fd. Map \u7f3a\u53e3: donor _proc_getcsflags 0xacd94c4 \u540e; native _proc_getcsflags 0x788ee04 \u2192 \u2026 \u2192 _proc_platform 0x788eee4 (prev _proc_is_simulated 0x788eedc) \u2014 \u540c kern_proc.c ro-accessor \u7c07. KDK \u6e90\u5e8f\u4f50\u8bc1 kern_proc.c:1509. native \u7b26\u53f7\u5b58\u5728. \u8d26\u672c 7 \u7ad9/2 kext (sandbox 4). \u7f6e\u4fe1\u5ea6: \u9ad8"
+  },
+  {
+   "original": "0xfffffe000a7e2378",
+   "original_size": 320,
+   "original_sha256": "06ba79dcb4e7ab3e7cefdf63c7438bdd51a08d0fd722e6e4cf355d61d82028bf",
+   "native_symbol": "_host_get_special_port",
+   "evidence": "osfmk/kern/host.c:1481. \u4f53\u5f62\u9010\u5143\u7d20\u5bf9\u8bfb native 0xfffffff007328c7c(+body 0x7328c94): \u5165\u53e3\u5224\u5b9a\u9010\u6307\u4ee4\u540c (sub w8,w2,#0x24; cmn #0x23 \u2014 id \u2208 [HOST_MIN_SPECIAL_PORT,35]; donor cbz host\u2192KERN_INVALID_ARGUMENT=4, native ccmp \u5408\u5e76); host \u9501 donor \u5185\u8054 casa [host+8] (native lck_mtx_lock); port \u8868 donor 0xb304b50+id*8 (realhost.special), **PAC \u4e0a\u4e0b\u6587 movk #0x9b8d,lsl#48 \u4e0e native \u9010\u5b57\u8282\u76f8\u540c**; switch id==3\u2192ipc_port_copy_send_any(main_device_port donor 0x7d72a8) / id==2\u2192ipc_kobject_copy_send(port,&realhost,0x19=IKOT_HOST_PRIV) / id==1\u2192ipc_kobject_copy_send(&realhost,0x18=IKOT_HOST) / default\u2192ipc_port_copy_send_mqueue \u2014 native \u540c\u56db\u8def (0x7328d28/d3c/d08/d50); str \u7ed3\u679c\u2192[x3=portp]; \u8fd4\u56de KERN_SUCCESS. realhost \u5168\u5c40 donor 0xb304b40 = T11 \u8fd4\u56de\u503c\u4e92\u8bc1. Map \u7f3a\u53e3: _host_get_special_port_from_user 0xa7e22a0 .. _host_set_atm_diagnostic_flag 0xa7e2580 = native get_special_port 0x7328c7c..atm 0x7328de8 \u540c\u7a97. native \u7b26\u53f7\u5b58\u5728. \u8d26\u672c 5 \u7ad9/2 kext (sandbox 3). \u7f6e\u4fe1\u5ea6: \u9ad8"
+  },
+  {
+   "original": "0xfffffe000a7e2570",
+   "original_size": 16,
+   "original_sha256": "f845e11798478692af2090b7e75df862bf53a21351d5dca820fc3718999b954b",
+   "native_symbol": "_host_priv_self",
+   "evidence": "osfmk/kern/host.c:1532. \u4f53\u5f62: 3 \u6307\u4ee4 adrp/add/ret \u8fd4\u56de &realhost (donor 0xb304b40 \u2014 \u4e0e T10 host_get_special_port \u7684 realhost.special \u8868\u57fa\u5740\u4e92\u8bc1: T10 \u8868 0xb304b50 = realhost+0x10, T11 \u8fd4\u56de realhost \u5934\u90e8). native 0xfffffff007328dd0 (_host_priv_self) = adrp realhost(0x7ca93d0)+add+ret, \u4e0e 0xfffffff007328ddc (_host_self) **\u5b57\u8282\u7ea7\u76f8\u540c\u4f53** (host.c:1526/1532 \u540c\u4e3a return &realhost). Map \u7f3a\u53e3: donor \u4f4d\u4e8e host_get_special_port \u7c07\u5c3e\u4e0e _host_set_atm_diagnostic_flag 0xa7e2580 \u4e4b\u524d = native \u5e8f host_get_special_port\u2192host_get_io_main\u2192host_priv_self\u2192host_self\u2192host_set_atm_diagnostic_flag \u7684\u5c3e\u7a97; donor \u53ea\u4fdd\u7559\u4e00\u4efd realhost-thunk (\u53e6\u4e00\u4efd\u88ab\u5185\u8054). \u884c\u4e3a\u6ce8\u8bb0: host_priv_self \u4e0e host_self \u8fd4\u56de\u503c/ABI \u5b8c\u5168\u7b49\u4ef7, shim \u884c\u4e3a\u4e0d\u56e0\u4e8c\u9009\u4e00\u800c\u53d8. \u5bfc\u5165\u7a97\u53e3 0x7fa92f0 \u7d27\u968f T10 (sandbox \u65cf). native \u7b26\u53f7\u5b58\u5728. \u8d26\u672c 5 \u7ad9/2 kext (sandbox 3). \u7f6e\u4fe1\u5ea6: \u4e2d (\u53cc\u80de\u80ce\u4e0d\u53ef\u5206; \u4f53\u5f62/\u6e90\u5e8f\u6307\u5411 host_priv_self \u4e3a kext KPI \u60ef\u7528)"
+  },
+  {
+   "original": "0xfffffe000a90fac0",
+   "original_size": 8,
+   "original_sha256": "1205bf222a778a48999789cbbc61619c86f5d28d5ca4699b88d2fd8ee781c2c5",
+   "native_symbol": "_vm_deallocate",
+   "evidence": "osfmk/vm/vm_user.c:203. \u4f53\u5f62: bti c + \u7eaf\u5c3e\u8df3 b 0xa8a7c98 (2 \u6307\u4ee4 thunk). 0xa8a7c98 = mach_vm_deallocate_kernel \u5b9e\u73b0 (donor map \u5c06\u5b6a\u751f thunk 0xa90fab8 \u547d\u540d\u4e3a _mach_vm_deallocate \u2192 \u540c\u4e00 0xa8a7c98; \u5b9e\u73b0\u4f53 cbz map\u2192KERN_INVALID_ARGUMENT \u7b49\u4e0e native _mach_vm_deallocate_kernel 0xfffffff007433484 \u540c\u7c07). native \u7a7a\u95f4\u5b8c\u5168\u5e73\u884c: _mach_vm_deallocate_external 0x74be0f0 \u4e0e _vm_deallocate 0x74be0f4 \u662f**\u4e24\u4e2a\u76f8\u90bb\u522b\u540d thunk** (\u5747 `b _mach_vm_deallocate_kernel`), donor \u540c\u6837\u6210\u5bf9 (0xa90fab8 + T12 0xa90fac0) \u4e14\u5730\u5740\u5e8f\u4e00\u81f4 (native: vm_allocate_external 0x74be05c \u2192 mach_vm_deallocate_external \u2192 vm_deallocate \u2192 mach_vm_inherit; donor: upl_commit_range \u2192 \u2026 \u2192 mach_vm_deallocate \u2192 T12 \u2192 protect \u7c7b wrapper). \u884c\u4e3a\u6ce8\u8bb0: \u4e24\u522b\u540d\u540c\u5b9e\u73b0, \u5373\u4f7f pairing \u4e92\u6362 shim \u884c\u4e3a\u4e0d\u53d8. native \u7b26\u53f7\u5b58\u5728. \u8d26\u672c 7 \u7ad9/2 kext (sandbox 3). \u7f6e\u4fe1\u5ea6: \u9ad8"
+  },
+  {
+   "original": "0xfffffe000a9e4440",
+   "original_size": 92,
+   "original_sha256": "f8e001b232338443c45f01e454237a82c9dbcca7c48768abd0fd3356c96ba16a",
+   "native_symbol": "_vn_rdwr",
+   "evidence": "bsd/vfs/vfs_vnops.c:983. \u4f53\u5f62 = native 0xfffffff0075e4c20 **\u6307\u4ee4\u7ea7\u540c\u6784 wrapper**: tbnz w3,#0x1f \u2192 return EINVAL 0x16 (len<0, vn_rdwr \u6e90\u9996\u68c0); \u5e27\u5185 ldp x19,x8,[x29+0x10] = \u6808\u53c2 (*aresid, p) \u900f\u4f20; mov w3,w3 \u96f6\u5ef6; str xzr,[sp+0x18] (resid \u6e05\u96f6) + stp x9(&resid),x8(p) \u4f5c impl \u524d 2 \u6808\u53c2; bl impl = **_vn_rdwr_64** (donor 0xa9e449c, native 0x75e4c74): frame 0xd0, x6=ioflg/x7=cred \u900f\u4f20, mrs tpidr \u5efa context.vc_thread + x7 \u5efa vc_ucred (\u6e90 1042-1043), lsl w8,#1,w5 / tst #0x121 = UIO_SEG_IS_USER_SPACE{UIO_USERSPACE(0),32(5),64(8)}, [p+0x454] bit2 = P_LP64 \u9009 spacetype, uio_createwithbuffer \u6808\u7f13\u51b2 + bl _uio_addiov, MAC \u68c0\u67e5\u7c07 (mac_vnode_check_*), \u5c3e\u8def\u5f84 sleep/lock_vnode_and_post; wrapper \u5c3e cbz x19\u2192\u8df3\u8fc7, ldr [sp+0x18] \u622a\u65ad int \u5199 *aresid (\u6e90 1013-1016). Map \u7f3a\u53e3: donor _vn_open_auth 0xa9e3848 .. _vnio_openfd 0xa9e4f58 = vfs_vnops.c \u7c07, native _vn_open 0x75e3e7c/_vn_open_modflags 0x75e3f04/_vn_open_auth 0x75e3f84 \u540c\u533a. \u5bfc\u5165\u7a97\u53e3 0x7fa43f8/0x7f69d88/0x7f576f0 = sandbox vfs KPI \u65cf (\u5b57\u6bcd\u5e8f\u6070\u5728 vfs_context_ucred \u4e0e vnode_close \u4e4b\u95f4). native \u7b26\u53f7\u5b58\u5728 (_vn_rdwr 0x75e4c20). \u8d26\u672c 7 \u7ad9/3 kext (sandbox 3). \u7f6e\u4fe1\u5ea6: \u9ad8"
+  },
+  {
+   "original": "0xfffffe000a9e9a28",
+   "original_size": 160,
+   "original_sha256": "5bf1debe7088ed73298d90da08e98c45bfda40dbc8dc4cb6eeca60dd1e852bd9",
+   "native_symbol": "_vfs_rootvnode",
+   "evidence": "bsd/vfs/kpi_vfs.c:1838. \u4f53\u5f62\u9010\u5143\u7d20\u5bf9\u8bfb native 0xfffffff0075e9c24: \u8bfb\u5168\u5c40 rootvnode (donor 0xb373b10 / native _rootvnode 0x7d215c0); NULL\u2192\u8fd4\u56de NULL; lck_rw_lock_shared(rootvnode_rw_lock) \u2014 donor \u7528 IORWLockRead wrapper 0xa7f5598 \u4e8e donor rootvnode_rw_lock 0xb373b58 (native 0x7d1d500 \u540c\u8bed\u4e49); vnode_get(vp) donor bl 0xa9be914 = _vnode_get (map \u5df2\u914d\u540d); csel vp,err==0?vp:NULL \u9010\u6307\u4ee4\u540c; \u89e3\u9501 donor IORWLockUnlock 0xa7f6138 \u5e26 **\u5185\u8054 rw \u6a21\u5f0f\u65ad\u8a00 panic**: \u4e32 'lck_rw_unlock_shared(): lock %p held in mode: %d @%s:%d' + \u6587\u4ef6\u4e32 'lock_rw_old.c' + \u884c 0x74d=1869 (native \u7ecf _lck_rw_unlock_shared \u5916\u90e8\u65ad\u8a00) \u2014 donor \u628a unlock \u65ad\u8a00\u5185\u8054, benign. \u8fd4\u56de\u6301 iocount \u7684 rootvnode (KDK \u547d\u4e2d vfs_rootvnode; \u6e90\u6ce8\u91ca 'returns system root vnode iocount; released using vnode_put()'). Map \u7f3a\u53e3: donor _vfs_isswapmount 0xa9e9954 .. _vnode_vid 0xa9e9ac8 = kpi_vfs.c \u7c07\u5c3e (native \u540c\u90bb). \u5bfc\u5165\u7a97\u53e3 0x82d0bc0 sandbox vfs \u65cf (\u7d27\u968f T4 vfs_getbyid). native \u7b26\u53f7\u5b58\u5728. \u8d26\u672c 3 \u7ad9/1 kext (sandbox). \u7f6e\u4fe1\u5ea6: \u9ad8"
+  },
+  {
+   "original": "0xfffffe000aa8abc8",
+   "original_size": 324,
+   "original_sha256": "472b2b31723dfa3c5820204e47809acd44a52a4b471a62e4c88b057aa36a3ad1",
+   "native_symbol": "_ifaddr_address",
+   "evidence": "bsd/net/kpi_interface.c:2772. \u4f53\u5f62\u9010\u5143\u7d20\u5bf9\u8bfb native 0xfffffff007678198: cbz ifa / cbz out_addr \u2192 EINVAL 0x16 (\u4e24\u5904, \u540c); IFA_LOCK_SPIN donor \u5185\u8054 (percpu preempt \u8ba1\u6570 [tpidr+0x1b8]++ + casa ctid|0x30000000 \u4e8e [ifa+8], native bl _lck_mtx_lock_spin 0x733c1c8 \u2014 \u540c spin mutex \u8bed\u4e49); ifa_addr NULL \u2192 \u89e3\u9501\u8fd4\u56de ENOTSUP 0x2d (donor [ifa+0x18], native [ifa+0x28], 8B \u7ed3\u6784\u6f02\u79fb); copylen=min(addr_size, sa->sa_len) (native csel w2,w19,w8,lo; donor \u540c\u4e49\u5b57 0xac44 \u4e3a capstone \u672a\u89e3\u7801\u7684 v8.8+ MOPS/\u62f7\u8d1d\u65cf\u6307\u4ee4, \u4e0d\u5f71\u54cd\u8bed\u4e49); SOCKADDR_COPY\u2192bl _memcpy donor 0xa76cbd0 (map body-hash \u914d\u540d, native 0x7c4ca90 \u540c\u8c03) \u5e26 __memcpy_chk \u8fb9\u754c brk #0x5519 (0xff \u4e0a\u754c); \u5c3e cmp addr_size,sa_len / csel EMSGSIZE 0x28 : 0 \u9010\u6307\u4ee4\u540c (native 0x6781f8-0x678200). \u90bb\u5c45\u81ea\u8bc1: donor \u7c07 0xaa8aa84=ifaddr_reference(+0x10 ref ldadd)/0xaa8aac8=ifaddr_release/0xaa8ab1c=ifaddr_address_family (\u8bfb [sa+1]=sa_family, IFA_LOCK_SPIN \u540c\u6784) \u4e0e native ifaddr_reference 0x6780d0/ifaddr_release 0x678100/ifaddr_address_family 0x678148/**ifaddr_address 0x678198**/ifaddr_dstaddress 0x678224 \u5730\u5740\u5e8f\u5b8c\u5168\u5e73\u884c; \u6e90 kpi_interface.c:2757-2772 \u76f8\u90bb. \u5bfc\u5165\u7a97\u53e3\u542b sandbox (\u8d26\u672c 3 \u7ad9/1 kext). native \u7b26\u53f7\u5b58\u5728. \u7f6e\u4fe1\u5ea6: \u9ad8"
+  },
+  {
+   "original": "0xfffffe000aca3094",
+   "original_size": 68,
+   "original_sha256": "a3da2d5d99d9ad804d9107ad5eea2fa5d3afdfd258b0eb48f526e792b9344122",
+   "native_symbol": "_fg_get_vnode",
+   "evidence": "bsd/kern/kern_descrip.c:1968 + \u4f53\u5f62\u5bf9\u8bfb: donor 68B bti-c leaf = native 0xfffffff00785b39c element-for-element (mov x8,x0; ldr [x8,#0x28]! autda ctx 0x853c = fg_data; w8=[data]==1 gate; ldr [x0,#0x38]! autda 0x11b5 = fg_vnode, return or NULL); donor \u7701\u7565 xpacd/brk \u81ea\u68c0(benign). map \u7f3a\u53e3\u5939\u903c: donor _falloc_withinit 0xaca1ff8 .. _fp_getfvp 0xaca30d8, target \u7d27\u8d34 _fp_getfvp \u524d, native \u540c\u5e8f falloc..dupfdopen\u2192fg_get_vnode\u2192fp_getfvp. sandbox/AMFI \u5bfc\u5165\u8868\u53cc\u7a97\u53e3\u6392\u5e8f\u4f4d (extended_research < X < garbage_collect) \u76f8\u5bb9. native \u7b26\u53f7\u5728 symtab \u2713. 3 \u7ad9. \u7f6e\u4fe1\u5ea6\u9ad8"
+  },
+  {
+   "original": "0xfffffe000acd5b74",
+   "original_size": 172,
+   "original_sha256": "a53913fdf292a40c05e58cc731e7b669735db6041ed5bf0af4c791ee760f260b",
+   "native_symbol": "_persona_get_type",
+   "evidence": "bsd/kern/kern_persona.c:827 + \u4f53\u5f62\u5bf9\u8bfb: native 0xfffffff00788c390 \u540c\u6784 (cbz\u2192PERSONA_INVALID=0; persona_lock; [x0+4]==PERSONA_MAGIC 0x0aa55aa0 (kern_persona.c:67); return pna_type [x0+0xc]; unlock). donor \u5185\u8054 lck_mtx \u4e3a casa/casl hw-lock-bit @persona+0x140, native \u8c03 lck_mtx_lock/unlock \u2014 benign; \u504f\u79fb\u6f02\u79fb native valid@0x10/type@0x18/lock@0x148. map \u7f3a\u53e3 _persona_proc_drop 0xacd5bf4 \u6bb5\u540e\u7d27\u90bb donor _persona_get_uid (native \u5e8f get_type\u2192get_uid \u76f8\u90bb). KDK kern_persona \u547d\u4e2d. 3 \u7ad9. \u7f6e\u4fe1\u5ea6\u9ad8"
+  },
+  {
+   "original": "0xfffffe000acd5c20",
+   "original_size": 172,
+   "original_sha256": "19f4bd20b73035c71dcfad970997087ace672a13db749ea2087d73cca66ce952",
+   "native_symbol": "_persona_get_uid",
+   "evidence": "bsd/kern/kern_persona.c:847 + \u4f53\u5f62\u5bf9\u8bfb: native 0xfffffff00788c3f0 \u540c\u6784\u542b\u7279\u5f81\u7acb\u5373\u6570 mov w20,#-0x65 (KAUTH_UID_NONE \u95e8\u63a7\u503c, native NULL/invalid \u8def\u5f84\u540c\u4e3a -0x65) + magic 0x0aa55aa0@+4 + return pna_uid [x0+0x118](donor)/[x0+0x128](native, \u4e00\u81f4 0x10 \u5934\u90e8\u6f02\u79fb). donor \u5185\u8054 casa \u9501 @+0x140 (native lck_mtx@+0x148). \u7d27\u968f _persona_get_type \u4e4b\u540e, native \u6e90\u5e8f\u4e00\u81f4. 3 \u7ad9. \u7f6e\u4fe1\u5ea6\u9ad8"
+  },
+  {
+   "original": "0xfffffe000acd8544",
+   "original_size": 228,
+   "original_sha256": "c94633d4f10a994405b0574a1941d6384edc0dae7fe84d49bc13f016cd71b52c",
+   "native_symbol": "_proc_self",
+   "evidence": "bsd/kern/kern_proc.c:1047 + \u4f53\u5f62\u5bf9\u8bfb: native 0xfffffff00788e07c: current_proc\u2192zone_id_require(tag 0x19=ZONE_ID_PROC)\u2192os_ref_retain_try_mask_internal(p_refcount native+0x47c/donor+0x464, +0x100 \u589e\u91cf, mask 3, \u5931\u8d25\u7f6e NULL). donor \u5168\u90e8\u5185\u8054: get_thread_ro\u2192[tro+0x18] \u53d6 current proc, \u5185\u8054 zone range/quantum/tag \u68c0\u67e5 (b359450/7c9cbd0/7c9cc80), cas \u5faa\u73af +0x100. \u65e0\u53c2\u8fd4\u56de\u5e26\u5f15\u7528 proc = proc_self \u552f\u4e00\u5f62\u6001. map \u7f3a\u53e3 _proc_ident_equal 0xacd84e8 .. _proc_find_zombref 0xacd8900, native proc_self \u6070\u5728\u8be5 native \u533a\u95f4\u5185 (proc_ident_equal<proc_self<proc_find_zombref). sandbox \u9ad8\u9891 stub. 3 \u7ad9. \u7f6e\u4fe1\u5ea6\u9ad8"
+  },
+  {
+   "original": "0xfffffe000acd9558",
+   "original_size": 276,
+   "original_sha256": "def9bc2a83023022df96b25803530222e24ea9148df91fc5a9f81e27beea5e99",
+   "native_symbol": "_proc_csflags",
+   "evidence": "bsd/kern/kern_proc.c:1477 + \u4f53\u5f62\u5bf9\u8bfb: native 0xfffffff00788ee54: (p, *out) cbz\u2192EINVAL 0x16; zone_id_require(0x19,p); ro=[p+0x18] zone_require_ro(5) backref; w0=0; w8=[ro+0x24]; str x8,[out]. donor element-for-element (\u5168\u90e8\u5185\u8054, \u5931\u8d25\u8def\u5f84 bl zone_id_require_panic 0xb0019f0 / panic_proc_ro_proc_backref_mismatch 0xb008bcc / zone_id_require_ro_panic 0xb001a10). map \u7f3a\u53e3 _proc_getcsflags 0xacd94c4 .. _thread_soft_bind 0xacd966c, native proc_csflags \u6070\u5728 proc_getcsflags \u4e4b\u540e. 3 \u7ad9. \u7f6e\u4fe1\u5ea6\u9ad8"
+  },
+  {
+   "original": "0xfffffe000ace0b08",
+   "original_size": 48,
+   "original_sha256": "562eaa8b7a311df7a8bbf94bfff5f4588cdb4f38f0454ed130cec5735f5ecb66",
+   "native_symbol": "_proc_selfpgrpid",
+   "evidence": "bsd/kern/kern_proc.c:4868 + \u4f53\u5f62\u5bf9\u8bfb: native 0xfffffff007894d60 \u5f62 (current_proc; return [p+0x24]); donor \u540c [p+0x24] \u504f\u79fb, \u591a kernproc \u56de\u9000 (cbz tro_proc \u2192 \u5168\u5c40 0x7da58a0 kernproc). map \u7f3a\u53e3 _proc_pgrpid 0xace0af0 .. _proc_resetpcontrol 0xace0b38, native \u7c07\u5e8f proc_pgrpid\u2192proc_sessionid\u2192proc_selfpgrpid. 3 \u7ad9. \u7f6e\u4fe1\u5ea6\u9ad8"
+  },
+  {
+   "original": "0xfffffe000a7f5b1c",
+   "original_size": 320,
+   "original_sha256": "03a67ab199bd033265fbd5572129f5e2d491bcfa8b15a2b11606baa8c03e9c0b",
+   "native_symbol": "_lck_rw_lock_exclusive_to_shared",
+   "evidence": "osfmk/kern/lock_rw.c:2100 + \u4f53\u5f62\u5bf9\u8bfb: native 0xfffffff00733ee40 \u5e38\u91cf\u7ea7\u5168\u540c: str wzr,[x0,#4](\u6e05 owner); \u539f\u5b50\u5faa\u73af ldxr/casl [x0+8] w12=w19+1, \u7acb\u5373\u6570 -0x40001/-0xc0001/0x220000/0xffdfffff \u9010\u4e00\u76f8\u540c; bit16 \u7f6e\u4f4d\u2192wfe \u81ea\u65cb; \u6210\u529f\u540e xpac(x0)(sbfx#0x37/bfxil)\u2192VM range \u68c0\u67e5\u2192ml_static_unslide(donor=ml_addrperm_pacga \u7b49\u4ef7\u8f85\u52a9, \u5747\u4e22\u5f03\u8fd4\u56de\u503c); \u5c3e\u90e8 cmp 0x220000/tst 0x100000\u2192thread_wakeup_prim(x0+2,0,0)(donor \u5c3e\u8c03 0xa8150f0). donor \u7528\u5185\u8054 casl \u66ff\u4ee3 native atomic_exchange_begin/complete \u2014 benign. map \u7f3a\u53e3 _IORWLockRead 0xa7f5598 .. __lck_rw_lock_type_panic 0xa7f5c5c, native \u5e8f lck_rw_lock_exclusive_to_shared \u6070\u5728 __lck_rw_lock_type_panic \u4e4b\u524d. sandbox/AMFI \u5bfc\u5165 3 \u7a97\u53e3. 2 \u7ad9. \u7f6e\u4fe1\u5ea6\u9ad8"
+  },
+  {
+   "original": "0xfffffe000a8b604c",
+   "original_size": 16,
+   "original_sha256": "c4aacbb5056cbf7e15d2db8ae65c303591cb8cff2093df2d7ba92846844f06c0",
+   "native_symbol": "_vm_map_unwire",
+   "evidence": "osfmk/vm/vm_map.c:7471 + \u4f53\u5f62\u5bf9\u8bfb: native 0xfffffff007444ca0 = 12B thunk (ldr x4,[global 0x71c36a0]; b _vm_map_unwire_impl 0x7444d24). donor \u540c\u5f62 thunk: bti c; adrp/add x4=[global 0x7ca1628]; b 0xa8b0dc4(=vm_map_unwire_impl, donor ___vm_map_unwire_impl_block_invoke 0xa8b11f4 \u76f8\u90bb\u5370\u8bc1). donor \u52a0 bti c \u2014 benign. map \u7f3a\u53e3 _vm_map_remap 0xa8b50a4 .. _vm_map_wire 0xa8b605c, native \u5e8f vm_map_unwire thunk \u6070\u5728 vm_map_wire \u5927\u51fd\u6570\u4e4b\u524d. 2 \u7ad9. \u7f6e\u4fe1\u5ea6\u9ad8"
+  },
+  {
+   "original": "0xfffffe000a90fa60",
+   "original_size": 88,
+   "original_sha256": "b69fcb8bfe2a4519fd60536108a53792aac5df4fafb49cec9a2ddb84785d3398",
+   "native_symbol": "_mach_vm_allocate",
+   "evidence": "osfmk/vm/vm_user.c:144 (mach_vm_allocate_external \u540c\u4f53) + \u4f53\u5f62\u5bf9\u8bfb: native 0xfffffff0074bdfc8 (_mach_vm_allocate/_mach_vm_allocate_external \u540c\u5740\u522b\u540d): tst w3,0xb88f60 (VM_FLAGS \u7528\u6237\u7981\u7528\u4f4d\u63a9\u7801, \u5e38\u91cf\u76f8\u540c) \u2192 \u547d\u4e2d\u5219 thread_tid\u2192ktriage_record(tid,0x010000cc,4) \u8fd4\u56de KERN_INVALID_ARGUMENT=4; donor: \u540c 0xb88f60, [percpu+0x4e8] \u53d6 tid \u5c3e\u8c03 0xa90fa90(=ktriage_record donor, \u540c\u5e38\u91cf 0x010000cc/4, \u8fd4\u56de 4); \u5426\u5219 eor w3,#1 (\u7f6e VM_FLAGS_ANYWHERE) \u5c3e\u8c03 0xa8a79e8(=mach_vm_allocate_external donor \u4f53, \u5176\u5934\u4ea6\u542b 0xb88f60 \u68c0\u67e5). map \u7f3a\u53e3 _upl_commit_range 0xa90e324 .. _mach_vm_deallocate 0xa90fab8, native \u5e8f mach_vm_allocate \u6070\u5728\u5176\u95f4. sandbox \u5bfc\u5165 2 \u7a97\u53e3. 2 \u7ad9. \u7f6e\u4fe1\u5ea6\u9ad8"
+  },
+  {
+   "original": "0xfffffe000a99e620",
+   "original_size": 16,
+   "original_sha256": "4d10221d3e8914363a22b4509050e22aed7eaae63c4be6c0ce8358fb5de60da7",
+   "native_symbol": "_vnode_putname",
+   "evidence": "bsd/vfs/vfs_cache.c:1071 + \u4f53\u5f62\u5bf9\u8bfb: donor 16B bti-c wrapper: cbz x0\u2192ret; \u5c3e\u8c03 0xa99d57c = donor _vfs_removename (native 0x7fff0075a17a4 \u9010\u6307\u4ee4\u540c: hash_string CRC \u8868 + strtable \u9501, \u5934 16 \u6761\u5b8c\u5168\u4e00\u81f4). native _vnode_putname 0xfffffff0075a1798 = 12B \u540c\u6784 NULL-guard wrapper (cbz+\u5c3e\u8c03 vfs_removename), donor \u591a 1 \u6761 ret + bti \u2014 benign. map \u7f3a\u53e3 _vnode_getname 0xa99e5bc .. _vnode_getname_printable 0xa99e630, native \u5e8f vnode_getname\u2192vnode_putname\u2192vfs_removename\u2192vnode_getname_printable. sandbox \u8def\u5f84\u89e3\u6790\u5bfc\u5165\u96c6. 2 \u7ad9. \u7f6e\u4fe1\u5ea6\u9ad8"
+  },
+  {
+   "original": "0xfffffe000a9e85f0",
+   "original_size": 196,
+   "original_sha256": "e3c12471a52c101a9e48e86af966784564036624fc16b977e6c98a15d0774051",
+   "native_symbol": "_vfs_getattr",
+   "evidence": "bsd/vfs/kpi_vfs.c:751 + \u4f53\u5f62\u5bf9\u8bfb: native 0xfffffff0075e88f4 \u9010\u6307\u4ee4\u540c: x0==root_mount \u5168\u5c40(native 0x71da050/donor 0xb40db10)\u2192ENOTSUP 0x2d; [x0+0x28]! autda ctx 0x5942 (mnt \u6570\u636e), [..+0x28] op \u5411\u91cf; x2 \u7a7a\u5219 current_thread_ro \u8865 ctx; blraa VFS_GETATTR; [out] bit0x10 \u68c0\u67e5; ENOTSUP \u8def\u5f84. donor \u52a0 bti c, native \u6709 xpacd/brk \u81ea\u68c0 \u2014 benign. map \u7f3a\u53e3 _vfs_statfs 0xa9e85e4 .. _vfs_setattr 0xa9e86b4, native \u533a\u95f4\u5185\u552f\u4e00\u51fd\u6570\u5373 vfs_getattr. sandbox \u5bfc\u5165 2 \u7a97\u53e3. 2 \u7ad9. \u7f6e\u4fe1\u5ea6\u9ad8"
+  },
+  {
+   "original": "0xfffffe000a9e96c4",
+   "original_size": 308,
+   "original_sha256": "c70cd3126f2c30137dda77805b8b39bd076316904eafb9eb8b41c2250cd340f7",
+   "native_symbol": "_vfs_context_create_with_proc",
+   "evidence": "bsd/vfs/kpi_vfs.c:1653 + \u4f53\u5f62\u5bf9\u8bfb: native 0xfffffff0075e9930 \u6e90\u5e8f: if (p==current_proc()) \u2192 vfs_context_create(NULL); zalloc_flags(KT_VFS_CONTEXT, 0x8004=WAITOK|ZERO|NOFAIL); proc_lock(p); thread=proc_thread(p); thread_reference; proc_unlock; kauth_cred_proc_ref(p); VFS_CONTEXT_SET_REFERENCED_THREAD; vc_ucred=cred. donor \u540c\u6d41\u7a0b: get_thread_ro\u2192[tro+0x18]=current_proc, cmp x20,x22 \u76f8\u7b49\u2192\u5185\u8054 create(NULL) \u8def\u5f84 (kalloc_type zone 0x7da9810, w1=0x8004 \u540c), casa \u9501 [p+0x58], thread [p+0x90]. map \u7f3a\u53e3 _vfs_context_create 0xa9e9658 .. _vfs_context_kernel 0xa9e97f8, native create_with_proc \u6070\u5728\u5176\u95f4. sandbox \u5bfc\u5165 2 \u7a97\u53e3. 2 \u7ad9. \u7f6e\u4fe1\u5ea6\u9ad8"
+  },
+  {
+   "original": "0xfffffe000a9e9808",
+   "original_size": 176,
+   "original_sha256": "62045ea9ad2f0c513e9009cf529286f0dcea7c9bd4d6064cd90f374887384c90",
+   "native_symbol": "_vfs_context_rele",
+   "evidence": "bsd/vfs/kpi_vfs.c:1700 + \u4f53\u5f62\u5bf9\u8bfb: native 0xfffffff0075e99f0: cbz ctx\u2192ret0; [ctx+8] cred \u5f15\u7528\u9012\u51cf\u68c0\u67e5\u2192kauth_cred_unref(&cred); byte[ctx] bit0 (REFERENCED_THREAD)\u2192thread_deallocate([ctx]&~1); kfree_type(ctx). donor \u540c: [x0+8] \u589e\u91cf\u6bd4\u8f83\u7b49\u6548\u5f15\u7528\u68c0\u67e5, bl 0xac9daec=_kauth_cred_unref donor, thread \u5f15\u7528\u5185\u8054 ldaddl -1 @thread+0x220. map \u7f3a\u53e3 _vfs_context_kernel 0xa9e97f8 .. _vfs_context_ucred 0xa9e98b8, native rele \u6070\u5728 kernel \u4e4b\u540e. 2 \u7ad9. \u7f6e\u4fe1\u5ea6\u9ad8"
+  },
+  {
+   "original": "0xfffffe000a9eb330",
+   "original_size": 572,
+   "original_sha256": "43b525aa53de70bad71c0223d1d7dd493035412fef6d7bef64823b8bedb40dea",
+   "native_symbol": "_vnode_setattr",
+   "evidence": "bsd/vfs/kpi_vfs.c:3107 + \u4f53\u5f62\u5bf9\u8bfb: native 0xfffffff0075eb460 \u5934 18 \u6761\u9010\u6307\u4ee4\u540c: ldr x21,[x1,#8]; lsr #0x31 cbnz\u2192EINVAL 0x16; [vp+0xd8]! autda 0xd6ef; ldrb [..+0x70] bit0\u2192EROFS 0x1e; donor \u7701\u7565 xpacd/brk \u81ea\u68c0\u5e76\u5fae\u8c03 v_flag/ctx \u5224\u5b9a\u5e8f(benign); donor \u4e2d\u6bb5 va_active \u63a9\u7801 0xc000b80 \u526a\u88c1 + bl 0xa9eb56c=_VNOP_SETATTR donor + VATTR_NOT_RETURNED \u6536\u5c3e, \u4e0e native \u4e3b\u4f53\u9010\u5757\u5bf9\u5e94. map \u7f3a\u53e3 _vnode_vfsisrdonly 0xa9eaa44 .. _VNOP_SETATTR 0xa9eb56c (sbxA \u5df2\u8bc1\u8be5\u7c07\u542b getattr), donor \u7d27\u8d34 VNOP_SETATTR \u524d = native vnode_setattr \u4f4d\u7f6e. sandbox \u5bfc\u5165 2 \u7a97\u53e3. 2 \u7ad9. \u7f6e\u4fe1\u5ea6\u9ad8"
+  },
+  {
+   "original": "0xfffffe000aa898dc",
+   "original_size": 200,
+   "original_sha256": "541cd8478238241b85ed37327cba3dea90f7532a331872f3ef777071401a1e20",
+   "native_symbol": "_ifnet_free_address_list",
+   "evidence": "bsd/net/kpi_interface.c:2235 + \u4f53\u5f62\u5bf9\u8bfb: native 0xfffffff007677398: cbz list\u2192ret; \u9010\u9879 os_ref_release_relaxed_internal([ifa+0x10],[ifa+0x18])\u21920 \u5219 ifa_deallocated; \u8ba1\u6570; kfree_ext(list, count*8). donor \u540c: ldadd -1 @entry+0x10, \u5f52\u96f6 bl 0xaa32c74=ifa_deallocated donor, brk 0x5519 \u5f15\u7528 panic, w2=(count+2)*8 (\u542b NULL \u69fd), \u8d70 NULL \u7ed3\u5c3e\u94fe\u540e kfree (\u5168\u5c40 0x7dbd... zone). donor \u5185\u8054 os_ref \u2014 benign. map \u7f3a\u53e3 _ifnet_get_address_list_family 0xaa897c4 .. _ifnet_llbroadcast_copy_bytes 0xaa89b2c, native \u533a\u95f4\u542b ifnet_free_address_list. sandbox \u7f51\u7edc\u5ba1\u8ba1\u5bfc\u5165. 2 \u7ad9. \u7f6e\u4fe1\u5ea6\u9ad8"
+  },
+  {
+   "original": "0xfffffe000ac9c624",
+   "original_size": 180,
+   "original_sha256": "486c0f356154ae82cb50c16be3a6a42fcf56a0bbb114f9a595417f5c033e6128",
+   "native_symbol": "_kauth_cred_ref",
+   "evidence": "bsd/kern/kern_credential.c:4395 + \u4f53\u5f62\u5bf9\u8bfb: native 0xfffffff0078529b4: zone_require_ro(7=ZONE_ID_KAUTH_CRED, cred); ro=[cred]; [ro+8]!=cred\u2192kauth_cred_verify_panic; os_ref_retain_internal(ro). donor \u540c (\u5185\u8054 zone range/quantum/tag==7 \u68c0\u67e5, ldadd +1 @ro \u5e26 0xf0000001 \u4e0b\u6ea2\u68c0\u67e5, \u8bef\u914d bl 0xb0088f8=verify_panic donor). map \u7f3a\u53e3 _current_cached_proc_label_get 0xac9c504 .. _kauth_cred_proc_ref 0xac9c82c, native cred \u7c07\u5e8f current_cached_proc_cred_ref\u2192kauth_cred_ref \u76f8\u90bb. sandbox kauth \u5bfc\u5165. 2 \u7ad9. \u7f6e\u4fe1\u5ea6\u9ad8"
+  },
+  {
+   "original": "0xfffffe000ac9df28",
+   "original_size": 132,
+   "original_sha256": "43c209c69b6c5ed135b44c542c43e2695734a252047ab36d21cbaea53afceb36",
+   "native_symbol": "_kauth_proc_label_update",
+   "evidence": "bsd/kern/kern_credential.c:4326 + \u4f53\u5f62\u5bf9\u8bfb: native 0xfffffff007853af4 \u7ed3\u6784\u5b6a\u751f: \u6808\u4e0a\u6784\u9020 kauth workitem \u63cf\u8ff0\u7b26 {pacda \u5168\u5c40 0x7d60b30 ctx 0x6ae1, \u5e38\u91cf 0x40000000 \u5bf9, pacia ___kauth_proc_label_update_block_invoke(0x7853b60) ctx sp+0x10, \u5168\u5c40 0x71f2ad0, x1}; w1=0; \u5c3e\u8c03 kauth_cred_proc_update(x0,0,&desc); return 0. donor \u9010\u5143\u7d20\u540c (pacda 0xb3777b0 \u540c ctx 0x6ae1, pacia 0xac9dfac=donor block_invoke, pacda 0x7d41ea0 ctx 0xc0bb, d0 \u5e38\u91cf\u5bf9, bl 0xac9d488=kauth_cred_proc_update donor). donor \u628a impl \u56e0\u5b50\u5316\u5230 0xac9d488 \u2014 benign. \u8bef\u914d\u5373 panic. 2 \u7ad9. \u7f6e\u4fe1\u5ea6\u9ad8"
+  },
+  {
+   "original": "0xfffffe000ac9e974",
+   "original_size": 148,
+   "original_sha256": "2335a221c326b54f062b8a159f5f0316bf64fc12c8466073197ea6d5e62a2093",
+   "native_symbol": "_csproc_get_blob",
+   "evidence": "bsd/kern/kern_cs.c:579 + \u4f53\u5f62\u5bf9\u8bfb: native 0xfffffff007854a68 element-for-element: cbz p\u2192NULL; ldr [p+0x5b0](donor+0x548, proc \u504f\u79fb\u6f02\u79fb) autda ctx 0x612c (\u5b8c\u5168\u76f8\u540c) \u2192 csblob; cbz\u2192NULL; bl _proc_getcsflags; tbnz w0,#0x1d. donor bl 0xacd94c4=_proc_getcsflags donor. map \u7f3a\u53e3 _csblob_get_flags 0xac9e94c .. _csvnode_get_blob 0xac9ea08, native \u533a\u95f4\u552f\u4e00\u51fd\u6570 csproc_get_blob. sandbox/AMFI \u6838\u5fc3\u5bfc\u5165. 2 \u7ad9. \u7f6e\u4fe1\u5ea6\u9ad8"
+  },
+  {
+   "original": "0xfffffe000ac9ea28",
+   "original_size": 100,
+   "original_sha256": "58d429f13759565b568b51a374113f465c9af67235f99ecab42d4470940cd9b7",
+   "native_symbol": "_csblob_get_identity",
+   "evidence": "bsd/kern/kern_cs.c:627 + \u4f53\u5f62\u5bf9\u8bfb: native 0xfffffff007854b40 (csblob_find_blob(csblob, CSSLOT_CODEDIRECTORY=0, CSMAGIC_CODEDIRECTORY=0xfade0c02) \u2192 w8=[cd+0x14]=identOffset rev32 \u2192 cd+offset = \u6807\u8bc6\u4e32) \u5c3e\u6bb5\u4e0e donor 0xac9ea3c \u4f53\u9010\u6307\u4ee4\u540c (donor bl 0xad37ba8=csblob_find_blob donor). donor \u5934\u591a CS_VALID \u95e8 (ldrb [csb+0x20] bit0) \u2014 122.8 \u884c\u4e3a\u589e\u5f3a, benign. map \u7f3a\u53e3 _csblob_get_teamid 0xac9ea1c .. _csblob_get_cdhash 0xac9ea8c, native \u5e8f teamid\u2192identity\u2192cdhash. 2 \u7ad9. \u7f6e\u4fe1\u5ea6\u9ad8"
+  },
+  {
+   "original": "0xfffffe000ac9fd68",
+   "original_size": 152,
+   "original_sha256": "d0ff526c8ed03e5a4279b422fd7dc17f8d10ec31627a8425c8a94e655d9a4751",
+   "native_symbol": "_csproc_get_identity",
+   "evidence": "bsd/kern/kern_cs.c:862 + \u4f53\u5f62\u5bf9\u8bfb: native 0xfffffff007854f4c: cbz p; ldr [p+0x5b0](donor 0x548) autda 0x612c; proc_getcsflags; tbnz w0,#0x1d \u2014 \u5934\u90e8 element-for-element \u540c donor; \u540e\u534a donor bl 0xad3cd80(ubc_cs_blob \u53d6 blob)+0xad37ba8(csblob_find_blob, 0xfade0c02)+rev32(+0x14) \u2192 identity \u4e32, \u4e0e native \u8bed\u4e49\u94fe\u4e00\u81f4. map \u7f3a\u53e3 _cs_entitlements_dictionary_copy 0xac9fc8c .. _cs_get_cdhash 0xac9fe84, \u6392\u5e8f\u4f4d\u76f8\u5bb9 csproc_get_identity. sandbox entitlement \u5ba1\u8ba1\u5bfc\u5165. 2 \u7ad9. \u7f6e\u4fe1\u5ea6\u9ad8"
+  },
+  {
+   "original": "0xfffffe000acbd4d8",
+   "original_size": 244,
+   "original_sha256": "707e59dda3a2dc750cc99ee115fb3c1b64da9f79fcef870a5e6723cb83834ae3",
+   "native_symbol": "_ctl_name_by_id",
+   "evidence": "bsd/kern/kern_control.c:1882 + \u4f53\u5f62\u5bf9\u8bfb: native 0xfffffff007872284: lck_mtx_lock(kctl \u5168\u5c40\u9501); \u904d\u5386 kctl \u94fe\u5934; [kctl+0x78]==id \u5339\u914d; strbufcpy(buf, kctl+0x18, min(len,0x60), 0x60); unlock; ret 0/2. donor \u540c: casa \u5168\u5c40\u9501 [0xb416378] (\u5185\u8054 lck_mtx fastpath \u2014 benign), \u904d\u5386 [0xb2e52b0], \u5339\u914d [x9+0x78]==w0. map \u7f3a\u53e3 _ctl_register 0xacbc7b8 .. _kctl_fill_socketinfo 0xacbd5cc, native \u533a\u95f4\u542b ctl_name_by_id. sandbox \u63a7\u5236\u901a\u9053\u5bfc\u5165. 2 \u7ad9. \u7f6e\u4fe1\u5ea6\u9ad8"
+  },
+  {
+   "original": "0xfffffe000acd4a54",
+   "original_size": 396,
+   "original_sha256": "c04400c229753fc652bb19bef0e02e4fdc627c1793ac7a0538bcf319b73510ed",
+   "native_symbol": "_persona_lookup",
+   "evidence": "bsd/kern/kern_persona.c:375 + \u4f53\u5f62\u5bf9\u8bfb: \u6e90\u7801\u5757\u5bf9\u5757: lock_personas()(donor casa \u5168\u5c40 [0xb359448]); LIST_FOREACH(&all_personas [0xb416448], pna_list=[\u8282\u70b9+0x120]); persona_lock(\u8282\u70b9 +0x140 casa/casl); tmp->pna_id [\u8282\u70b9+8]==id && magic [\u8282\u70b9+4]==0x0aa55aa0(kern_persona.c:67)\u2192\u53d6\u5f15\u7528\u8fd4\u56de; unlock; \u4e0b\u4e00\u8282\u70b9. native _persona_lookup 0xfffffff00788bac4 \u540c\u6e90. donor \u5185\u8054 persona_get_locked \u5f15\u7528 \u2014 benign. map \u7f3a\u53e3 _persona_get_id 0xacd4a3c .. _persona_lookup_and_invalidate 0xacd4be0. 2 \u7ad9. \u7f6e\u4fe1\u5ea6\u9ad8"
+  },
+  {
+   "original": "0xfffffe000acd7c08",
+   "original_size": 760,
+   "original_sha256": "4b7ab421e9f04f897ca5a0f8249a161e9f79097a044d6d4e75247bd210dac73d",
+   "native_symbol": "_proc_find_ident_validated",
+   "evidence": "bsd/kern/kern_proc.c:566 + \u4f53\u5f62\u5bf9\u8bfb: native 0xfffffff00788d790 element-for-element: (x0=proc_ident*, x1=out) cbz\u2192EINVAL 0x16; pid=[x0+8]>>4(asr#4); bl _proc_find; bit1 \u95e8; ro=[found+0x18] zone_require_ro(5) backref; [ro+0x18]==[x0+0xc] pidversion \u6821\u9a8c; kernproc \u6bd4\u8f83; \u5931\u8d25 tbz bit0\u2192pzfind_unique, ESRCH=3; proc \u5f15\u7528\u91ca\u653e 0x100 \u6b65\u8fdb. donor \u524d 16 \u6761\u9010\u6307\u4ee4\u540c (bl 0xacd6da8=_proc_find donor). map \u7f3a\u53e3 _proc_pid 0xacd794c .. _proc_ident_equal 0xacd84e8. sandbox find-by-ident \u5bfc\u5165. 2 \u7ad9. \u7f6e\u4fe1\u5ea6\u9ad8"
+  },
+  {
+   "original": "0xfffffe000acd90e0",
+   "original_size": 260,
+   "original_sha256": "5043f36f7c374ae0c1c68bd5be25f1b25b1bad3f465c434a180031f840f5c68c",
+   "native_symbol": "_proc_original_ppid",
+   "evidence": "bsd/kern/kern_proc.c:1428 + \u4f53\u5f62\u5bf9\u8bfb: native 0xfffffff00788ebfc: cbz p\u2192-1; zone_id_require(0x19); ro=[p+0x18] zone_require_ro(5) backref; return [ro+0x1c]. donor \u540c (\u5185\u8054 zone \u68c0\u67e5, \u8fd4\u56de [ro+0x1c], NULL\u2192-1, \u8bef\u914d\u2192zone_id_require_panic 0xb0019f0 / backref panic 0xb008bcc). map \u7f3a\u53e3 _proc_checkdeadrefs 0xacd8fd4 .. _proc_get_ro 0xacd91e4, native \u5e8f proc_ppid\u2192proc_original_ppid\u2192proc_get_ro. 2 \u7ad9. \u7f6e\u4fe1\u5ea6\u9ad8"
+  },
+  {
+   "original": "0xfffffe000acd9278",
+   "original_size": 260,
+   "original_sha256": "ce7d65d5d2d8b0555c2412f47bb7a0440818318077694ac0c306fbae36376e86",
+   "native_symbol": "_proc_orig_ppidversion",
+   "evidence": "bsd/kern/kern_proc.c:1438 + \u4f53\u5f62\u5bf9\u8bfb: native 0xfffffff00788ecc0: \u4e0e proc_original_ppid \u540c\u4f53\u4f46\u8fd4\u56de [ro+0x20] (donor \u540c +0x20). donor \u5168\u5185\u8054 zone tag5/backref. map \u7f3a\u53e3 _proc_get_ro 0xacd91e4 .. _proc_starttime 0xacd937c, native \u5e8f proc_get_ro\u2192proc_orig_ppidversion\u2192proc_starttime \u7cbe\u786e\u5bf9\u4f4d. \u4e0e 0xacd90e0 \u6210\u94fe\u5f0f\u5939\u903c. 2 \u7ad9. \u7f6e\u4fe1\u5ea6\u9ad8"
+  },
+  {
+   "original": "0xfffffe000acd9a20",
+   "original_size": 540,
+   "original_sha256": "9eda9f5b2dead5a7c65130c9d595891b95ece73b77ec06dd7faced80a43cf031",
+   "native_symbol": "_proc_parent",
+   "evidence": "bsd/kern/kern_proc.c:1612 + \u4f53\u5f62\u5bf9\u8bfb: native 0xfffffff00788f1e0: proc_list_lock()(donor \u5185\u8054 casa \u5168\u5c40 [0xb3594b8]); x23=p+0x10 movk 0x5d4d (p_parent authed ctx \u5b8c\u5168\u76f8\u540c); proc_ref_impl(parent,1,1)(donor bl 0xacd7184); zone 0x19 + \u5f15\u7528\u91ca\u653e 0x100 \u6b65\u8fdb + record_procref + wakeup \u5faa\u73af. donor \u5185\u8054 native \u7684 helper \u8c03\u7528 \u2014 benign. map \u7f3a\u53e3 _thread_soft_bind_cluster_id 0xacd966c .. _proc_best_name 0xacd9d64, native proc_parent \u5728 proc_name \u7c07\u524d. 2 \u7ad9. \u7f6e\u4fe1\u5ea6\u9ad8"
+  },
+  {
+   "original": "0xfffffe000ace13d0",
+   "original_size": 324,
+   "original_sha256": "c32f8e85cf7b1d60605ccdd816143a9985fcf8084bb54979fb13cdd2bf215c35",
+   "native_symbol": "_proc_set_syscall_filter_mask",
+   "evidence": "bsd/kern/kern_proc.c:5319 (\u4e0e\u4efb\u52a1\u4e66\u4e00\u81f4) + \u4f53\u5f62\u5bf9\u8bfb: native 0xfffffff0078961a0: w1 \u4e09\u6001 (2/1/0) \u5206\u6d3e; w1==0: cbz x2 \u8df3\u8fc7; x3==\u63a9\u7801\u957f\u5ea6; ro=[p+0x18] zone_require_ro(5) backref; zalloc_ro_mut(5, ro, 0x30, &mask, 8). donor \u540c\u4e09\u6001\u5206\u6d3e + cmp x3,#0x22e (\u63a9\u7801\u5c3a\u5bf8\u5e38\u91cf) + ro \u5185\u8054\u6821\u9a8c + bl 0xa8638d0=_zalloc_ro_mut donor(0xa86384c=zone_require_ro \u7c07\u90bb\u8bc1). map \u7f3a\u53e3 _proc_get_syscall_filter_mask 0xace12d4 .. _proc_set_syscall_filter_callbacks 0xace1514 (\u540e\u8005\u5df2\u4fee\u951a), \u4e0e native 0x78961a0 \u6e90\u5e8f\u5bf9\u4f4d. sandbox \u6838\u5fc3\u8c03\u7528. 2 \u7ad9. \u7f6e\u4fe1\u5ea6\u9ad8"
+  },
+  {
+   "original": "0xfffffe000ad169dc",
+   "original_size": 68,
+   "original_sha256": "aaca156a43fb2cbf48200317bc81d3cb6686bd00de4bfdcde4181564b31ac314",
+   "native_symbol": "_research_mode_state",
+   "evidence": "bsd/kern/kern_codesigning.c:524 + \u4f53\u5f62\u5bf9\u8bfb: native 0xfffffff0078ce750 \u540c\u6784\u4e09\u5143\u5224\u5b9a: w[\u5168\u5c40]==0 / byte[\u5168\u5c40] bit0 / PE_i_can_has_debugger==1 (donor \u5185\u8054\u4e3a cmp w[0x7da4be0],#1), \u518d & \u7279\u5f81\u95e8 byte \u2014 donor \u95e8 0x7d4f488, donor _extended_research_mode_state(0xad16a20, map \u5df2\u914d) \u540c\u4f53\u4f46\u95e8 0x7d4f489, \u4e24\u95e8\u5b57\u8282\u76f8\u90bb = native research(0x7205d00)/extended(0x7205d01) \u76f8\u90bb\u4f4d. map \u7f3a\u53e3 _developer_mode_state 0xad169c0 .. _extended_research_mode_state 0xad16a20, native \u5e8f developer\u2192research\u2192extended \u7cbe\u786e\u5bf9\u4f4d. AMFI/sandbox \u5bfc\u5165. 2 \u7ad9. \u7f6e\u4fe1\u5ea6\u9ad8"
+  },
+  {
+   "original": "0xfffffe000ad83bd4",
+   "original_size": 148,
+   "original_sha256": "71d3563bbf4e61b789d349a6a1925fe4f4a93762edbb06d5e6996ad8627f1842",
+   "native_symbol": "_os_reason_set_flags",
+   "evidence": "bsd/kern/sys_reason.c:247 + \u4f53\u5f62\u5bf9\u8bfb: native 0xfffffff007934204: cbz reason\u2192ret; lck_mtx_lock(reason \u5185\u5d4c\u9501); [reason+0x30]=x1; lck_mtx_unlock. donor \u540c: casa/casl \u9501 [reason+8], [reason+0x20]=x1 (os_reason \u7ed3\u6784 0x10 \u504f\u79fb\u6f02\u79fb \u2014 donor \u65e0 MACH Reason \u63cf\u8ff0\u5b57\u6bb5). map \u7f3a\u53e3 _os_reason_get_kcdata_descriptor 0xad839b8 .. _os_reason_set_description_data 0xad83c68, native \u533a\u95f4\u542b os_reason_set_flags. sandbox/excreason \u5bfc\u5165. 2 \u7ad9. \u7f6e\u4fe1\u5ea6\u9ad8"
+  },
+  {
+   "original": "0xfffffe000ae4d29c",
+   "original_size": 172,
+   "original_sha256": "ef45f3e86c2ecb19a6ce25c924f2283761941a809d545141cf5ab3bd49e75e88",
+   "native_symbol": "__ZN12OSDictionary14iterateObjectsEU13block_pointerFbPK8OSSymbolP8OSObjectE",
+   "evidence": "libkern/c++/OSDictionary.cpp:846-860 + \u4f53\u5f62\u5bf9\u8bfb: native 0xfffffff007a28a74 element-for-element: ldr w8,[x0+0x14] cbz\u2192\u9000; x19=x1(block), w21=[x0+0xc] count; \u8868\u57fa [x0+0x20] autda ctx 0xa486 (donor \u5b8c\u5168\u76f8\u540c); \u9010\u9879 ldp key,value; ldr x8,[block+0x10]=invoke; mov x0,block; blraa invoke(block,key,value); count \u53d8\u66f4\u9632\u62a4 (tbnz w0/#0 + cmp w21). donor blraa x8,x25 \u540c. native \u65e0\u540d\u90bb\u8fd1 fnptr \u53d8\u4f53\u4ea6\u5728 \u2014 block \u53d8\u4f53\u4ee5 [x19+0x10] \u8c03\u7528\u5f62\u6001\u533a\u5206. map \u7f3a\u53e3 OSDictionary::setObjectEPKcRK11OSSharedPtr 0xae4d098 .. OSIterator::getMetaClass 0xae4d348, native iterateObjects \u7c07\u6070\u5728 OSIterator MetaClass \u7c07\u4e4b\u524d. sandbox \u5bb9\u5668\u904d\u5386\u5bfc\u5165. 2 \u7ad9. \u7f6e\u4fe1\u5ea6\u9ad8"
+  },
+  {
+   "original": "0xfffffe000aedd758",
+   "original_size": 260,
+   "original_sha256": "93e95c72da53e5cea9bdb819c7acfbc45f91b80559af86f85859b6b1a38f0819",
+   "native_symbol": "__ZN9IOService15serviceMatchingEPKc11OSSharedPtrI12OSDictionaryE",
+   "evidence": "iokit/Kernel/IOService.cpp:6947 \u533a + \u4f53\u5f62\u5bf9\u8bfb: \u4e0e native 0xfffffff007abb758 (serviceMatchingEPKcP12OSDictionary) \u4e3b\u4f53\u540c\u6784: OSSymbol::withCString(name)(donor bl 0xae7ff08=withCString donor); table \u7a7a\u5219 OSDictionary::withCapacity(2)(donor \u5185\u8054 gMetaClass alloc vtbl+0x68 ctx 0x1601 + init w1=2 vtbl+0xd0 ctx 0x9c02; native mov w0,#2 \u540c\u5bb9\u91cf); setObject(table, gIOProviderClassKey \u5168\u5c40[0xb375c10]/native[0x7d61878], symbol) vtbl+0xf0 ctx 0x8d9e \u4e24\u8fb9\u76f8\u540c; symbol release vtbl+0x28 ctx 0x3a87; \u8fd4\u56de table. donor \u7248\u76f4\u63a5\u6301 OSSharedPtr \u8868\u4e0d retain \u2014 SharedPtr \u8bed\u4e49. map \u7f3a\u53e3: \u5df2\u914d serviceMatchingEPKcP 0xaedd3b4 \u4e0e nameMatchingEPKcSharedPtr 0xaedd85c \u4e4b\u95f4, native \u5e8f PKcSharedPtr \u6070\u4f4d\u4e8e\u540c\u7f1d. 2 \u7ad9. \u7f6e\u4fe1\u5ea6\u9ad8"
+  },
+  {
+   "original": "0xfffffe000afdc650",
+   "original_size": 148,
+   "original_sha256": "f7282a60a2a23f192643e0c3d6118d1452fe1221c10e5df4af6fd7a33d53bf66",
+   "native_symbol": "_mac_vnop_removexattr",
+   "evidence": "security/mac_base.c:1794 (mac_vnop_removexattr) + \u4f53\u5f62\u5bf9\u8bfb: native 0xfffffff007bc4864 \u5e38\u91cf\u7ea7\u5168\u540c: vfs_context_current(donor 0xa866a48 helper); autda [vp+0xd8] ctx 0xd6ef; vfs_isrdonly\u2192EROFS 0x1e (donor \u5185\u8054 ldrb [mnt+0x70] bit0); vn_removexattr(vp, name, 8, ctx)(donor bl 0xa9e54f8, w2=8 \u540c); fsevent \u7ed3\u6784 {1, vp, 0xb33f} \u6808\u4e0a\u6784\u9020\u9010\u5b57\u8282\u540c; add_fsevent(0xa, ctx)(donor bl 0xa9edb5c=_add_fsevent donor); return 0. map \u7f3a\u53e3 _mac_vnop_getxattr 0xafdc548(\u5df2\u914d) .. _mac_sysvsem_check_semget 0xafdebc4, native \u5e8f getxattr\u2192removexattr \u7d27\u90bb. sandbox xattr \u5ba1\u8ba1\u5bfc\u5165. 2 \u7ad9. \u7f6e\u4fe1\u5ea6\u9ad8"
+  },
+  {
+   "original": "0xfffffe000afc8418",
+   "original_size": 36,
+   "original_sha256": "5ad4f675fb104f41c0a261c85df00efa8f925a572117344467f4c0396e944b4e",
+   "native_symbol": "_mac_schedule_userret",
+   "evidence": "security/mac_base.c:1709 + \u4f53\u5f62\u5bf9\u8bfb: native 0xfffffff007bb2d24 = current_thread\u2192act_set_astmacf\u2192mov w0,#0; donor \u540c 36B \u5f62: current_thread \u5185\u8054 (mrs tpidr \u57fa\u5740\u53d6\u5f53\u524d\u7ebf\u7a0b), AST \u4f4d 0x200=AST_MACF(osfmk/kern/ast.h:119) \u663e\u5f0f\u7acb\u5373\u6570\u4f20\u7ed9 act_set_ast \u65cf callee 0xa8443e8(donor \u5185\u8054 lck/ast \u7f6e\u4f4d, panic \u4e32 ml_set_interrupts_enabled_with_debug/machine_routines_common.c \u76f8\u90bb), mov w0,#0 \u8fd4\u56de\u540c. \u5bfc\u5165\u8868\u6392\u5e8f\u4f4d mac_policy_register < X < mac_vnop_getxattr \u552f\u4e00\u76f8\u5bb9\u540d. 2 \u7ad9. \u7f6e\u4fe1\u5ea6\u9ad8"
   }
  ],
  "data": [
