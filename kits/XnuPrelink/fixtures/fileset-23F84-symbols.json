@@ -1768,6 +1768,12 @@
    "native_symbol": "_gIOAllCPUInitializedKey",
    "addend": 0,
    "evidence": "IOService::initialize stores the OSSymbol made from \"IOAllCPUInitialized\" here (store after withCStringNoCopy at +0x880). Source: iokit/Kernel/IOService.cpp gIOAllCPUInitializedKey."
+  },
+  {
+   "original": "0xfffffe0007d72508",
+   "native_symbol": "__ZTV12IOUserClient",
+   "addend": 0,
+   "evidence": "IOUserClient vtable, donor side pinned by vtable layout: donor slots 0x7d72518.. span 187 entries with slot[172] at 0x7d72a78 targeting 0xaf5b9b4, which the reviewed functions record pairs with IOUserClient::clientClose; the native __ZTV12IOUserClient has 186 slots with identical dispatch discriminators (186/186 slot layout match) and its slot[172] is __ZN12IOUserClient11clientCloseEv. Pins this identity because the automatic vtable-user/vtable-layout pairing on the Apple-clang native build converges the donor table onto the derived __ZTV22IOKitDiagnosticsClient instead (slot[172] there is the IOKitDiagnosticsClient::clientClose override; same slot signatures), which contradicts the reviewed function binding. The reviewed bind also blocks the wrong vtable double-bind."
   }
  ]
 }
