@@ -1760,6 +1760,13 @@
    "original_sha256": "5ad4f675fb104f41c0a261c85df00efa8f925a572117344467f4c0396e944b4e",
    "native_symbol": "_mac_schedule_userret",
    "evidence": "security/mac_base.c:1709 + \u4f53\u5f62\u5bf9\u8bfb: native 0xfffffff007bb2d24 = current_thread\u2192act_set_astmacf\u2192mov w0,#0; donor \u540c 36B \u5f62: current_thread \u5185\u8054 (mrs tpidr \u57fa\u5740\u53d6\u5f53\u524d\u7ebf\u7a0b), AST \u4f4d 0x200=AST_MACF(osfmk/kern/ast.h:119) \u663e\u5f0f\u7acb\u5373\u6570\u4f20\u7ed9 act_set_ast \u65cf callee 0xa8443e8(donor \u5185\u8054 lck/ast \u7f6e\u4f4d, panic \u4e32 ml_set_interrupts_enabled_with_debug/machine_routines_common.c \u76f8\u90bb), mov w0,#0 \u8fd4\u56de\u540c. \u5bfc\u5165\u8868\u6392\u5e8f\u4f4d mac_policy_register < X < mac_vnop_getxattr \u552f\u4e00\u76f8\u5bb9\u540d. 2 \u7ad9. \u7f6e\u4fe1\u5ea6\u9ad8"
+  },
+  {
+   "original": "0xfffffe000aead3e0",
+   "original_size": 268,
+   "original_sha256": "2d1919eae83df152c73743ef12977beb6503e39aa4238b33a9bb2852ae8a321d",
+   "native_symbol": "_IOLogv",
+   "evidence": "IOLogv worker (IOLib.cpp source order: _IOLog .. IOLogv family .. _IOFindValueForName brackets donor 0x0aead2c8 .. 0x0aead568). Panic chain on payload 2273bd09 first boot: AppleImage4 caller (lr 0xfffffff008d41f6c, bl at 0x08d41f68) hit the unmapped-call stub on this function with x0 = C string \"no legacy blob present\" and x1 = tag-signed data pointer (crc 0x4be0eb86); the preceding bl in the same caller targets 0x0aead2c8 = _IOLog, already paired. Body is the varargs logging worker: pacibsp, 0x160 frame with stack canary compare on exit, mov x4,x30 + xpaci captures the caller return address for the log prefix, 256-byte stack scratch zero-filled, format copy via bl 0x0ae8b0bc, console-gate byte at 0x07da4c5a (tbnz skip), pacia-signed handler 0x0a92a0c0 (div 0xae56) passed to the emit call bl 0x0a800184, retab. Both lanes' native _IOLogv is the small tail-jump shim into the static worker __ZL7_IOLogvPKcPcPv (Mac 0xfffffff007a59b6c size 0x10, Linux 0xfffffff007a92a3c size 0xc); the Linux lane already binds this donor function to _IOLogv via reference-order and passed this boot region on device. The Apple-clang Mac build misses the pairing because LTO shifts the reference order (the whole 0x0aead log neighborhood is unpaired in the Mac map), so the identity is recorded here. Expected to clear the 4 AppleEffaceableStorage cross-component ledger sites (STATE 10.Y.2)."
   }
  ],
  "data": [
