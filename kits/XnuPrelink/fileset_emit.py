@@ -39,6 +39,19 @@ FILESET_DATA_POOLS = (
     ('982f8a42', 256, '74ef7306e7452d6859b6463ce496b8df30925f69e1b2969e1f3f34bbc9c6af04'),
 )
 
+# Single-word text patches applied to the kept original (donor) code after
+# rebase. The hybrid kernel runs donor code against our native __DATA_CONST,
+# and the compiler-derived ptrauth slot tags drifted between the donor's
+# toolchain and ours, so a donor reader authenticates a native table slot with
+# the wrong discriminator. Each entry pins the expected old word; a mismatch
+# aborts the emit. Wall-40 (2026-11-04): AppleARMCPU::start reads the
+# gTable+0x2c0 function pointer with movk x17, #0x3c68 while the native slot
+# at the same offset is signed with our tag 0x4529 -> FPAC (esr 0x72000000).
+TEXT_WORD_PATCHES = (
+    (0xfffffe00084ca4f8, 0xF2E78D11, 0xF2E8A531,
+     'AppleARMCPU::start gTable+0x2c0 reader: movk x17, #0x3c68 -> #0x4529'),
+)
+
 
 def inline_data_ranges(blob, pools=FILESET_MATH_POOLS):
     result = []
@@ -506,6 +519,22 @@ class Emit:
                         continue
                     pages.pop(base, None)
 
+    def apply_text_word_patches(self, slide):
+        """Pin-patched single words in the kept original code (see TEXT_WORD_PATCHES)."""
+        for va, old, new, why in TEXT_WORD_PATCHES:
+            target = (va + slide) & MASK64
+            segment = next((s for s in self.cache.segments
+                            if s['va'] <= target < s['va'] + s['size'] and s['filesize']), None)
+            if segment is None:
+                raise ValueError(f'Text word patch {va:#x} outside cached segments')
+            at = segment['fileoff'] + (target - segment['va'])
+            word, = struct.unpack_from('<I', self.data, at)
+            if word != old:
+                raise ValueError(f'Text word patch {va:#x}: word {word:#010x} != expected {old:#010x}')
+            struct.pack_into('<I', self.data, at, new)
+            self.report['text_word_patches'] = self.report.get('text_word_patches', 0) + 1
+            self.report.setdefault('text_word_patch_log', []).append(why)
+
     def patch_adrp_pair(self, segment, adrp_offset, use_offset, rebound, size):
         word, = struct.unpack_from('<I', self.data, segment['fileoff'] + adrp_offset)
         pc = segment['va'] + adrp_offset
@@ -711,6 +740,7 @@ def emit_images(raw, native_data, payload, roots, stub_symbol=None, early_securi
     emit.rewrite_native_chains()
     emit.rebuild_linkedit()
     emit.rewrite_branches()
+    emit.apply_text_word_patches(collection_slide)
     emit.seal_components()
     emit.patch_entry_header()
     emit.patch_headers()
