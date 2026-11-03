@@ -1781,6 +1781,13 @@
    "original_sha256": "73c4e9edaae1e1999779514a6c2749de329c97bad1a5edc1fb663b4d62bacf51",
    "native_symbol": "__ZN8OSObjectC2Ev",
    "evidence": "Base object constructor of OSObject: bti c entry; stores refcount 1 at [x0+8]; stores the pacda-signed OSObject vtable 0x7d9e2d0 (discriminator this|0xcda1<<48) at [x0]; ret. 10 instructions, zero calls. Distinct from the already-paired OSMetaClassBase ctor clone 0x0ae40a00 (vtable 0x7d62608, vptr only, no refcount store). Native has the standalone no-arg base ctor __ZN8OSObjectC2Ev (libkern/c++/OSObject.cpp OSObject::OSObject()). Wall-36 verified target: donor kext caller 0x0977dd00 (OSObject-subclass operator-new construction chain, fn bounds 0x0977dcb0..0x0977dd9c) bl's 0x0af07900 then overwrites the vptr with its own; 188 direct bl sites + 31 fixup slots across donor kexts share this target, so one fixture clears the whole class. Call-time order self-consistent: base vptr set inside callee, caller vptr overwritten on return = standard C++ construction chain."
+  },
+  {
+   "original": "0xfffffe000af0f77c",
+   "original_size": 284,
+   "original_sha256": "8669d1454247a0bc988f7b414912aa56c4af6f56ca3b5b3839a9905e11619f55",
+   "native_symbol": "__ZN18IOTimerEventSource16timerEventSourceEP8OSObjectPFvS1_PS_E",
+   "evidence": "Static factory IOTimerEventSource::timerEventSource(OSObject*, Action): 0x60-byte typed alloc (native same 0x60), pacda vptr 0x7d683c8 key 0xcda1, inline instanceConstructed on gIOTimerEventSourceMetaClass 0xb3758f0, virtual vtable[+0x140] init(1,owner,action) PAC key 0x5f4, free path vtable[+0x28] key 0x3a87, tbnz w0,#0 - instruction-for-instruction isomorphic to noctf __ZN18IOTimerEventSource16timerEventSourceEP8OSObjectPFvS1_PS_E (j-overload excluded: constant 1 as init timeout, 2 caller args). Wall-37 verified target: CoreAnalyticsFamily start fn (bounds 0x0977fd14..0x097802ac) bl 0x0977fef8 -> 0x0af0f77c, crc 0x1fa14f06 verified 139B. Dividend face: 321 direct bl sites + 100 fixup slots across ~100 entries (IOAccessoryManager 26, AppleHPM 19, ApplePearlSEPDriver 19, AppleSPU 10...); CoreAnalyticsFamily itself holds 4 sites incl. two more in the same caller fn (0x977ff40/0x977ff88)."
   }
  ],
  "data": [
