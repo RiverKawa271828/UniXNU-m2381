@@ -1774,6 +1774,13 @@
    "original_sha256": "a7d37a033c7387e65f1fe1b13d22e75c9998a74bbf40b9927bfe8a7f1a57d805",
    "native_symbol": "_mach_memory_entry_port_release",
    "evidence": "mach_memory_entry_port_release (predictor top-K #1, session 43 reference-swap residue, STATE 10.Y.6 work order): the only name-fixable wall left after the reference swap. Linux production map pairs this donor function to _mach_memory_entry_port_release via call-sites (native 0xfffffff007469be4 on b9b2aaad); the whole ipc_port neighborhood brackets it (_ipc_port_request_cancel, _ipc_port_importance_delta, _ipc_port_destroy, _ipc_port_adjust_special_reply_port_locked all paired within +/-0x3000 in the donor import table). The donor-reference pairing did not transfer this name (the donor\u2194reference stage leaves it unpaired), so it stayed unmapped in the reference-swap map B (9896 pairs) while 75 call sites on the AMFI-rooted boot walk and 5 kext ledger stub sites point at it. Donor body: pacibsp frame, release fast path comparing mapped-entry refcount +1 vs 2 with retab early return, then port-tag orr #0xf00000000000000 arithmetic into the release worker; size 0x214. Both native lanes build _mach_memory_entry_port_release as a small shim (Mac 0xfffffff00745860c size 0x38, ldrb w8,[x0]; cmp #0x24 issuer-class byte gate; Linux equivalent shim) tail-calling the shared worker, same shim/worker split as the _IOLogv wall-32 fixture. Mac native symbol is the unique global at 0xfffffff00745860c on 4672ced7."
+  },
+  {
+   "original": "0xfffffe000af07900",
+   "original_size": 44,
+   "original_sha256": "73c4e9edaae1e1999779514a6c2749de329c97bad1a5edc1fb663b4d62bacf51",
+   "native_symbol": "__ZN8OSObjectC2Ev",
+   "evidence": "Base object constructor of OSObject: bti c entry; stores refcount 1 at [x0+8]; stores the pacda-signed OSObject vtable 0x7d9e2d0 (discriminator this|0xcda1<<48) at [x0]; ret. 10 instructions, zero calls. Distinct from the already-paired OSMetaClassBase ctor clone 0x0ae40a00 (vtable 0x7d62608, vptr only, no refcount store). Native has the standalone no-arg base ctor __ZN8OSObjectC2Ev (libkern/c++/OSObject.cpp OSObject::OSObject()). Wall-36 verified target: donor kext caller 0x0977dd00 (OSObject-subclass operator-new construction chain, fn bounds 0x0977dcb0..0x0977dd9c) bl's 0x0af07900 then overwrites the vptr with its own; 188 direct bl sites + 31 fixup slots across donor kexts share this target, so one fixture clears the whole class. Call-time order self-consistent: base vptr set inside callee, caller vptr overwritten on return = standard C++ construction chain."
   }
  ],
  "data": [
