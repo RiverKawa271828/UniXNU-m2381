@@ -1,0 +1,7 @@
+[
+ {
+  "low": "0xfffffe000af5afc8",
+  "symbol": "__ZN12IOUserClient23registerFilterCallbacksEPK19io_filter_callbacksm",
+  "evidence": "IOUserClient::registerFilterCallbacks(const struct io_filter_callbacks *callbacks, size_t size), IOUserClient.cpp:6856. Wall 24 (payload b5f102ac first flash, CRC 0xbad103f6 zlib-exact): sandbox site 0xa52ee20 (wall 23 +0x2c0, same startup function) bl 0xfffffe000af5afc8; x0 = 0x82d0e80 = sandbox __DATA io_filter_callbacks struct ptr, x1 = 0x18 = sizeof(io_filter_callbacks). Body identity (13 instr): cmp x1,#0x18 -> kIOReturnBadArgument 0xe00002c2; casal x9,x8,[0x7d71b88 = gIOUCFilterCallbacks, file NULL] -> OSCompareAndSwapPtr(NULL, callbacks, &gIOUCFilterCallbacks); fail -> +0x13 = kIOReturnBusy 0xe00002d5; success -> 0. Apple map gap between is_io_device_tree_entry_exists_with_name 0xaf5ac1c and sysctl_debug_iokit 0xaf5b000. Ledger key 0xfffffff00af5afc8, 2 sites / 1 kext (sandbox). Native named global 0xfffffff007abdf4->0xfffffff007b39df4, same constants (0x2c2, cmp x1,#0x18, add #0x13), CAS lowered to OSCompareAndSwapPtr call 0x7a1c8e4 vs donor inline casal."
+ }
+]

@@ -1,0 +1,7 @@
+[
+ {
+  "low": "0xfffffe000a91f920",
+  "symbol": "_strncasecmp",
+  "evidence": "strncasecmp(const char*, const char*, size_t), osfmk/device/subrs.c strncasecmp_impl asm(\"_strncasecmp\") alias (osfmk/machine/string.h:66). Wall 21 (kernel 132b605a/payload 91ddb680 first-flash, CRC 0xfc18414e zlib-exact): sandbox kext site 0xa5472e8 bl 0xfffffe000a91f920 (file state); panic args x0='ENTITLEMENT:com.apple.security.exception.iokit-user-client-class' x1='ENTITLEMENT:' = case-insensitive entitlement-prefix match in sandbox profile compile (continues wall 19/20 sandbox startup chain). Callee identity: 3-arg body bti c; cbz x2,+0x48; sub x9,x2,#1; ldrsb tolower-csel loop; cmp w10,#0; ccmp x9,#0,#4,ne; sub x9,x9,#1 tail — distinct from 2-arg _strcasecmp entry 0xa91f8dc; Apple map has NO symbol between _strcasecmp 0xa91f8dc and _strchr 0xa91fa44, so map-name channel could not pair it (ledger key 0xfffffff00a91f920, 34 sites / 4 kexts: AppleARMPlatform 9, apfs 2, IOMobileGraphicsFamily 20, sandbox 3). Native: _strncasecmp global N_SECT at 0xfffffff007506ed4, 21 body instructions mnemonic-identical to donor mod donor-leading bti c. Tool note: kc.py _symtab setdefault keyed by value lets an empty-name symbol at the same address hide the real name (sym search false negative); direct symtab parse resolves the name."
+ }
+]

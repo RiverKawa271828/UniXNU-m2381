@@ -1,0 +1,7 @@
+[
+ {
+  "low": "0xfffffe000ace1514",
+  "symbol": "_proc_set_syscall_filter_callbacks",
+  "evidence": "proc_set_syscall_filter_callbacks(syscall_filter_cbs_t cbs), bsd/kern/kern_proc.c:5354. Wall 26 (payload 73be0a25 first flash, CRC 0xd630bc81 zlib-exact): sandbox site 0xa52f18c (wall 25 +0x34c, same startup function, now past registerFilterCallbacks into MACF integration) bl 0xfffffe000ace1514; x0 = cbs struct (heap), x1 = 0x80 = sizeof passed by caller. Body identity: ldr w8,[x0] = cbs->version, cmp #1 (SYSCALL_FILTER_CALLBACK_VERSION) != -> return 0x16 = EINVAL (22); ldp x9,x8,[x0,#0x10] + orr + cbnz = cbs->mach_filter_cbfunc || cbs->kobj_filter_cbfunc non-NULL -> install path (zalloc_ro_mut + panic_proc_ro_proc_backref_mismatch/zone_id_require_ro_panic callees = mac_task_register_filter_callbacks RO machinery) -> 0. Source order: sits in the unnamed kern_proc.c gap between _proc_get_syscall_filter_mask (map 0xace12d4, +0x240 noise) and _proc_ro_alloc 0xace1708. Ledger key 0xfffffff00ace1514, 2 sites / 1 kext (sandbox). Native named global _proc_set_syscall_filter_callbacks 0xfffffff00789632c (right after the wall-19-paired _proc_get_syscall_filter_mask_size/_proc_get_syscall_filter_mask cluster)."
+ }
+]

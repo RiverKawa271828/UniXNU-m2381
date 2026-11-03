@@ -1,0 +1,7 @@
+[
+ {
+  "low": "0xfffffe000a938070",
+  "symbol": "_unixnu_fileset_read_erandom",
+  "evidence": "read_erandom(void *buf, size_t nbytes), osfmk/prng/prng_random.c:313 (static __static_testable __mockable). Wall 25 (payload f0713efc first flash, CRC 0x18977c8a zlib-exact): sandbox site 0xa52ee40 (wall 24 +0x20, same startup function) bl 0xfffffe000a938070; x0 = 0x82d2875 sandbox __DATA buffer, x1 = 0x40 = 64 bytes of entropy. Callee sits in the donor map gap between _read_erandom_generate 0xa937fb8 and _read_random 0xa938124 = exactly where source order puts static read_erandom; body head reads prng_ready flag [0x7ca28c0] and branches DRBG vs PRNG path (prng_ctx 0x7ca28b0 signed 0xedeb = cckprng generate discriminator, session 21 family). NO-NATIVE class: our clang inlines static read_erandom into every caller (native symtab has only _read_erandom_generate kind=36; native _read_random 0x51db78 additionally calls prng_funcs.refresh so pairing to it would add a refresh per read = semantics drift). Fix = shim channel first instance: patches/xnu-12377/fileset-read-erandom-shim.patch adds unixnu_fileset_read_erandom (used, noinline) to prng_random.c wrapping read_erandom + Mach.exports entry (kernel links -exported_symbols_list all-kpi.exp so the export keeps it alive). Ledger key 0xfffffff00a938070, 3 sites / 1 kext (sandbox)."
+ }
+]

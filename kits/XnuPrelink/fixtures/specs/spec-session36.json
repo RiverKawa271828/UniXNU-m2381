@@ -1,0 +1,17 @@
+[
+ {
+  "low": "0xfffffe000ace1578",
+  "symbol": "_proc_set_syscall_filter_index",
+  "evidence": "proc_set_syscall_filter_index(int which, int num, int index), bsd/kern/kern_proc.c:5374. Source-order flanking with two independently verified anchors: donor physical sequence in the kern_proc.c MACF gap = 0xace1514 _proc_set_syscall_filter_callbacks (wall-26 fixture, confirmed gone from ledger after 97f091b3 flash) -> 0xace1578 (this) -> 0xace1618 _proc_set_sandbox_info_callbacks (wall-27, body-verified against native 0x78963bc); fixup window shows no other function start in between. Body: bti c; cmp w0,#2 = switch(which) case SYSCALL_MASK_KOBJ (bsd/sys/proc_private.h:262 = 2), b.ne -> EINVAL path; then inlined ipc_kobject_set_kobjidx: kobj table count [0x7c98470]-1, umull constant-div magic 0x7f218557 (divide by table stride), table base 0x7c923c8 — Apple clang inlines the helper while our native emits a real call (bl _ipc_kobject_set_kobjidx at 0x789639c); toolchain inlining drift, semantics identical (returns ENOENT=2 when kobjidx set fails). Ledger 0xfffffff00ace1578, 2 sites / 1 kext (com.apple.security.sandbox). Native symbol _proc_set_syscall_filter_index 0xfffffff007896380."
+ },
+ {
+  "low": "0xfffffe000ace1618",
+  "symbol": "_proc_set_sandbox_info_callbacks",
+  "evidence": "proc_set_sandbox_info_callbacks(sandbox_info_cbs_t cbs), bsd/kern/kern_proc.c:5392. Wall 27 (payload 97f091b3 first flash, CRC 0x74feb86 zlib-exact over the 132-byte on-screen message): sandbox site 0xa52f1a8 (wall-26 site 0xa52f18c +0x1c, same MACF-integration startup chain of com.apple.security.sandbox) bl -> donor 0xfffffe000ace1618. Body identity with native _proc_set_sandbox_info_callbacks 0xfffffff0078963bc instruction-for-instruction (modulo addresses): ldr w8,[x0] = cbs->version, cmp #1 (SANDBOX_INFO_CALLBACK_VERSION, bsd/sys/proc_private.h:284) mismatch -> w0=0x16 EINVAL(22); ldr x8,[x0,#8] = cbs->sandbox_profile_cbfunc, cbz -> return 0; adrp/ldr global mac_proc_get_sandbox_profile (SECURITY_READ_ONLY_LATE, kern_proc.c:5390), non-NULL -> w0=1 = EPERM (BSD errno: EPERM=1), NULL -> str cbfunc into global, return 0. Caller context: sandbox kext registering its sandbox_profile_cbfunc during startup. Ledger 0xfffffff00ace1618, 2 sites / 1 kext (com.apple.security.sandbox)."
+ },
+ {
+  "low": "0xfffffe000ace1660",
+  "symbol": "_proc_set_filter_message_flag",
+  "evidence": "proc_set_filter_message_flag(proc_t p, boolean_t flag), bsd/kern/kern_proc.c:5410. Donor start immediately after wall-27 target 0xace1618, matching source order (set_sandbox_info_callbacks :5392 -> set_filter_message_flag :5410). Body identity with native _proc_set_filter_message_flag 0xfffffff007896400 shape-for-shape: cbz x0 -> early EINVAL return (p == PROC_NULL); pacibsp + 0x10 frame; global load then add p (donor [0xb2e5520] vs native [0x7c79990]); ldr w9,[p+0x458/0x470], tst #2, csel x0,xzr,x8,eq; bl task_set_filter_msg_flag (native bl resolves to named _task_set_filter_msg_flag, osfmk/kern/task.c:9824; donor callee 0xa836a5c unnamed same role); mov w0,#0 + epilogue. Only p==NULL early-out present (set/get pair sibling proc_get_filter_message_flag :5422 would also test x1 and is not in the ledger). Ledger 0xfffffff00ace1660, 4 sites / 1 kext (com.apple.security.sandbox). Native symbol _proc_set_filter_message_flag 0xfffffff007896400."
+ }
+]

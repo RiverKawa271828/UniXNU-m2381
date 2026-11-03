@@ -1,0 +1,77 @@
+[
+  {
+    "low": "0xfffffe000a7f5850",
+    "symbol": "_lck_rw_lock_shared_to_exclusive",
+    "evidence": "osfmk/kern/lock_rw.c:1793. 体形逐元素对读 native 0xfffffff00733e964: 同 frame 常量 (0x3ffff=r_count-1, -0x210000 掩码, 0x20ffff, sub #0x200,lsl#12, cmp #1); atomic_exchange_begin32(x19+8) 位测 #0x10/#0x12 对应 donor 在 [x0+8] 上的 casa 循环 (donor 内联 LSE 原子); wakeup 判定块逐指令同 (and 0x20ffff / sub #0x200<<12 / cmp #1 / thread_wakeup_prim(x20+1,0,0) donor 0xa8150f0); lck_rw_drain_status(lck,0xffff,·) donor 0xa7f5434; assert_wait(lck+1,0x40000000) reader-event 逐字节同 (donor 0xa811e60); u_wanted 已置时 __lck_rw_unlock_shared + return false 的唯一 s2x 尾 (donor 0x5b0c→0xa7f6f98); 成功路径 str ctid→[x20,#4] (owner) 返回 1. Map 缺口夹逼: donor 位于 _IORWLockRead 0xa7f5598 (=native lck_rw_lock_shared) 与 __lck_rw_lock_type_panic 0xa7f5c5c 之间 = native lck_rw_lock_shared_b/shared_to_exclusive/exclusive_to_shared 源序窗口; native 地址序 lock_shared_b→shared_to_exclusive→exclusive_to_shared→type_panic 唯一放置. Panic 锚: 0x4e6=1254 行 = machine_routines_common.c 'ml_set_interrupts_enabled_with_debug' (donor 内联 ml_set_interrupts_enabled 的 daif 断言, native 走 _ml_set_interrupts_enabled 外调). native 符号存在. 账本 22 站/2 kext (sandbox 7). 置信度: 高"
+  },
+  {
+    "low": "0xfffffe000acd4758",
+    "symbol": "_persona_put",
+    "evidence": "bsd/kern/kern_persona.c:357. 体形: bti c + cbz x0→ret (persona==NULL 早退, native 0xfffffff00788b8c8 同为帧外 cbz); inline persona_lock = casa 0↔ctid on [x0+0x140] (pna_lock word), 慢路径 0xa7f3574 = lck_mtx_lock 慢路 (与 T2 簇同一把); 尾跳 persona_put_and_unlock (donor 0xacd47b8, map 已配名 native 0xfffffff00788b90c). 源: if (persona) { persona_lock(persona); persona_put_and_unlock(persona); } 逐句对应. Map 缺口: donor 位于 _persona_alloc 0xacd40f8 与 _persona_put_and_unlock 0xacd47b8 之间; native 地址序 _persona_put 0x788b8c8 紧邻 _persona_put_and_unlock 0x788b90c 同样 caller-before-callee 放置 (源序 put_and_unlock:320 在 put:357 前, 两件二进制同逆序). 代码差异 benign: donor 内联 mutex fastpath casa, native 外调 lck_mtx_lock; donor 慢路多一层帧. native 符号存在. 账本 7 站/1 kext (sandbox). 置信度: 高"
+  },
+  {
+    "low": "0xfffffe000acd79e8",
+    "symbol": "_proc_pidversion",
+    "evidence": "bsd/kern/kern_proc.c:2109. 体形逐元素对读 native 0xfffffff00788d65c: ldr [x0+0x18]=p_proc_ro; zone 校验 donor 内联 (orr 0xf0<<48 归一 + ro-range [0x7c9cc20] + elem-tag [0x7c9cc80] lsr#0xa/ldrh/and 0x3ff == 5 = ZONE_ID_PROC_RO, native 为 bl _zone_require_ro(w0=5,w1=0x60) 同参); backref 校验 [ro]==p else bl panic_proc_ro_proc_backref_mismatch (donor 0xb008bcc); 返回 [ro+0x18] = p_idversion (proc_ro.h:75, pr_proc@0/pr_task@8/p_uniqueid@0x10/p_idversion@0x18). Map 缺口: donor _proc_pid 0xacd794c .. _proc_ident_equal 0xacd84e8 窗口内紧随 proc_pid, native _proc_pid 0x788d5f8 → _proc_pidversion 0x788d65c 同邻接. KDK: proc_pidversion kern_proc.c 命中. 同簇 recon2A 已实证 proc_uniqueid (ro+0x10, tag 5) 同构. native 符号存在. 账本 12 站/2 kext (sandbox 7). 置信度: 高"
+  },
+  {
+    "low": "0xfffffe000a9b0b90",
+    "symbol": "_vfs_getbyid",
+    "evidence": "bsd/vfs/vfs_lookup.c:2498. 体形逐元素对读 native 0xfffffff0075b6be0: ldr w0,[x0] = fsid->val[0]; bl 0xa9bf5c0 = mount_lookupby_volfsid(val0, withref=1) (donor 内联实现: mountlist 锁 casa 0xb345878 + TAILQ 走链 [mp] 头 0xb373b48 + mnt_lflag 位测 [mp+0x74]&0x1010000==0x10000 + mount_iterref 计数 [mp+0x9a4], 单字比较与 volfsid 语义一致); NULL → return 0x16 (EINVAL) ✓; cmp x1,#2 → ino==2 走 VFS_ROOT: donor 内联 VFS_ROOT 宏 (cmp mp,dead_mountp 0xb40db10 → ENOTSUP 0x2d; op NULL 检查; ctx==NULL→bl 0xa866a48=vfs_context_current; autda mnt_op [mp+0x28] ctx 0x5942; 槽 +0x18=vfs_root, 3 参) else VFS_VGET (槽 +0x38, 4 参 mp,ino,vpp,ctx) — vfsops 布局 vfs_root@0x18/vfs_vget@0x38 吻合; 尾部 vfs_unbusy 内联 = IORWLockUnlock([mp+0x960]) donor 0xa7f6138. native 外调 _VFS_ROOT 0x75e7c0c/_VFS_VGET 0x75e7f30/_vfs_unbusy — 控制流分支结构逐块同 (native 实测: cbz→0x16, cmp x22,#2, 同参数编组). 导入窗口: sandbox kext vfs KPI 族 0x82d0ba8 (vfs_context_ucred/vfs_devvp/vfs_flags/vfs_statfs/…). native 符号存在. 账本 5 站/1 kext (sandbox). 置信度: 高"
+  },
+  {
+    "low": "0xfffffe000ac9efd0",
+    "symbol": "_csproc_get_platform_binary",
+    "evidence": "bsd/kern/kern_cs.c:923. 体形逐元素对读 native 0xfffffff007855110: donor 内联 csproc_get_blob — cbz p→0; authed p_textvp [p+0x548] ctx 0x612c (native +0x5b0 同 ctx, 同 autda 形); proc_getcsflags & CS_SIGNED (bit 0x1d=0x20000000, cs_blobs.h:72) 未置→0; bl 0xad3cd80 = ubc_cs_blob_get(vp,-1,-1,[p+0x550]=p_textoff) (w1=w2=-1 同 csvnode_get_teamid 调用形); 返回 [csblob+0xac] 位 0 = csb_platform_binary 位域. 双胞胎: 0xac9f074 同形但 ubfx #1 = csb_platform_path → donor 位序 platform_binary 先 platform_path 后, native 同序 (_csproc_get_platform_binary 0x7855110 → _csproc_get_platform_path 0x78551cc), 源序 kern_cs.c:923/935 位于 csvnode_get_teamid(900) 与 csproc_get_prod_signed(1030) 之间, donor map 簇一致 (_csvnode_get_teamid 0xac9ef98 .. _csproc_get_prod_signed 0xac9f118). 导入窗口 0x82d06c0/0x7fa9270 = sandbox/AMFI cs KPI 族 (_csproc_get_teamid/_csvnode_get_blob 邻). 差异 benign: donor 内联 lck mutex fastpath + 省略 xpacd 自检. native 符号存在. 账本 7 站/2 kext (sandbox 5). 置信度: 高"
+  },
+  {
+    "low": "0xfffffe000acd463c",
+    "symbol": "_proc_persona_get",
+    "evidence": "bsd/kern/kern_persona.c:310. 体形逐元素对读 native 0xfffffff00788b874: proc_lock (donor 内联 casa 0↔ctid on [p+0x58] p_mlock word; native bl _proc_lock 0x788938c→lck_mtx_lock); x20=[p+0xa8]=p_persona — **offset 0xa8 两件二进制完全一致**; NULL→跳过; persona_lock (donor casa [persona+0x140], native lck_mtx_lock(persona+0x148), 8B 结构漂移); os_ref_retain (donor ldadd 1 on [persona+0], native bl _os_ref_retain_internal(persona,[persona+8])); persona_unlock; proc_unlock (donor casl 归零, native bl _proc_unlock); return persona. 源序: proc_persona_get(310) 在 persona_put_and_unlock(320) 前, donor 地址序 T6@0xacd463c < persona_put_and_unlock@0xacd47b8 ✓, native _proc_persona_get 0x788b874 紧邻 _persona_put 0x788b8c8. 导入窗口 0x82d09c0 = sandbox proc KPI 族 (proc_pgrpid/proc_pid/proc_get_ro 邻). native 符号存在. 账本 5 站/1 kext (sandbox). 置信度: 高"
+  },
+  {
+    "low": "0xfffffe000acd5290",
+    "symbol": "_current_persona_get",
+    "evidence": "bsd/kern/kern_persona.c:546. 体形 = native 0xfffffff00788bf20 的**逐指令等价 wrapper**: pacibsp 帧 + bl <get_id> + 撤帧 + autibsp + 尾跳 persona_lookup — native: bl _current_persona_get_id (0x788beb8) 尾 b _persona_lookup; donor: bl 0xacd51d8 尾 b 0xacd4a54. callee 对读: 0xacd51d8 = current_persona_get_id 内联 (mov w20=-1 存 [sp+0xc]; bl 0xa841528 = thread_get_mach_voucher(current_thread,0,&voucher); [sp]=voucher; bl 0xa87a578 = bank_get_bank_ledger_thread_group_and_persona(voucher,0,0,&uid); ldaddl -1 [voucher] = ipc_voucher_release 内联; 回退路径 vfs_context_current→[ctx+0x18]→[p+0xa8]→[persona+8] = proc_persona_id 内联; 返回 uid) — 与 native current_persona_get_id 逐块同 (native: _thread_get_mach_voucher/_bank_get_bank_ledger_thread_group_and_persona/_ipc_voucher_release/_proc_persona_id). 0xacd4a54 = persona_lookup (all_personas 锁 casa 0xb359448 = persona_put_and_unlock destroy 路径同一把; 走 0xb416448 链表, 0x5aa0/0xaa5<<16 magic 校验). Map 缺口: donor _persona_find 0xacd5084 .. _persona_proc_adopt 0xacd52ac, native 源序 current_persona_get_id(522)/current_persona_get(546)/proc_reset_persona_internal(566) 窗口一致. 导入窗口 0x80106d8 sandbox 族 (_cs_get_cdhash/_current_proc/_kauth_cred_proc_ref 邻, current_persona_* 字母序恰在 current_proc 前). native 符号存在. 账本 4 站/1 kext (sandbox). 置信度: 高"
+  },
+  {
+    "low": "0xfffffe000acd905c",
+    "symbol": "_proc_ppid",
+    "evidence": "bsd/kern/kern_proc.c:1418. 体形逐元素对读 native 0xfffffff00788ebb4: cbz x0→-1 (0xffffffff); zone 校验 donor 内联 (x1=x0 自身或归一 0xf0<<48, ro-range [0x7c9cbd0], elem-tag [0x7c9cc80]==0x19=25=ZONE_ID_PROC_TASK 即 proc 本体校验; native 为 bl _zone_id_require(w0=0x19)); 返回 ldr w0,[p+0x20] = p_ppid (直读 proc 可变字段, 非走 proc_ro). 双胞胎 0xacd90e0 = proc_original_ppid (同 zone-25 校验 + ro=[p+0x18] + zone-5 校验 + backref + 返回 [ro+0x1c]=p_orig_ppid) 与 native _proc_original_ppid 0x788ebfc 逐元素同 — donor 簇序 checkdeadrefs→[T8 proc_ppid]→[original_ppid]→get_ro 与 native proc_checkdeadrefs 0x788eb44→proc_ppid 0x788ebb4→proc_original_ppid 0x788ebfc→proc_get_ro 0x788ec70 完全平行. 差异 benign: donor 内联 zone_id_require. native 符号存在. 账本 6 站/2 kext (sandbox 4). 置信度: 高"
+  },
+  {
+    "low": "0xfffffe000acd9678",
+    "symbol": "_proc_platform",
+    "evidence": "bsd/kern/kern_proc.c:1509. 体形逐元素对读 native 0xfffffff00788eee4: cbz p→-1; ro=[p+0x18]; zone 校验 donor 内联 (ro-range [0x7c9cc20] + elem-tag==5 ZONE_ID_PROC_RO, 尺寸商 0x4000-((x1&0x3fff))*[0x7ca2f88] 余检查 = inlined zone_require_ro 元素归属, native bl _zone_require_ro(5,0x60)); backref [ro]==p else panic_proc_ro_proc_backref_mismatch; 返回 [ro+0x38] = p_platform_data.p_platform (proc_ro.h:81: proc_data 组 0x10 起: uniqueid@0x10/idversion@0x18/orig_ppid@0x1c/orig_ppidver@0x20/csflags@0x24/ucred@0x28/filter_mask@0x30/platform@0x38). 与 T3 (proc_pidversion, ro+0x18) 同构不同槽. Map 缺口: donor _proc_getcsflags 0xacd94c4 后; native _proc_getcsflags 0x788ee04 → … → _proc_platform 0x788eee4 (prev _proc_is_simulated 0x788eedc) — 同 kern_proc.c ro-accessor 簇. KDK 源序佐证 kern_proc.c:1509. native 符号存在. 账本 7 站/2 kext (sandbox 4). 置信度: 高"
+  },
+  {
+    "low": "0xfffffe000a7e2378",
+    "symbol": "_host_get_special_port",
+    "evidence": "osfmk/kern/host.c:1481. 体形逐元素对读 native 0xfffffff007328c7c(+body 0x7328c94): 入口判定逐指令同 (sub w8,w2,#0x24; cmn #0x23 — id ∈ [HOST_MIN_SPECIAL_PORT,35]; donor cbz host→KERN_INVALID_ARGUMENT=4, native ccmp 合并); host 锁 donor 内联 casa [host+8] (native lck_mtx_lock); port 表 donor 0xb304b50+id*8 (realhost.special), **PAC 上下文 movk #0x9b8d,lsl#48 与 native 逐字节相同**; switch id==3→ipc_port_copy_send_any(main_device_port donor 0x7d72a8) / id==2→ipc_kobject_copy_send(port,&realhost,0x19=IKOT_HOST_PRIV) / id==1→ipc_kobject_copy_send(&realhost,0x18=IKOT_HOST) / default→ipc_port_copy_send_mqueue — native 同四路 (0x7328d28/d3c/d08/d50); str 结果→[x3=portp]; 返回 KERN_SUCCESS. realhost 全局 donor 0xb304b40 = T11 返回值互证. Map 缺口: _host_get_special_port_from_user 0xa7e22a0 .. _host_set_atm_diagnostic_flag 0xa7e2580 = native get_special_port 0x7328c7c..atm 0x7328de8 同窗. native 符号存在. 账本 5 站/2 kext (sandbox 3). 置信度: 高"
+  },
+  {
+    "low": "0xfffffe000a7e2570",
+    "symbol": "_host_priv_self",
+    "evidence": "osfmk/kern/host.c:1532. 体形: 3 指令 adrp/add/ret 返回 &realhost (donor 0xb304b40 — 与 T10 host_get_special_port 的 realhost.special 表基址互证: T10 表 0xb304b50 = realhost+0x10, T11 返回 realhost 头部). native 0xfffffff007328dd0 (_host_priv_self) = adrp realhost(0x7ca93d0)+add+ret, 与 0xfffffff007328ddc (_host_self) **字节级相同体** (host.c:1526/1532 同为 return &realhost). Map 缺口: donor 位于 host_get_special_port 簇尾与 _host_set_atm_diagnostic_flag 0xa7e2580 之前 = native 序 host_get_special_port→host_get_io_main→host_priv_self→host_self→host_set_atm_diagnostic_flag 的尾窗; donor 只保留一份 realhost-thunk (另一份被内联). 行为注记: host_priv_self 与 host_self 返回值/ABI 完全等价, shim 行为不因二选一而变. 导入窗口 0x7fa92f0 紧随 T10 (sandbox 族). native 符号存在. 账本 5 站/2 kext (sandbox 3). 置信度: 中 (双胞胎不可分; 体形/源序指向 host_priv_self 为 kext KPI 惯用)"
+  },
+  {
+    "low": "0xfffffe000a90fac0",
+    "symbol": "_vm_deallocate",
+    "evidence": "osfmk/vm/vm_user.c:203. 体形: bti c + 纯尾跳 b 0xa8a7c98 (2 指令 thunk). 0xa8a7c98 = mach_vm_deallocate_kernel 实现 (donor map 将孪生 thunk 0xa90fab8 命名为 _mach_vm_deallocate → 同一 0xa8a7c98; 实现体 cbz map→KERN_INVALID_ARGUMENT 等与 native _mach_vm_deallocate_kernel 0xfffffff007433484 同簇). native 空间完全平行: _mach_vm_deallocate_external 0x74be0f0 与 _vm_deallocate 0x74be0f4 是**两个相邻别名 thunk** (均 `b _mach_vm_deallocate_kernel`), donor 同样成对 (0xa90fab8 + T12 0xa90fac0) 且地址序一致 (native: vm_allocate_external 0x74be05c → mach_vm_deallocate_external → vm_deallocate → mach_vm_inherit; donor: upl_commit_range → … → mach_vm_deallocate → T12 → protect 类 wrapper). 行为注记: 两别名同实现, 即使 pairing 互换 shim 行为不变. native 符号存在. 账本 7 站/2 kext (sandbox 3). 置信度: 高"
+  },
+  {
+    "low": "0xfffffe000a9e4440",
+    "symbol": "_vn_rdwr",
+    "evidence": "bsd/vfs/vfs_vnops.c:983. 体形 = native 0xfffffff0075e4c20 **指令级同构 wrapper**: tbnz w3,#0x1f → return EINVAL 0x16 (len<0, vn_rdwr 源首检); 帧内 ldp x19,x8,[x29+0x10] = 栈参 (*aresid, p) 透传; mov w3,w3 零延; str xzr,[sp+0x18] (resid 清零) + stp x9(&resid),x8(p) 作 impl 前 2 栈参; bl impl = **_vn_rdwr_64** (donor 0xa9e449c, native 0x75e4c74): frame 0xd0, x6=ioflg/x7=cred 透传, mrs tpidr 建 context.vc_thread + x7 建 vc_ucred (源 1042-1043), lsl w8,#1,w5 / tst #0x121 = UIO_SEG_IS_USER_SPACE{UIO_USERSPACE(0),32(5),64(8)}, [p+0x454] bit2 = P_LP64 选 spacetype, uio_createwithbuffer 栈缓冲 + bl _uio_addiov, MAC 检查簇 (mac_vnode_check_*), 尾路径 sleep/lock_vnode_and_post; wrapper 尾 cbz x19→跳过, ldr [sp+0x18] 截断 int 写 *aresid (源 1013-1016). Map 缺口: donor _vn_open_auth 0xa9e3848 .. _vnio_openfd 0xa9e4f58 = vfs_vnops.c 簇, native _vn_open 0x75e3e7c/_vn_open_modflags 0x75e3f04/_vn_open_auth 0x75e3f84 同区. 导入窗口 0x7fa43f8/0x7f69d88/0x7f576f0 = sandbox vfs KPI 族 (字母序恰在 vfs_context_ucred 与 vnode_close 之间). native 符号存在 (_vn_rdwr 0x75e4c20). 账本 7 站/3 kext (sandbox 3). 置信度: 高"
+  },
+  {
+    "low": "0xfffffe000a9e9a28",
+    "symbol": "_vfs_rootvnode",
+    "evidence": "bsd/vfs/kpi_vfs.c:1838. 体形逐元素对读 native 0xfffffff0075e9c24: 读全局 rootvnode (donor 0xb373b10 / native _rootvnode 0x7d215c0); NULL→返回 NULL; lck_rw_lock_shared(rootvnode_rw_lock) — donor 用 IORWLockRead wrapper 0xa7f5598 于 donor rootvnode_rw_lock 0xb373b58 (native 0x7d1d500 同语义); vnode_get(vp) donor bl 0xa9be914 = _vnode_get (map 已配名); csel vp,err==0?vp:NULL 逐指令同; 解锁 donor IORWLockUnlock 0xa7f6138 带 **内联 rw 模式断言 panic**: 串 'lck_rw_unlock_shared(): lock %p held in mode: %d @%s:%d' + 文件串 'lock_rw_old.c' + 行 0x74d=1869 (native 经 _lck_rw_unlock_shared 外部断言) — donor 把 unlock 断言内联, benign. 返回持 iocount 的 rootvnode (KDK 命中 vfs_rootvnode; 源注释 'returns system root vnode iocount; released using vnode_put()'). Map 缺口: donor _vfs_isswapmount 0xa9e9954 .. _vnode_vid 0xa9e9ac8 = kpi_vfs.c 簇尾 (native 同邻). 导入窗口 0x82d0bc0 sandbox vfs 族 (紧随 T4 vfs_getbyid). native 符号存在. 账本 3 站/1 kext (sandbox). 置信度: 高"
+  },
+  {
+    "low": "0xfffffe000aa8abc8",
+    "symbol": "_ifaddr_address",
+    "evidence": "bsd/net/kpi_interface.c:2772. 体形逐元素对读 native 0xfffffff007678198: cbz ifa / cbz out_addr → EINVAL 0x16 (两处, 同); IFA_LOCK_SPIN donor 内联 (percpu preempt 计数 [tpidr+0x1b8]++ + casa ctid|0x30000000 于 [ifa+8], native bl _lck_mtx_lock_spin 0x733c1c8 — 同 spin mutex 语义); ifa_addr NULL → 解锁返回 ENOTSUP 0x2d (donor [ifa+0x18], native [ifa+0x28], 8B 结构漂移); copylen=min(addr_size, sa->sa_len) (native csel w2,w19,w8,lo; donor 同义字 0xac44 为 capstone 未解码的 v8.8+ MOPS/拷贝族指令, 不影响语义); SOCKADDR_COPY→bl _memcpy donor 0xa76cbd0 (map body-hash 配名, native 0x7c4ca90 同调) 带 __memcpy_chk 边界 brk #0x5519 (0xff 上界); 尾 cmp addr_size,sa_len / csel EMSGSIZE 0x28 : 0 逐指令同 (native 0x6781f8-0x678200). 邻居自证: donor 簇 0xaa8aa84=ifaddr_reference(+0x10 ref ldadd)/0xaa8aac8=ifaddr_release/0xaa8ab1c=ifaddr_address_family (读 [sa+1]=sa_family, IFA_LOCK_SPIN 同构) 与 native ifaddr_reference 0x6780d0/ifaddr_release 0x678100/ifaddr_address_family 0x678148/**ifaddr_address 0x678198**/ifaddr_dstaddress 0x678224 地址序完全平行; 源 kpi_interface.c:2757-2772 相邻. 导入窗口含 sandbox (账本 3 站/1 kext). native 符号存在. 置信度: 高"
+  }
+]

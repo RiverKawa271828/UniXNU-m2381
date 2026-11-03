@@ -1,0 +1,7 @@
+[
+ {
+  "low": "0xfffffe000aedcb48",
+  "symbol": "__ZN9IOService19getMatchingServicesEP12OSDictionary",
+  "evidence": "IOService::getMatchingServices(OSDictionary *matching), IOService.cpp:6398. Wall 23 (payload 7fac1e57 first flash, CRC 0xcfcb40bc zlib-exact): sandbox site 0xa52ed60 (+0x3c from wall 22 site 0xa52ed24, same startup function advancing) bl 0xfffffe000aedcb48; x0 = heap OSDictionary* (matching), x1 = caller residue. Body identity: LOCKWRITENOTIFY inline (casa on [0xb419198] lock, owner +0x18, refcount +0x20) -> mov w1,#4 (kIOServiceMatchedState); mov w2,#0 (default options=0) -> bl copyExistingServices 0xaece088 -> UNLOCK inline (casl) -> return — element-for-element source 6398-6411. Apple map has no symbol between waitQuiet(mach_timespec) 0xaedc95c and addMatchingNotification 0xaedcf6c (nearest-name noise waitQuiet+0x1ec). Ledger key 0xfffffff00aedcb48, 13 sites / 5 kexts (ARMPlatform 4, IOGPUFamily 2, IOHIDFamily 2, IOStorageFamily 2, sandbox 3). Native named global 0xfffffff007aba788, 19-instr same semantic (out-of-line lock/unlock calls vs donor inline casa fast path)."
+ }
+]
