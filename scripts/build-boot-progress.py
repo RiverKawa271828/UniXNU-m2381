@@ -102,7 +102,15 @@ if os.environ.get('XNU_SOURCE_STORAGE') != '1':
 
 archive = OUT / 'libBootProgress.a'
 archive.unlink(missing_ok=True)
-members = [str(obj), str(fault_obj), str(policy_obj), str(diag_obj), str(fw_obj), str(blob_obj)]
+# 2026-11-05 (iOS>=27 source-storage lane): the source-storage archive carries
+# the real BootWatchdogPolicy.c and BootDiagExport.c (the build-sheng-source-
+# storage.py iOS>=27 branch pulls them), so those two members must stay out of
+# this archive exactly like log_obj, or the kernel link reports duplicate
+# sheng_boot_watchdog_policy / boot_diag_* symbols.
+source_storage = os.environ.get('XNU_SOURCE_STORAGE') == '1'
+members = [str(obj), str(fault_obj), str(fw_obj), str(blob_obj)]
+if not source_storage:
+    members += [str(policy_obj), str(diag_obj)]
 if os.environ.get('XNU_SOURCE_STORAGE') != '1':
     members.append(str(log_obj))
 subprocess.run(['xcrun', 'ar', 'rcs', str(archive), *members], check=True, timeout=30)

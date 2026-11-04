@@ -20,20 +20,28 @@
 // defines XNU_NATIVE_LEGACY_DISPLAY_QUALIFIED), libNativeLegacyDisplay.late.a
 // carries the real providers and drivers, and these zeros must not also
 // define them (duplicate symbols at force_load).
+// 2026-11-05 (iOS>=27 source-storage lane): the libShengUfs.a archive carries
+// the real BootProcessProbe/BootUiTraceProbe capture (native_gpu_role_thread
+// consumers) and defines this state itself, so the zero-def stubs must stay
+// out of that link (same rule as native_ufs_extra_fault below).
+#ifndef XNU_SOURCE_STORAGE
 void boot_process_capture(void) {}
 void boot_process_snapshot(void) {}
 void boot_ui_trace_snapshot(unsigned phase) { (void)phase; }
 unsigned boot_ui_trace_role_rows(unsigned role, char rows[][120], unsigned cap, unsigned depth) {
     (void)role; (void)rows; (void)cap; (void)depth; return 0;
 }
+#endif
 void sheng_cpufreq_poll(void) {}
 
 // The same for BootLog.c's optional surfaces (no legacy display, no touch/
 // Adreno/Wi-Fi probes, no BootReset lane on this board): NULL-guarded text
 // exporters that only the log's [sections] would call.
+#ifndef XNU_SOURCE_STORAGE
 unsigned boot_ui_trace_hot_rows(char rows[][120], unsigned cap) {
     (void)rows; (void)cap; return 0;
 }
+#endif
 // 2026-10-30: on the source-storage lane the libShengUfs.a archive carries the
 // real NativeUfs (native_ufs_extra_fault) and the real BootReset kit, so these
 // zero stubs must stay out of that link.
@@ -59,7 +67,9 @@ int boot_reset_watchdog(uint32_t seconds, char *out, unsigned cap) {
 }
 #endif
 
-// Boot process and UI trace state
+// Boot process and UI trace state (source-storage lane: the real capture in
+// libShengUfs.a owns these; see the stub gate above)
+#ifndef XNU_SOURCE_STORAGE
 volatile unsigned boot_process_attempts = 0;
 volatile unsigned boot_process_busy = 0;
 volatile unsigned boot_process_passes = 0;
@@ -70,6 +80,7 @@ char boot_ui_trace_label[120] = {0};
 volatile unsigned boot_ui_trace_phase = 0;
 unsigned boot_ui_trace_ready = 0;
 char boot_ui_trace_rows[14][120] = {{0}};
+#endif
 
 // Adreno (NATIVE_ADRENO=n)
 volatile uint32_t native_adreno_audit_attr = 0;
