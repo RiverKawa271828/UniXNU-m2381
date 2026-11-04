@@ -65,16 +65,16 @@ def _bl_to_native(symbol):
     return make
 
 
-TEXT_WORD_PATCHES = (
-    (0xfffffe00084ca4f8, 0xF2E78D11, 0xF2E8A531,
-     'AppleARMCPU::start gTable+0x2c0 reader: movk x17, #0x3c68 -> #0x4529'),
-    (0xfffffe0008f0d560, 0x9400000D, _bl_to_native('_unixnu_amfi_devmode_config'),
-     'wall-42: AMFI ConfigurationSettings developer-mode config station (caller re-checks the config-done flag right after)'),
-    (0xfffffe0008f0dce8, 0x97FFFE2B, _bl_to_native('_unixnu_amfi_devmode_config'),
-     'wall-42: AMFI ConfigurationSettings developer-mode config station'),
-    (0xfffffe0008f0dd24, 0x97FFFE1C, _bl_to_native('_unixnu_amfi_devmode_config'),
-     'wall-42: AMFI ConfigurationSettings developer-mode config station'),
-)
+# All four 23F84-lane stations retired with the 24A446 switch (2026-11-05):
+# the wall-40 movk station and the three wall-42 AMFI stations are donor-
+# address pins of the 23F84 collection (0x84ca4f8/0x8f0d560… are outside or
+# semantically foreign in the 24A446 layout), and apply_text_word_patches
+# raises on an unexpected word, so leaving them in would fail every 24A446
+# emit. Upstream evidence: the 24A446 lane boots to SpringBoard with zero
+# we-only patches, so the 24A446 stations are re-derived only if the first
+# boot actually trips those walls. The callable _bl_to_native channel above
+# stays for that case.
+TEXT_WORD_PATCHES = ()
 
 
 def inline_data_ranges(blob, pools=FILESET_MATH_POOLS):

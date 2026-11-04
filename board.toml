@@ -43,7 +43,7 @@ soc = "SM8550"
 description = "Meizu 20 Classic"
 kit = "sheng"                      # package/ of this repository appears as kits/sheng in the build tree (fuxi same: build-sheng-platform-power.py reads kits/sheng/ShengPlatformPower.cpp)
 soc_source = "sm8550"              # feeds.toml pins UniXNU-sm8550-common
-os_profile = "ipados-26.5.2-23F84"
+os_profile = "ipados-27.0.1-24A446"
 
 # The raw image for the userdata partition: the OS and SystemOS disk images of
 # the IPSW behind a manifest.
@@ -153,11 +153,11 @@ archives = [
   # skips the libAdreno740.a link requirement. Bring-up to launchd needs no
   # GPU; the chain returns with its own topic once those inputs are ported.
 ]
-# [kernel.prelink] is inherited from the OS profile (ipados-26.5.2-23F84):
+# [kernel.prelink] is inherited from the OS profile (ipados-27.0.1-24A446):
 # tool kits/XnuPrelink/emit_prelink.py (the kits/XnuPrelink vendored copy of
 # this repository shadows the upstream submodule in the assembled tree), the
-# 23F84 kernelcache sha 0f7d50ac…, slide -0x1000000 and the AMFI early-init
-# pointer. The 23F84 collection is an MH_FILESET, so emit_prelink takes the
+# 24A446 kernelcache sha 38e6d9fa…, slide -0x1000000 and the AMFI early-init
+# pointer. The 24A446 collection is an MH_FILESET, so emit_prelink takes the
 # fileset emitter; --allow-missing pairs with the kernel-side
 # fileset-unmapped-call.patch (arch series): every unmatched call binds to the
 # reporting stub instead of failing emission, and the JSON report lists the
@@ -250,16 +250,18 @@ panic_screen = true
 # tz_stat page (FAR 0x82700020) that RamManagerDxe handed out as conventional
 # RAM; fixed in uefi-m2381 MemoryMapLib (adsp_mhi/global_sync/tz_stat added).
 forensic = false
-# sha256 of the trust caches of this 23F84 build: the two IM4P members
-# (extracted from the local IPSW 2026-10-30 via "unixnu ipsw fetch") and the
-# flat two-module bundle made by scripts/make-m2381-trust-bundle.py
-# (DarwinBoot/kernel need the bare container). Overrides the profile's
-# bundle-only pin. The 20H392 set this replaces (63e01c03/9cc478fe/eb1475f6)
-# stays in the frozen 16-lane era.
+# sha256 of the trust caches of this 24A446 build: the two IM4P members
+# (extracted from the local IPSW via "unixnu ipsw fetch"; BuildManifest role
+# mapping resolved 2026-11-05: StaticTrustCache rides the OS dmg 043-68950-668,
+# Cryptex1,SystemTrustCache the SystemOS dmg 043-69086-713) and the flat
+# two-module bundle made by scripts/make-m2381-trust-bundle.py (DarwinBoot/
+# kernel need the bare container). Overrides the profile's bundle-only pin.
+# The 23F84 set this replaces (e70a385a/58960bbc/ebeaf7fb) stays as the
+# rollback lane's pins (git history, 2026-11-05 lane switch).
 trust_cache_sha256 = [
-  "e70a385aa5677f5c27677531ca1d87f0dba164e023495313f9236c3b7a5e84bb",   # StaticTrustCache (094-56106-108.dmg.aea.trustcache, 3308 entries)
-  "58960bbc4d5311b71803dbfcc29accb357e2d6954cc6af146fc8e4bc6a79d397",   # Cryptex1,SystemTrustCache (094-54821-109.dmg.aea.trustcache, 116 entries)
-  "ebeaf7fb5e35a230941e664747c9f306c82ecff70bc628a577f228439da9415c",   # original-trust-23F84.bundle (3308+116 entries, loader-rule PASS)
+  "dc3642e0b44bcb3912126b19770cffcf07b9fb40f7196df32d54bb54acc0550a",   # StaticTrustCache (043-68950-668.dmg.aea.trustcache, 3547 entries)
+  "34d6186ffd6278b66ac06c9b86961ba3dd195bd120ce2b8278c0f89d48eda7db",   # Cryptex1,SystemTrustCache (043-69086-713.dmg.aea.trustcache, 130 entries)
+  "dc655bcb2ddfaea214f9ec83659b3fc8d8b658bafac2b5a004fb4179a25c89bf",   # original-trust-24A446.bundle (3547+130 entries, loader-rule self-check PASS)
 ]
 # text_fixups are inherited from the OS profile (the nx729j set for the same
 # donor build: AWAttentionAwareness init, PosterBoard file protection,
@@ -297,11 +299,11 @@ kernel_args = [
 [payload.adt]
 chip_id = "207"                     # [DTB] qcom,msm-id 0x207 (SM8550-AB) — same value sheng/nx729j use
 owned_memory_size = "0x130000000"
-# root_match_volume_uuid of the donor OS image's root volume: the 26.5.2
-# (23F84) profile is self-sufficient and carries it (os volume 546DFF4A…,
-# donor iPad17,3/j820ap); the 20H392 value (DADD93F8…) retired with that
-# frozen lane (full derivation history: git, 2026-10-29).
-root_match_volume_uuid = "546DFF4A-4172-4026-9F1B-7FDAD45F3D2E"
+# root_match_volume_uuid of the donor OS image's root volume: the 27.0.1
+# (24A446) profile carries it (os volume 2F8E6EED…, donor iPad17,3/j820ap);
+# the 23F84 value (546DFF4A…) retired with that lane (git history,
+# 2026-11-05 lane switch).
+root_match_volume_uuid = "2F8E6EED-68D5-4261-B8A3-12571BAA2DD4"
 packed_data_ramdisk = true
 unique_chip_id = "required"          # the platform seed is not stored in any repository
 # cpu identity moved to dts/m2381.dts (the v1 generator's cpu_regs list,

@@ -31,6 +31,12 @@ PINNED_INPUTS = {
     # modules — the pin check stays so a cross-build pair cannot slip through).
     'e70a385aa5677f5c27677531ca1d87f0dba164e023495313f9236c3b7a5e84bb': 'StaticTrustCache',
     '58960bbc4d5311b71803dbfcc29accb357e2d6954cc6af146fc8e4bc6a79d397': 'Cryptex1,SystemTrustCache',
+    # The 24A446 donor pair (iPad17,3 iPadOS 27.0.1, extracted from the local
+    # IPSW 2026-11-05 via "unixnu ipsw fetch"; same DER/IM4P shape —
+    # StaticTrustCache rides the OS dmg 043-68950-668, Cryptex1,SystemTrustCache
+    # the SystemOS dmg 043-69086-713, BuildManifest role mapping verified).
+    'dc3642e0b44bcb3912126b19770cffcf07b9fb40f7196df32d54bb54acc0550a': 'StaticTrustCache',
+    '34d6186ffd6278b66ac06c9b86961ba3dd195bd120ce2b8278c0f89d48eda7db': 'Cryptex1,SystemTrustCache',
 }
 
 

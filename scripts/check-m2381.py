@@ -117,8 +117,8 @@ def main():
     ipsw = board.get('ipsw')
     if ipsw is None:
         record(WARN, 'ipsw identity', 'no [ipsw] visible: OS profile not merged (standalone board) — identity check skipped')
-    elif (ipsw['product'], ipsw['build'], ipsw['device_class']) != ('iPad17,3', '23F84', 'j820ap'):
-        record(FAIL, 'ipsw identity', 'm2381 targets iPad17,3 / 23F84 / j820ap (user decision 2026-10-29: iOS27 conservative lane on upstream feat/ipados27-gpu-parity arm64e; profile ipados-26.5.2-23F84 self-sufficient; the 20H392 iOS16 lane froze at r88)')
+    elif (ipsw['product'], ipsw['build'], ipsw['device_class']) != ('iPad17,3', '24A446', 'j820ap'):
+        record(FAIL, 'ipsw identity', 'm2381 targets iPad17,3 / 24A446 / j820ap (user decision 2026-11-05: lane switch to the upstream-proven ipados-27.0.1-24A446 profile; the 23F84 lane froze as the w42fix rollback, and the 20H392 iOS16 lane froze at r88)')
     elif ipsw.get('chip_id') != 33090 or ipsw.get('board_id') != 12:
         record(FAIL, 'ipsw chip/board id', f"expected 0x8142/12 (j820ap BuildManifest), got {ipsw.get('chip_id')}/{ipsw.get('board_id')}")
     else:
