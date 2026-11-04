@@ -74,7 +74,28 @@ def _bl_to_native(symbol):
 # we-only patches, so the 24A446 stations are re-derived only if the first
 # boot actually trips those walls. The callable _bl_to_native channel above
 # stays for that case.
-TEXT_WORD_PATCHES = ()
+#
+# Wall-53 (2026-11-05, r52 first boot, screen crc 0xd3edecbb): donor
+# com.apple.kec.corecrypto kext corecrypto_kext_start (kext exec 0xac72428,
+# byte-verified in the emitted kernel) publishes its static KPI table by
+# tail-calling the 27-era kernel-entry receiver at 0xb42b4a0
+# ("if already claimed return -1; else store &kpis at 0x7ec5178, set byte
+# 0x7ec5170") through auth stub 0xac81a80 / GOT slot 0x84ac9e8. The donor
+# kernel entry is wholly replaced by our native kernel in the hybrid image
+# (native_base 0x7184000), the 27-era receiver has no 26.5-era native twin
+# (native text scanned: no bti+adrp+ldr#0x178+cbz claim shape, no
+# s3_4_c15_c10_6 reader), the call's result is ignored and x0 is dead after
+# it, and the receiver global has zero readers inside the hybrid image (the
+# 82 stock readers all live in the dropped donor kernel entry). Emitting the
+# call as-is therefore always panics (stubbed[corecrypto] lists 0xb42b4a0)
+# and the publish is semantically void in this world: NOP the single
+# fire-and-forget bl (old word 0x94003CE6 = bl 0xac726e8 -> stub 0xac81a80,
+# stable donor text).
+TEXT_WORD_PATCHES = (
+    (0xfffffe000ac726e8, 0x94003CE6, 0xD503201F,
+     'wall-53: corecrypto_kext_start kpis publish bl -> NOP (27-era kernel-entry '
+     'receiver 0xb42b4a0 replaced by native kernel, no twin, no hybrid readers)'),
+)
 
 
 def inline_data_ranges(blob, pools=FILESET_MATH_POOLS):
