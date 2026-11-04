@@ -47,9 +47,33 @@ FILESET_DATA_POOLS = (
 # aborts the emit. Wall-40 (2026-11-04): AppleARMCPU::start reads the
 # gTable+0x2c0 function pointer with movk x17, #0x3c68 while the native slot
 # at the same offset is signed with our tag 0x4529 -> FPAC (esr 0x72000000).
+def _bl_to_native(symbol):
+    """Text word patch factory: rewrite a donor bl station into a bl of the named
+    native function, computed at emit time (the displacement needs the collection
+    slide). Keeps the station's bl semantics so the donor caller's LR stays valid.
+    Needed for kext-internal stations: mapped()/rebind() only see kernel-entry
+    targets, so the station machinery cannot rebind branches whose callee lives
+    inside a kept kext entry (wall-42)."""
+    def make(emit, target):
+        found = [address for address, names in emit.native.symbols().items() if symbol in names]
+        if len(found) != 1:
+            raise ValueError(f'Text word patch: native symbol {symbol} not unique')
+        displacement = emit.layout.translate(found[0]) - target
+        if displacement % 4 or not -(1 << 27) <= displacement < (1 << 27):
+            raise ValueError(f'Text word patch: bl to {symbol} out of range ({displacement:#x})')
+        return 0x94000000 | ((displacement >> 2) & 0x3ffffff)
+    return make
+
+
 TEXT_WORD_PATCHES = (
     (0xfffffe00084ca4f8, 0xF2E78D11, 0xF2E8A531,
      'AppleARMCPU::start gTable+0x2c0 reader: movk x17, #0x3c68 -> #0x4529'),
+    (0xfffffe0008f0d560, 0x9400000D, _bl_to_native('_unixnu_amfi_devmode_config'),
+     'wall-42: AMFI ConfigurationSettings developer-mode config station (caller re-checks the config-done flag right after)'),
+    (0xfffffe0008f0dce8, 0x97FFFE2B, _bl_to_native('_unixnu_amfi_devmode_config'),
+     'wall-42: AMFI ConfigurationSettings developer-mode config station'),
+    (0xfffffe0008f0dd24, 0x97FFFE1C, _bl_to_native('_unixnu_amfi_devmode_config'),
+     'wall-42: AMFI ConfigurationSettings developer-mode config station'),
 )
 
 
@@ -531,6 +555,8 @@ class Emit:
             word, = struct.unpack_from('<I', self.data, at)
             if word != old:
                 raise ValueError(f'Text word patch {va:#x}: word {word:#010x} != expected {old:#010x}')
+            if callable(new):
+                new = new(self, target)
             struct.pack_into('<I', self.data, at, new)
             self.report['text_word_patches'] = self.report.get('text_word_patches', 0) + 1
             self.report.setdefault('text_word_patch_log', []).append(why)
