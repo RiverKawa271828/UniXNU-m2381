@@ -1,0 +1,23 @@
+--- a/osfmk/arm64/machine_routines.c
++++ b/osfmk/arm64/machine_routines.c
+@@ -3395,6 +3395,20 @@
+ 		_unsafe_kernel_text_initialized = true;
+ 		_unsafe_kernel_text = (0 == *(const int *)value);
+ 	}
++#if defined(BCM2837)
++	else {
++		/*
++		 * m2381 boots from a generic UEFI, not iBoot: /chosen carries
++		 * no kernel-ctrr-to-be-enabled intent. CTRR does not exist on
++		 * this SoC, so kernel text is permanently unprotected; report
++		 * it as initialized-and-unsafe so ml_unsafe_kernel_text()
++		 * callers proceed on DEVELOPMENT builds instead of tripping
++		 * the assert.
++		 */
++		_unsafe_kernel_text_initialized = true;
++		_unsafe_kernel_text = true;
++	}
++#endif
+ }
+ STARTUP(TUNABLES, STARTUP_RANK_FIRST, ml_unsafe_kernel_text_init);
+ 

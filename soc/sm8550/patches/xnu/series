@@ -6,3 +6,10 @@
 # Phase 2 re-adds the archive + config when the charging stack is re-derived.
 native-smp-secondary.patch
 sheng-platform-power.patch
+# 2026-11-04 (wall-41): /chosen carries no kernel-ctrr-to-be-enabled intent on the
+# nura-lineage FDT, so ml_unsafe_kernel_text_init() leaves its flags false and the
+# first caller trips the machine_routines.c:3379 assert (brk 0xbffc) at bsd_init
+# IOKitInitializeTime. BCM2837-gated fallback: initialized + unsafe (no CTRR on
+# SM8550 = text genuinely unprotected). Alternative (FDT-blob property) would
+# touch a pinned binary + boot_b reflash; kept as a noted follow-up.
+native-ctrr-intent-fallback.patch
