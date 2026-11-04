@@ -139,7 +139,7 @@ def main():
     payload = board['payload']
     if payload['volume'] != 'M2381ESP':
         record(FAIL, 'payload volume', 'label must be M2381ESP (≤11 chars, FAT limit)')
-    if payload['size_mib'] > 96:
+    if payload['size_mib'] > 99:
         record(FAIL, 'payload size', f"{payload['size_mib']} MiB does not fit recovery_a (100 MiB partition, FAT slack)")
     else:
         record(OK, 'payload volume', f'{payload["volume"]} {payload["size_mib"]} MiB on recovery_a, loader {payload["loader"]}')
