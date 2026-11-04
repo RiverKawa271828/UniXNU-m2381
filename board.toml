@@ -216,9 +216,9 @@ BUILDID_STRING = "m2381-research"
 # The payload volume: a FAT image with the UniXNU config, the kernel, the ADT
 # and the optional trust cache and Data seed, written to the recovery_a
 # partition ([DEVICE] 2026-10-30 fastboot getvar: 0x6400000 = 100 MiB).
-# Volume stays at 96 MiB (the one-day 97 MiB bump for the combined reader
-# payload was reverted with the 2026-10-30 reader split; content ~86.5 MiB,
-# build gate 95% = 91.2). DarwinBoot (in the firmware volume) reads it
+# Volume at 99 MiB since the 24A446 switch (2026-11-05): the 27.0.1 fileset
+# kernel fills the ESP payload to 92 MiB (the 23F84 one was ~86.5), and 96
+# tripped the 95% build gate. DarwinBoot (in the firmware volume) reads it
 # through the UFS driver.
 # The ADT is assembled by the schema v2 generator from dts/m2381.dts, the OS
 # profile's typed identity and the [payload.adt] options below; the v1
@@ -226,7 +226,7 @@ BUILDID_STRING = "m2381-research"
 # what those produce.
 [payload]
 volume = "M2381ESP"
-size_mib = 96
+size_mib = 99
 loader = "firmware"
 title = "m2381 first boot: source 4K XNU to console"
 dram_size = "0x400000000"            # [DEVICE] 16 GiB LPDDR5X
