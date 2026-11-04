@@ -252,3 +252,19 @@ next_action = ["Mac kernel -> payload -> flash card (user gates the first boot)"
 evidence = [
   { kind = "source", reference = "records/rounds.md", result = "session-52 build loop: nine Mac kernel runs, five distinct blockers fixed with local reproduction each time" },
 ]
+
+[[area]]
+id = "wall42-24a446-stations-recon"
+status = "implemented"
+components = []
+paths = ["kits/XnuPrelink/fileset_emit.py"]
+inputs = ["Session-52 pre-flash recon: the 24A446 AMFI entry's dev-mode configuration face located by string-reference sweep (b'/arm-io/soc-misc' -> 0x924e800, b'ApplePMGRNub' -> 0x924e92c, both inside one function)"]
+configuration = ["Stations PENDING (not wired into TEXT_WORD_PATCHES - the r52 baseline ships without them; enable only if the first boot trips the wall): caller sites 0x924e77c / 0x924ef1c / 0x924ef5c, all bl -> the dev-mode configuration function 0x924e7b0 (0x498 bytes, 42 calls; same structure as the 23F84 trio 0xf0d560/0xf0dce8/0xf0dd24 -> 0xf0d594)"]
+procedure = ["kc_image entry parse; adrp/add string-reference scan; ret+prologue boundary walk"]
+findings = ["the three callers replicate the 23F84 trio's structure (one caller ahead of the function, two behind in sibling code); the _bl_to_native callable channel is already in fileset_emit.py and the shim patch (unixnu_amfi_devmode_config) is still in patches/ although retired from the series", "ktriage step-0 closure: donor 0xac8f594 (23F84 wall hit #1 target) = the ktriage register-subsystem-strings family (sub w8,w0,#0xa; cmn w8,#9 = subsystem id in [10,18]; native _ktriage_register_subsystem_strings at 0x7834074 same shape); the 24A446 AMFI entry has ZERO calls into that shape (2661 bl sites scanned), so that wall does not recur on this lane"]
+completion = ["first-boot wall triage has a ready station table for the strongest AMFI candidate and a closed verdict for the w42fix screen wall"]
+limits = ["station enablement waits for the actual first-boot panic; the 30s waitForMatchingService constant was not located in the dev-mode function this pass (encoded differently than the 23F84 movk pair)"]
+next_action = ["if the first boot shows the AMFI No-PMGR assert: populate TEXT_WORD_PATCHES with the three stations -> shim, one rebuild, one flash"]
+evidence = [
+  { kind = "source", reference = "records/rounds.md", result = "session-52 pre-flash recon sweep on out/ipsw/24A446/kernelcache.decompressed (sha 38e6d9fa)" },
+]
