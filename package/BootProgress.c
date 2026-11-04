@@ -719,7 +719,7 @@ size_t boot_progress_spawn_rows(char *out,size_t cap) {
 // 2026-10-30: the fileset emitter pins native __DATA at the start of the collection's __DATA root, ahead of the first retained
 // kext's data (23F84: 2142 KiB before com.apple.driver.AppleARMPlatform). The 64K/32K rings (2 MiB of BSS) overflowed that slot
 // (native __DATA 3824 KiB); 4K/4K keeps the profiler functional at 160 KiB with ~200 KiB of slack.
-enum {BpProfSamples = 4096};
+enum {BpProfSamples = 1024};
 static uint64_t bp_prof[BpProfSamples];
 static uint32_t bp_prof_head;
 // Interrupted samples per core and process (pid % 61), since boot: shows which cores the busy processes run on.
@@ -728,7 +728,7 @@ static uint32_t bp_cpu_cnt[8][64];
 // ml_set_interrupts_enabled, i.e. timer interrupts held pending by an interrupts-masked section, which only its callers can name.
 // Per sample: pc and three return addresses, each as its low 32 bits (kernel text lies in one 4 GiB window); 0 = frame not inside the
 // interrupted thread's kernel stack.
-enum {BpKernSamples = 4096};
+enum {BpKernSamples = 1024};
 static uint32_t bp_kern[BpKernSamples][4];
 static uint32_t bp_kern_head;
 static void bp_kernel_chain(uint64_t pc) {
