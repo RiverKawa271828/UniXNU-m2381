@@ -268,3 +268,19 @@ next_action = ["if the first boot shows the AMFI No-PMGR assert: populate TEXT_W
 evidence = [
   { kind = "source", reference = "records/rounds.md", result = "session-52 pre-flash recon sweep on out/ipsw/24A446/kernelcache.decompressed (sha 38e6d9fa)" },
 ]
+
+[[area]]
+id = "bringup-merge-recon"
+status = "implemented"
+components = []
+paths = ["../ios-m2381-unixnu/patches/xnu-12377/zzzz-sheng-ipados27-bringup-core.patch"]
+inputs = ["Session-52 pre-flash recon: the 2006-line sheng bring-up patch splits into 36 file sections; 35 apply cleanly on the r52 tree (per-file git apply --check) but the real sequence fails across MULTIPLE files (exception.c, iokit_rpc.c) at fuzz=3 - our own exception.c/pmap.c/proc_reg.h/vm_dyld_pager.c/sched_clutch/vm_param chains rework the same lines"]
+configuration = ["bring-up-core patch synthesized (35 then 34 sections) and pulled back out; series stays at the r52 baseline (69 lines) for the first flash"]
+procedure = ["per-file git apply --check on the assembled tree; deterministic local replay with the full series before core"]
+findings = ["symbol dependency audit: unixnu_kernel_stack_shift is defined and used inside stack.c, sheng_prof_ring inside sleh.c, the kern_exec-only references drop with the deferred section - no cross-section dangles", "the fork merge is a genuine multi-file project (exception_triage rework, vm_dyld_pager 9 hunks, pmap 2 hunks), evidence-gated on the first boot's missing/stubbed face", "ktriage step-0: donor 0xac8f594 = ktriage register-subsystem-strings family, zero 24A446 recurrence; wall-42 station table ready (0x924e77c/0x924ef1c/0x924ef5c -> 0x924e7b0)"]
+completion = ["the first-flash card (r52) is unchanged and the merge project has a concrete file-level work plan"]
+limits = ["the merge needs hunk-level manual work per file, not patch-tool automation"]
+next_action = ["first boot (session 53); then scope the merge by which deferred providers actually trip"]
+evidence = [
+  { kind = "source", reference = "records/rounds.md", result = "session-52 bring-up recon: per-file applicability, symbol dependency audit, and the multi-file failure census" },
+]
