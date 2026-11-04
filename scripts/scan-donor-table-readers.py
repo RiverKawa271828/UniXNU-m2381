@@ -28,11 +28,22 @@ Encoding traps hit on the way (do not "simplify" these again):
 
 usage:
   python3 scan-donor-table-readers.py [--final kernel.macho]
-Default paths are this workspace's donor KC and the w40fix kernel; pass
---final to audit against a different emitted image.
+Defaults: donor KC = this workspace's 23F84 decompressed cache; final =
+the NEWEST kernel-*.macho archive in out/m2381/ (the Mac-build workflow
+pulls archives back each round; the local tree kernel.macho is stale).
+Name labels come only from a same-build snapshot: a sibling
+<name>.map.json/<name>.json or the tree pair, accepted ONLY when the
+snapshot's candidate_sha256 matches the audited image — mismatched
+maps stay silent instead of printing wrong nearest-names.
+
+Skews already covered by a kit TEXT_WORD_PATCHES entry (matched by the
+movk donor VA) are annotated PATCHED and excluded from the actionable
+count / exit code. Exit 1 = unpatched SKEW or NO-AUTH-NODE anomalies.
 """
 import argparse
 import bisect
+import hashlib
+import importlib.util
 import json
 import struct
 import sys
@@ -40,7 +51,9 @@ from pathlib import Path
 
 WS = Path('/home/ri/work/unixnu-meizu')
 DONOR = WS / 'ios-m2381-unixnu/out/ipsw/23F84/kernelcache.decompressed'
-MAPJ = WS / 'ios-m2381-unixnu/out/m2381/ipados-26.5.2-23F84/m2381/kernel/kernel.map.json'
+OUT_M2381 = WS / 'ios-m2381-unixnu/out/m2381'
+TREE_KERNEL = WS / 'ios-m2381-unixnu/out/m2381/ipados-26.5.2-23F84/m2381/kernel/kernel.macho'
+KIT_EMIT = WS / 'UniXNU-m2381/kits/XnuPrelink/fileset_emit.py'
 TABLE_VA = 0xfffffe0007e07fd8          # donor global holding the table base
 TABLE_PAGE = TABLE_VA & ~0xFFF
 G_OFF = 0xfd8                          # offset of the global within its page
@@ -70,11 +83,75 @@ def fo(segs, va):
     return None
 
 
+def kit_patched_movk_vas():
+    """Donor VAs of movk words the kit already rewrites (TEXT_WORD_PATCHES)."""
+    try:
+        sys.path.insert(0, str(KIT_EMIT.parent))
+        try:
+            spec = importlib.util.spec_from_file_location('xnu_prelink_emit', KIT_EMIT)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            return {va for va, _old, _new, _why in getattr(mod, 'TEXT_WORD_PATCHES', ())}
+        finally:
+            sys.path.pop(0)
+    except (OSError, ImportError, AttributeError, ValueError):
+        print(f'warning: cannot read kit patches from {KIT_EMIT}; '
+              'PATCHED annotation unavailable', file=sys.stderr)
+        return set()
+
+
+def default_final():
+    """Newest archived emit; the tree kernel.macho is stale in the Mac workflow."""
+    archives = sorted(OUT_M2381.glob('kernel-*.macho'), key=lambda p: p.stat().st_mtime)
+    return str(archives[-1]) if archives else str(TREE_KERNEL)
+
+
+def sha256(path):
+    h = hashlib.sha256()
+    with open(path, 'rb') as f:
+        for chunk in iter(lambda: f.read(1 << 20), b''):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def name_source(final_path):
+    """(map_functions, native_slide) from a sha-matched snapshot.
+
+    Tries sibling <stem>.map.json/<stem>.json first (round snapshots kept
+    next to the archive), then the tree pair. The snapshot's
+    candidate_sha256 must match the image; a mismatched map stays silent
+    instead of printing wrong nearest-names.
+
+    The noctf->final placement slide is self-calibrated: histogram
+    (node_target - map_native) over 0x4000-aligned candidates and take
+    the clear winner (page-aligned placement makes noise ~zero; the
+    slide must also collect >= MIN_PAIR exact pair hits). Hardcoding the
+    slide would rot across builds — the -0x193F4 drift of session-47 is
+    the precedent.
+    """
+    stem = Path(final_path).stem
+    cand = [(OUT_M2381 / f'{stem}.map.json', OUT_M2381 / f'{stem}.json'),
+            (TREE_KERNEL.parent / 'kernel.map.json', TREE_KERNEL.parent / 'kernel.json')]
+    img_sha = sha256(final_path)
+    for mapj, kjson in cand:
+        try:
+            kj = json.loads(kjson.read_text())
+            if kj.get('candidate_sha256') != img_sha:
+                continue
+            return json.loads(mapj.read_text())['functions']
+        except (OSError, KeyError, ValueError):
+            continue
+    print('note: no sha-matched map snapshot for this image; name labels off', file=sys.stderr)
+    return None
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--final', default=None, help='emitted kernel.macho to read our nodes from')
+    ap.add_argument('--final', default=None,
+                    help='emitted kernel.macho (default: newest archive in out/m2381/)')
     args = ap.parse_args()
-    final_path = args.final or str(WS / 'ios-m2381-unixnu/out/m2381/kernel-w40fix-96422b08.macho')
+    final_path = args.final or default_final()
+    patched = kit_patched_movk_vas()
 
     data, segs = load(str(DONOR))
     fdata, fsegs = load(final_path)
@@ -133,49 +210,66 @@ def main():
             return None
         return ((v >> 32) & 0xffff, 0xfffffff007004000 + (v & 0x3fffffff))
 
-    # native names from the pairing map; final targets -> noctf space via
-    # noctf = (final - collection_base) + native_link_address
+    # native names from a sha-matched snapshot with a self-calibrated slide
     names = {}
-    try:
-        kj = json.loads((WS / 'ios-m2381-unixnu/out/m2381/ipados-26.5.2-23F84/m2381/kernel/kernel.json').read_text())
-        cbase = int(kj['collection_base'], 16)
-        nbase = int(kj['native_link_address'], 16)
-        fns = json.loads(MAPJ.read_text())['functions']
+    fns = name_source(final_path)
+    if fns:
         nat = sorted((int(r['native'], 16) & 0xfffffffff, r.get('name', ''))
                      for r in fns.values() if r.get('native'))
-        keys = [x[0] for x in nat]
+        nkeys = [x[0] for x in nat]
+        targets = [node_at(off)[1] & 0xfffffffff for off in range(0, 0x800, 8)
+                   if node_at(off)]
+        from collections import Counter
+        hist = Counter()
+        for t in targets:
+            for n in nkeys:
+                s = t - n
+                if s > 0 and s % 0x4000 == 0:
+                    hist[s] += 1
+        slide = hist.most_common(1)[0][0] if hist else None
+        if not slide or hist[slide] < 2:
+            print('note: native placement slide ambiguous; name labels off', file=sys.stderr)
+            slide = None
+        else:
+            print(f'native placement slide: {slide:#x} '
+                  f'({hist[slide]} exact pair anchors)')
+        if slide:
+            def nm(final_target):
+                t = (final_target & 0xfffffffff) - slide
+                i = bisect.bisect_left(nkeys, t)
+                if i < len(nkeys) and nkeys[i] == t:
+                    return nat[i][1]
+                j = max(0, i - 1)
+                a, s2 = nat[j]
+                return s2 + (f'+0x{t - a:x}' if t >= a else '?')
+            for off in range(0, 0x800, 8):
+                r = node_at(off)
+                if r:
+                    names[off] = nm(r[1])
 
-        def nm(final_target):
-            t = ((final_target - cbase) + nbase) & 0xfffffffff
-            i = bisect.bisect_right(keys, t) - 1
-            a, s = nat[i]
-            return s + (f'+0x{t - a:x}' if t != a else '')
-        for off in range(0, 0x800, 8):
-            r = node_at(off)
-            if r:
-                names[off] = nm(r[1])
-    except OSError:
-        pass
-
-    print(f'donor readers of gTable {TABLE_VA:#x}: {len(hits)}')
-    print('(NOTE: this reads the PRISTINE donor, so skews already covered by a'
-          ' TEXT_WORD_PATCHES entry still appear — cross-check the kit patch list)')
-    skews = 0
+    print(f'donor readers of gTable {TABLE_VA:#x}: {len(hits)}  '
+          f'(final = {Path(final_path).name})')
+    skews = no_node = 0
     for (site, slot), (tag, mksite) in sorted(hits.items()):
         r = node_at(slot)
+        note = '  [PATCHED by kit]' if mksite in patched else ''
         if r is None:
-            print(f'  site {site:#x}: slot +{slot:#x} tag {tag:#06x} — NO AUTH NODE in final')
+            no_node += 1 if mksite not in patched else 0
+            print(f'  site {site:#x}: slot +{slot:#x} tag {tag:#06x} — NO AUTH NODE in final{note}')
             continue
         div, tgt = r
-        mark = 'MATCH' if div == tag else '** SKEW **'
-        if div != tag:
+        skewed = div != tag
+        if skewed and mksite not in patched:
             skews += 1
+        mark = ('PATCHED SKEW' if skewed else 'MATCH') if mksite in patched \
+            else ('** SKEW **' if skewed else 'MATCH')
         label = names.get(slot, '')
         print(f'  site {site:#x}: slot +{slot:#x} tag {tag:#06x} ourdiv {div:#06x} {mark} {label}'
-              f'  (movk at {mksite:#x})')
-    print(f'\nskews: {skews} — each is a wall-in-waiting; add pinned movk swaps to '
-          'TEXT_WORD_PATCHES in kits/XnuPrelink/fileset_emit.py')
-    return 1 if skews else 0
+              f'  (movk at {mksite:#x}){note}')
+    print(f'\nactionable anomalies: {skews} SKEW + {no_node} NO-NODE — each is a '
+          'wall-in-waiting; add pinned movk swaps to TEXT_WORD_PATCHES in '
+          'kits/XnuPrelink/fileset_emit.py')
+    return 1 if (skews or no_node) else 0
 
 
 if __name__ == '__main__':
