@@ -2,42 +2,51 @@
 """Local production of both 16 KiB policies from the flashed userdata image.
 
 The CI lane (ci-owner-policy.sh) attaches the restore dmg volumes on macOS;
-this lane proves the very same bytes on Linux: userdata-root.img carries the
-OS and SystemOS windows byte for byte (the image manifest pins both digests),
-so the manifests are made over the window streams and every block is verified
-by the same real C/RSA pass (local verified-root + openssl provider). The
-committed anchor key (device keys/owner.pem) signs both policies.
+this lane proves the very same bytes on any host with aead-decoded userdata:
+userdata-root.img carries the OS and SystemOS windows byte for byte (the image
+manifest pins both digests), so the manifests are made over the window streams
+and every block is verified by the same real C/RSA pass (local verified-root +
+openssl provider). The committed anchor key (device keys/owner.pem) signs both
+policies.
+
+Generalized 2026-11-05 (session-52, 24A446 lane switch): windows, volume UUIDs
+and image digests are read from the userdata step's own report
+(userdata-root.json) and the OS profile's [root] pins instead of the
+23F84-era hardcoded WINDOWS table, and the policies land in the combined
+firmware-cache layout build-sheng-source-storage.py consumes
+(.cache/firmware/verified-root-<build>/{OS,SystemOS}/).
+
+Usage: build-owner-policies-local.py <userdata-root.img> <fw-cache-dir> <profile.toml>
+  fw-cache-dir = e.g. .cache/firmware/verified-root-24A446 (OS/ SystemOS/ inside)
 """
 import ctypes
 import hashlib
 import importlib.util
 import json
-import os
-import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
-# Local lane: ROOT is this device repository (the VerifiedRoot fork with the
-# 16 KiB blocks lives in kits/, the committed anchor key in keys/). The
-# policies land in the firmware cache the kernel build stages from.
 ROOT = Path(__file__).resolve().parents[1]
+if len(sys.argv) != 4:
+    raise SystemExit(__doc__)
 image = Path(sys.argv[1])
 fw = Path(sys.argv[2])
+profile_path = Path(sys.argv[3])
 keys = ROOT / 'keys'
-WINDOWS = [
-    # The ipados-26.5.2-23F84 windows (2026-10-29): the offsets/sizes are the
-    # userdata step's own output (userdata-root.json), the digests and volume
-    # UUIDs are the OS profile's [root] pins (os 546DFF4A/b4e40913…, SystemOS
-    # 7A23BAC7/eadb838d…), both re-verified end to end by the policy build.
-    # The 20H392 windows (DADD93F8/96096B28) retired with that frozen lane
-    # (git history).
-    dict(name='os', out='build/verified-root-os', offset=1048576, size=8753512448,
-         uuid='546DFF4A-4172-4026-9F1B-7FDAD45F3D2E',
-         sha='b4e40913f9908f6b68e554bd79b4b95362cade0c3ce210dc378a151bc3387716'),
-    dict(name='systemos', out='build/verified-root-systemos', offset=8754561024, size=5224005632,
-         uuid='7A23BAC7-E86D-4DF4-B181-E6D80F212AE5',
-         sha='eadb838d10f05ff2404b6d6cbc4012e9376c90e16f0283ed6a19bd7ac8753daf'),
-]
+profile = tomllib.loads(profile_path.read_text())
+root_pins = profile['root']
+LANES = {'OS': ('os_volume_uuid', 'os_image_sha256'),
+         'SystemOS': ('systemos_volume_uuid', 'systemos_image_sha256')}
+report = json.loads(image.with_suffix('.json').read_text())
+WINDOWS = []
+for entry in report['windows']:
+    uuid_key, sha_key = LANES[entry['name']]
+    WINDOWS.append(dict(name=entry['name'], offset=entry['offset'], size=entry['size'],
+                        uuid=root_pins[uuid_key].upper(), sha=root_pins[sha_key]))
+for window in WINDOWS:
+    if window['sha'] != report['windows'][[e['name'] for e in report['windows']].index(window['name'])]['sha256']:
+        raise SystemExit(f'{window["name"]}: profile [root] sha and userdata report disagree')
 if not image.is_file():
     raise SystemExit(f'Require the dual-window userdata image: {image}')
 digest = hashlib.sha256()
@@ -76,12 +85,16 @@ class View(ctypes.Structure):
                 ('generation', ctypes.c_uint64), ('volume_uuid', ctypes.c_uint8 * 16), ('image_sha256', ctypes.c_uint8 * 32)]
 
 
-native = ctypes.CDLL(str(ROOT / 'build/verified-root-host/verified-root.dylib'))  # built below if absent
+dylib = ROOT / 'build/verified-root-host/verified-root.dylib'
+if not dylib.is_file():
+    raise SystemExit(f'missing {dylib}: build it once per host (xcrun clang verified_root.c + openssl_provider.c, '
+                     'see ci-owner-policy.sh host section) or copy the local one')
+native = ctypes.CDLL(str(dylib))
 native.vr_host_open.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.c_void_p, ctypes.c_uint64, ctypes.POINTER(View)]
 native.vr_host_block.argtypes = [ctypes.POINTER(View), ctypes.c_uint64, ctypes.c_void_p, ctypes.c_size_t]
 
 for window in WINDOWS:
-    out = fw / ('verified-root-' + window['name'])
+    out = fw / window['name']
     out.mkdir(parents=True, exist_ok=True)
     with image.open('rb') as raw:
         stream = Window(raw, window['offset'], window['size'])
@@ -109,14 +122,14 @@ for window in WINDOWS:
     if complete.hexdigest() != window['sha'] or complete.digest() != bytes(view.image_sha256):
         raise SystemExit(f'{window["name"]}: complete window digest differs from the pinned original')
     (out / 'original-samples.bin').write_bytes(b''.join(samples))
-    report = dict(image_bytes=view.image_bytes, blocks_verified=view.block_count, image_sha256=complete.hexdigest(),
-                  volume_uuid=window['uuid'], generation=view.generation, block_bytes=block_bytes,
-                  source_compressed_sha256=complete.hexdigest(), source_format='userdata window',
-                  host_bus_protocol='local file', host_media_writable=False,
-                  trusted_key_sha256=record['trusted_key_sha256'], actual_sample_indices=indices,
-                  actual_sample_lengths=lengths, real_c_signature_and_block_verification=True,
-                  original_image_modified=False, host_only=True, boot_root_authenticated=False,
-                  qemu_tested=False, hardware_tested=False)
-    (out / 'verification.json').write_text(json.dumps(report, indent=2) + '\n')
+    report_out = dict(image_bytes=view.image_bytes, blocks_verified=view.block_count, image_sha256=complete.hexdigest(),
+                      volume_uuid=window['uuid'], generation=view.generation, block_bytes=block_bytes,
+                      source_compressed_sha256=complete.hexdigest(), source_format='userdata window',
+                      host_bus_protocol='local file', host_media_writable=False,
+                      trusted_key_sha256=record['trusted_key_sha256'], actual_sample_indices=indices,
+                      actual_sample_lengths=lengths, real_c_signature_and_block_verification=True,
+                      original_image_modified=False, host_only=True, boot_root_authenticated=False,
+                      qemu_tested=False, hardware_tested=False)
+    (out / 'verification.json').write_text(json.dumps(report_out, indent=2) + '\n')
     print(f'PASS: {window["name"]} signature and every {view.block_count} block verified by real C/RSA')
 print('PASS: both 16 KiB policies produced under the committed anchor')
