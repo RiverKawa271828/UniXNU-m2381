@@ -236,3 +236,19 @@ next_action = ["First-boot judgment (session 53) with the wall triage flow; PMGR
 evidence = [
   { kind = "source", reference = "records/rounds.md", result = "session-52 lane switch: upstream-series diff, donor string/discriminator sweeps and the sheng-tip binding inheritance check" },
 ]
+
+[[area]]
+id = "lane-switch-24a446-board-layer"
+status = "implemented"
+components = []
+paths = ["package/ShengLatencyHooks.c", "package/BootProcessProbe.c", "package/BootProcessWorker.c", "package/BootUiTraceProbe.c", "package/BootLatencyTrace.c", "package/BootLatencyStore.h", "package/BootLatencyUnwind.h", "package/BootProgress.c", "package/BootProgressTelemetryDefs.c", "scripts/build-boot-progress.py", "../ios-m2381-unixnu/profiles/arch/arm64e/patches/xnu/series"]
+inputs = ["Build-loop evidence (2026-11-05, sessions 52): the upstream-proven 24A446 lane = arch series + the UniXNU-sheng BOARD kernel patches (zzzz-sheng-ipados27-bringup + three trace-hook patches), plus their package capture trio — the recon's 'zero we-only patches' comparison was arch-layer only", "verified-root-24A446 policy pair: rebuilt with the generalized build-owner-policies-local.py (a825e4c) from the Mac userdata image (AEA decode via the blacktop ipsw CLI + /usr/bin/aea), OS 586752 + SystemOS 367232 blocks RSA-verified under the committed owner.pem anchor; window shas match the profile [root] pins bit for bit", "24A446 emit layout: the donor kernel-entry __DATA window is 0x1e8000 (23F84 was 0x22c000 with room to spare) and native __DATA is placed there, so the bp sampler rings shrank 4096 -> 1024 (120 KiB) to clear the Libm/ARMPlatform/WatchdogTimer/AudioClockLibs retained __DATA at 0xba1c000"]
+configuration = ["arch series ends: ...prng + zzzz-sheng-ipados27-bringup + latency-trace + exit-latency + unnest-trace; ShengLatencyHooks.c keeps only native_gpu_role_thread (no definition even on the sheng lane; our ld64 refuses the weak import where Apple's binds zero)"]
+procedure = ["per-failure local reproduction with the kit's own kc_image/fileset_layout modules against out/ipsw/24A446/kernelcache.decompressed"]
+findings = ["the regression gate missing face (AppleARMPlatform 18 sites) was the sheng board-patch provider surface, not a donor wall; adopting the four patches verbatim closes it", "boot-process capture (iOS>=27 source-storage branch) pulled BootProcessProbe/BootProcessWorker/BootUiTraceProbe + BootLatencyTrace family from the sheng package; BootWatchdogPolicy/BootDiagExport dedup gate extended in build-boot-progress.py and BootProgressTelemetryDefs.c guards its boot_process_*/boot_ui_trace_* zeros behind the existing XNU_SOURCE_STORAGE gate", "sheng ShengPlatformPower stays OFF (its bindings are inherited 21H461 coordinates, donor-va 0x04a22568 outside the 24A446 segment span)"]
+completion = ["Mac lane reproduces the sheng input face: arch 64 + prng + four board patches, package capture trio, policy pair under the committed anchor"]
+limits = ["first-boot behavior still unverified; the stack-shift wall fix rides the adopted bring-up patch and its site stays re-derivable if the boot trips differently"]
+next_action = ["Mac kernel -> payload -> flash card (user gates the first boot)"]
+evidence = [
+  { kind = "source", reference = "records/rounds.md", result = "session-52 build loop: nine Mac kernel runs, five distinct blockers fixed with local reproduction each time" },
+]
