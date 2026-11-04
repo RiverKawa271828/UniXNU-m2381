@@ -1,18 +1,13 @@
 // SPDX-License-Identifier: MIT
-// m2381 stand-in definitions for the sheng board hook surface. The kernel
-// side of the upstream lane defines these through patches (zzzzzzzzz-sheng-
-// unnest-trace.patch), and our ld64 errors on unresolved weak references
-// where Apple's binds them to zero (the BootProgressTelemetryDefs.c
-// precedent). BootLatencyTrace.c registers its own capture functions into
-// these pointers at boot, so defining them zero-initialized here keeps the
-// sheng latency capture fully live; native_gpu_role_thread is the weakly
-// imported GPU role query the sheng GPU integration answers, and this board
-// runs no GPU integration, so it reports no mapping.
+// m2381 stand-in for the one weak import our ld64 refuses to bind zero. The
+// sheng kernel-side hook pointers (sheng_unnest_hook family) are defined by
+// their kernel patches, which this lane carries since the 24A446 switch, so
+// those live in the kernel now; native_gpu_role_thread however has no
+// definition anywhere on the sheng lane either — Apple's linker binds the
+// weak import to zero (the consumer guards on &symbol) while our ld64 errors
+// on it. This board runs no GPU role integration, so reporting no mapping is
+// also the semantics sheng's lane gets from the zero binding.
 #include <stdint.h>
-
-void (*sheng_user_fault_hook)(int, const int64_t *, unsigned);
-void (*sheng_unnest_hook)(uint64_t, uint64_t);
-void (*sheng_user_exit_hook)(int, int, uint32_t, uint64_t, const char *, const char *);
 
 uint64_t
 native_gpu_role_thread(uint32_t pid __unused, uint32_t role __unused)
