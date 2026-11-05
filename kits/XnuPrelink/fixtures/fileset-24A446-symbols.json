@@ -1088,6 +1088,86 @@
    "original_sha256": "6d642716e1f0939592e93ae74103ff5dbb4171da0d90525b08e7b41eae0285af",
    "native_symbol": "__ZN8OSObjectC2Ev",
    "evidence": "r59 (payload-r59 72cc9ef4, surgery scripts/s59-payload-surgery.py, 2026-11-06): donor-KC low48 GOT scan, pre-image whitelist (donor word / emitter sentinel) held for all 426 slots; slots live in collection __DATA_CONST outside the fips-HMAC-covered entry __text, so the seal is untouched (__fips_hmacs @payload 0x4ec5fd still 6fc44336fd3f44b7, r58 bytes); full-diff audit 426 clusters / 1278B, zero stray bytes; r58's 453 rebinds + 2 shims verified intact. Wall-58 (r58 first boot 2026-11-06, crc 0xfcd9b111 hit#1, 139B): caller = com.apple.iokit.IOCryptoAcceleratorFamily ctor (bl 0xa0ab660 auth-GOT thunk) -> slot 0x8313b60 = sentinel 0xb5a9c4c, donor import 0xb4424c4. Coordinate notes: lane slide = 0x1f000000000 (kc.py note holds); payload kernel.macho = donor KC rebased, kext GOTs position-identical (donor km offset == payload km offset). Identity: OSObject default ctor (body head pacibsp; stp x22,x21...; pacda per-object isa with 0xcda1 context -> str [x0]; OSMetaClass registration tail, cold error blocks to 0xb3d3a70). 292-slot import face (267 donor-word + 25 sentinel) -> native __ZN8OSObjectC2Ev 0xfffffff00b3aba18 (noctf 0x79efa18 + 0x39BC000), word 0x80110000043a7a18; s45 wall-36 semantic precedent (23F84 lane). s57's '267 donor-copy slots alive' is OVERTURNED by byte compare: donor kernel exec is wholly replaced by the native kernel in the payload, payload 0xb3d385c = native fn @0xb3d382c (_OSKextFreeSite neighborhood), so the 267 donor-word slots pointed at arbitrary native code and all 292 faces must rebind. This kext's ctor hits the OSObject-ctor thunk (0xa0ab730 -> slot 0x8313bc8) right after the IOLockAlloc call, hence the same-round batch."
+  },
+  {
+   "original": "0xfffffe000ad3e380",
+   "original_size": 68,
+   "original_sha256": "0afa00ba761097f493b6392375fa95f99b155496975bf89fa2255bcec98d9367",
+   "native_symbol": "kalloc_type_impl_external",
+   "native_km_va": "0xace8c8c",
+   "evidence": "r60 (payload-r60 7da7e0b3, surgery scripts/s60-payload-surgery.py, 2026-11-06): donor-KC low48 GOT scan over collection __DATA_CONST, pre-image whitelist (donor word / emitter sentinel) held for all 44 slots, full-diff audit 143B/43 clusters zero stray, seal untouched (__fips_hmacs @payload 0x4ec5fd still 6fc44336fd3f44b7). Wall-59 (r59 first boot 2026-11-06, crc 0x719ca2b6, caller AppleImage4 site.nonce_magazine_t ktv 0x80e16d0, zflags=4) fixed by kalloc_type_impl_external rebind; 9 more ledger-named (matcher body-hash, noctf cross-check native-0x39BC000) imports batched in same round. native_km_va is kernel.macho space; noctf VA = km - 0x39BC000. This record: donor 0xfffffe000ad3e380, slot faces rebound to native 0xace8c8c (kalloc_type_impl_external)."
+  },
+  {
+   "original": "0xfffffe000b417188",
+   "original_size": 120,
+   "original_sha256": "346029c0f8ee3901a8385663054ec28a867f1dd64b29a0735dac25d259c37cd0",
+   "native_symbol": "__Z16OSUnserializeXMLPKcmPP8OSString",
+   "native_km_va": "0xb3dfd78",
+   "evidence": "r60 (payload-r60 7da7e0b3, surgery scripts/s60-payload-surgery.py, 2026-11-06): donor-KC low48 GOT scan over collection __DATA_CONST, pre-image whitelist (donor word / emitter sentinel) held for all 44 slots, full-diff audit 143B/43 clusters zero stray, seal untouched (__fips_hmacs @payload 0x4ec5fd still 6fc44336fd3f44b7). Wall-59 (r59 first boot 2026-11-06, crc 0x719ca2b6, caller AppleImage4 site.nonce_magazine_t ktv 0x80e16d0, zflags=4) fixed by kalloc_type_impl_external rebind; 9 more ledger-named (matcher body-hash, noctf cross-check native-0x39BC000) imports batched in same round. native_km_va is kernel.macho space; noctf VA = km - 0x39BC000. This record: donor 0xfffffe000b417188, slot faces rebound to native 0xb3dfd78 (__Z16OSUnserializeXMLPKcmPP8OSString)."
+  },
+  {
+   "original": "0xfffffe000ad3e894",
+   "original_size": 16,
+   "original_sha256": "66b05a144d295339f18e57775a70035bf2795df5faa282efe32c6857a1eaf1c8",
+   "native_symbol": "_IOFreeTypeImpl",
+   "native_km_va": "0xb415c84",
+   "evidence": "r60 (payload-r60 7da7e0b3, surgery scripts/s60-payload-surgery.py, 2026-11-06): donor-KC low48 GOT scan over collection __DATA_CONST, pre-image whitelist (donor word / emitter sentinel) held for all 44 slots, full-diff audit 143B/43 clusters zero stray, seal untouched (__fips_hmacs @payload 0x4ec5fd still 6fc44336fd3f44b7). Wall-59 (r59 first boot 2026-11-06, crc 0x719ca2b6, caller AppleImage4 site.nonce_magazine_t ktv 0x80e16d0, zflags=4) fixed by kalloc_type_impl_external rebind; 9 more ledger-named (matcher body-hash, noctf cross-check native-0x39BC000) imports batched in same round. native_km_va is kernel.macho space; noctf VA = km - 0x39BC000. This record: donor 0xfffffe000ad3e894, slot faces rebound to native 0xb415c84 (_IOFreeTypeImpl)."
+  },
+  {
+   "original": "0xfffffe000aec8c20",
+   "original_size": 12,
+   "original_sha256": "9fe206bcfd54e8185061c521a120dc195787d439c0be0bb32e44f6bee7968687",
+   "native_symbol": "_kauth_cred_nfs4domain2dsnode",
+   "native_km_va": "0xb1fcfd4",
+   "evidence": "r60 (payload-r60 7da7e0b3, surgery scripts/s60-payload-surgery.py, 2026-11-06): donor-KC low48 GOT scan over collection __DATA_CONST, pre-image whitelist (donor word / emitter sentinel) held for all 44 slots, full-diff audit 143B/43 clusters zero stray, seal untouched (__fips_hmacs @payload 0x4ec5fd still 6fc44336fd3f44b7). Wall-59 (r59 first boot 2026-11-06, crc 0x719ca2b6, caller AppleImage4 site.nonce_magazine_t ktv 0x80e16d0, zflags=4) fixed by kalloc_type_impl_external rebind; 9 more ledger-named (matcher body-hash, noctf cross-check native-0x39BC000) imports batched in same round. native_km_va is kernel.macho space; noctf VA = km - 0x39BC000. This record: donor 0xfffffe000aec8c20, slot faces rebound to native 0xb1fcfd4 (_kauth_cred_nfs4domain2dsnode)."
+  },
+  {
+   "original": "0xfffffe000b3d92e8",
+   "original_size": 16,
+   "original_sha256": "45feb7861c3fba4c5da26f545e59294508a6c2b966c8d91b36f954c82fddd2cb",
+   "native_symbol": "__ZN12OSCollection4initEv",
+   "native_km_va": "0xb3adddc",
+   "evidence": "r60 (payload-r60 7da7e0b3, surgery scripts/s60-payload-surgery.py, 2026-11-06): donor-KC low48 GOT scan over collection __DATA_CONST, pre-image whitelist (donor word / emitter sentinel) held for all 44 slots, full-diff audit 143B/43 clusters zero stray, seal untouched (__fips_hmacs @payload 0x4ec5fd still 6fc44336fd3f44b7). Wall-59 (r59 first boot 2026-11-06, crc 0x719ca2b6, caller AppleImage4 site.nonce_magazine_t ktv 0x80e16d0, zflags=4) fixed by kalloc_type_impl_external rebind; 9 more ledger-named (matcher body-hash, noctf cross-check native-0x39BC000) imports batched in same round. native_km_va is kernel.macho space; noctf VA = km - 0x39BC000. This record: donor 0xfffffe000b3d92e8, slot faces rebound to native 0xb3adddc (__ZN12OSCollection4initEv)."
+  },
+  {
+   "original": "0xfffffe000af0444c",
+   "original_size": 68,
+   "original_sha256": "91b2b2af1d93b4d6ddc163f8a2ae77140fb3ba434c5e48069467930c27cc8e62",
+   "native_symbol": "_buf_biowait",
+   "native_km_va": "0xaf45a94",
+   "evidence": "r60 (payload-r60 7da7e0b3, surgery scripts/s60-payload-surgery.py, 2026-11-06): donor-KC low48 GOT scan over collection __DATA_CONST, pre-image whitelist (donor word / emitter sentinel) held for all 44 slots, full-diff audit 143B/43 clusters zero stray, seal untouched (__fips_hmacs @payload 0x4ec5fd still 6fc44336fd3f44b7). Wall-59 (r59 first boot 2026-11-06, crc 0x719ca2b6, caller AppleImage4 site.nonce_magazine_t ktv 0x80e16d0, zflags=4) fixed by kalloc_type_impl_external rebind; 9 more ledger-named (matcher body-hash, noctf cross-check native-0x39BC000) imports batched in same round. native_km_va is kernel.macho space; noctf VA = km - 0x39BC000. This record: donor 0xfffffe000af0444c, slot faces rebound to native 0xaf45a94 (_buf_biowait)."
+  },
+  {
+   "original": "0xfffffe000af01774",
+   "original_size": 256,
+   "original_sha256": "4a16a33b02615d5dad031e7bd82d3f0c7e3357d07516362143fa004cd80bb14c",
+   "native_symbol": "_buf_invalidateblks",
+   "native_km_va": "0xaf44968",
+   "evidence": "r60 (payload-r60 7da7e0b3, surgery scripts/s60-payload-surgery.py, 2026-11-06): donor-KC low48 GOT scan over collection __DATA_CONST, pre-image whitelist (donor word / emitter sentinel) held for all 44 slots, full-diff audit 143B/43 clusters zero stray, seal untouched (__fips_hmacs @payload 0x4ec5fd still 6fc44336fd3f44b7). Wall-59 (r59 first boot 2026-11-06, crc 0x719ca2b6, caller AppleImage4 site.nonce_magazine_t ktv 0x80e16d0, zflags=4) fixed by kalloc_type_impl_external rebind; 9 more ledger-named (matcher body-hash, noctf cross-check native-0x39BC000) imports batched in same round. native_km_va is kernel.macho space; noctf VA = km - 0x39BC000. This record: donor 0xfffffe000af01774, slot faces rebound to native 0xaf44968 (_buf_invalidateblks)."
+  },
+  {
+   "original": "0xfffffe000af1581c",
+   "original_size": 132,
+   "original_sha256": "9191522b4938270794af3f80f5d4a57372f17f3e6adf3d4aa19a8d283892dd94",
+   "native_symbol": "_cluster_unlock_direct_read",
+   "native_km_va": "0xaf55a08",
+   "evidence": "r60 (payload-r60 7da7e0b3, surgery scripts/s60-payload-surgery.py, 2026-11-06): donor-KC low48 GOT scan over collection __DATA_CONST, pre-image whitelist (donor word / emitter sentinel) held for all 44 slots, full-diff audit 143B/43 clusters zero stray, seal untouched (__fips_hmacs @payload 0x4ec5fd still 6fc44336fd3f44b7). Wall-59 (r59 first boot 2026-11-06, crc 0x719ca2b6, caller AppleImage4 site.nonce_magazine_t ktv 0x80e16d0, zflags=4) fixed by kalloc_type_impl_external rebind; 9 more ledger-named (matcher body-hash, noctf cross-check native-0x39BC000) imports batched in same round. native_km_va is kernel.macho space; noctf VA = km - 0x39BC000. This record: donor 0xfffffe000af1581c, slot faces rebound to native 0xaf55a08 (_cluster_unlock_direct_read)."
+  },
+  {
+   "original": "0xfffffe000af1f698",
+   "original_size": 184,
+   "original_sha256": "28a06d91f3ac2fadfeeb6e5eeee5055fee9d8d3d7571d3901490fff620724244",
+   "native_symbol": "_vfs_iterate",
+   "native_km_va": "0xaf6294c",
+   "evidence": "r60 (payload-r60 7da7e0b3, surgery scripts/s60-payload-surgery.py, 2026-11-06): donor-KC low48 GOT scan over collection __DATA_CONST, pre-image whitelist (donor word / emitter sentinel) held for all 44 slots, full-diff audit 143B/43 clusters zero stray, seal untouched (__fips_hmacs @payload 0x4ec5fd still 6fc44336fd3f44b7). Wall-59 (r59 first boot 2026-11-06, crc 0x719ca2b6, caller AppleImage4 site.nonce_magazine_t ktv 0x80e16d0, zflags=4) fixed by kalloc_type_impl_external rebind; 9 more ledger-named (matcher body-hash, noctf cross-check native-0x39BC000) imports batched in same round. native_km_va is kernel.macho space; noctf VA = km - 0x39BC000. This record: donor 0xfffffe000af1f698, slot faces rebound to native 0xaf6294c (_vfs_iterate)."
+  },
+  {
+   "original": "0xfffffe000af2c560",
+   "original_size": 84,
+   "original_sha256": "4043d71e72470a1a2e0c3ec7550d7fae84a49692ae897a0a485bbe10d0ffb430",
+   "native_symbol": "_vn_authorize_unlink",
+   "native_km_va": "0xaf6b8d0",
+   "evidence": "r60 (payload-r60 7da7e0b3, surgery scripts/s60-payload-surgery.py, 2026-11-06): donor-KC low48 GOT scan over collection __DATA_CONST, pre-image whitelist (donor word / emitter sentinel) held for all 44 slots, full-diff audit 143B/43 clusters zero stray, seal untouched (__fips_hmacs @payload 0x4ec5fd still 6fc44336fd3f44b7). Wall-59 (r59 first boot 2026-11-06, crc 0x719ca2b6, caller AppleImage4 site.nonce_magazine_t ktv 0x80e16d0, zflags=4) fixed by kalloc_type_impl_external rebind; 9 more ledger-named (matcher body-hash, noctf cross-check native-0x39BC000) imports batched in same round. native_km_va is kernel.macho space; noctf VA = km - 0x39BC000. This record: donor 0xfffffe000af2c560, slot faces rebound to native 0xaf6b8d0 (_vn_authorize_unlink)."
   }
  ],
  "data": [
