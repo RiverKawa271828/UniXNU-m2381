@@ -5697,6 +5697,22 @@
    "original_sha256": "f6a953e199655f542547cf030ca97621e4b2ac584c359d5382a49cd97bb5dcc2",
    "native_symbol": "_SecureDTGetProperty",
    "evidence": "Matcher ledger pair (how=pac-checked-shape), body-hash-verified against donor; native symbol exact in noctf table at 0x7b555e4 (km 0xb5115e4). Body bounds: [start, first 4-aligned ret/retaa/retab, or unconditional b whose target leaves the body, in donor KC, inclusive) - cut_at_first_return incl. tail-call exits; in-body branches skipped. Batch session-61."
+  },
+  {
+   "original": "0xfffffe000ae9bc68",
+   "original_size": 184,
+   "original_sha256": "7f550d7a2d5a282ed020fc0b18b7a634b6d29240b29ca88d1283dfa1b86b591a",
+   "native_symbol": "_read_frandom",
+   "addend": 0,
+   "evidence": "Wall-60 (payload-r61 first flash, crc 0xa9474625): AppleImage4 env-object callback adapter 0x902576c (ctx-drop tail (ctx,buf,len)->(buf,len)) -> GOT thunk 0x903a898 -> slot 0x848d5e8 sentinel; sentinel x0/x1 = (buf 0xba64b19 = struct+5 16B buffer, 0x10 = [x10+0x48]) = 16-byte random read (nonce manager, after corecrypto kext start). Donor 0xae9bc68 named by body forensics against osfmk/prng/prng_random.c (the wall-55 fips-gate TU): ldr w8,[0x7dff0a80] prng_ready gate + u32 len (w19=w1) + 0xedeb per-cpu section. Native twin: _read_frandom noctf-exact 0x7506bf8 (km 0xAEC2BF8), source read_frandom(buf,u_int){ read_erandom(buf,n); } = gate + (prng_ready ? PRNG : DRBG) - semantic superset of both donor imports; body shape verified (gate w32 + 0xedeb pacia per-cpu global + 0x100 chunks, same skeleton as donor). Faces bound: 7 sentinel slots -> 0x8011000003ebebf8 (A x1 slot 0x848d5e8, B x6 slots 0x80e1a40/0x8316e80/0x833c2e8/0x8479c28/0x849fa18/0x84ac9d8). Session-62 payload surgery (28B/7 clusters zero stray, seal untouched, payload-r62 2d3e8dd4)."
+  },
+  {
+   "original": "0xfffffe000ae9bd20",
+   "original_size": 384,
+   "original_sha256": "2df3eadc34f70c3f80f689c53f8e390aff041a970fe298209e906f566bcddf91",
+   "native_symbol": "_read_frandom",
+   "addend": 0,
+   "evidence": "Wall-60 (payload-r61 first flash, crc 0xa9474625): AppleImage4 env-object callback adapter 0x902576c (ctx-drop tail (ctx,buf,len)->(buf,len)) -> GOT thunk 0x903a898 -> slot 0x80e1a40 sentinel; sentinel x0/x1 = (buf 0xba64b19 = struct+5 16B buffer, 0x10 = [x10+0x48]) = 16-byte random read (nonce manager, after corecrypto kext start). Donor 0xae9bd20 named by body forensics against osfmk/prng/prng_random.c (the wall-55 fips-gate TU): blraa via prng_generate fn-ptr global [0x7dff0a68] + per-processor mutex (tpidr_el1) + 0x100 chunks; no gate (post-PRNG specialist). Native twin: _read_frandom noctf-exact 0x7506bf8 (km 0xAEC2BF8), source read_frandom(buf,u_int){ read_erandom(buf,n); } = gate + (prng_ready ? PRNG : DRBG) - semantic superset of both donor imports; body shape verified (gate w32 + 0xedeb pacia per-cpu global + 0x100 chunks, same skeleton as donor). Faces bound: 7 sentinel slots -> 0x8011000003ebebf8 (A x1 slot 0x848d5e8, B x6 slots 0x80e1a40/0x8316e80/0x833c2e8/0x8479c28/0x849fa18/0x84ac9d8). Session-62 payload surgery (28B/7 clusters zero stray, seal untouched, payload-r62 2d3e8dd4)."
   }
  ],
  "data": [
