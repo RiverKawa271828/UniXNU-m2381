@@ -85,17 +85,16 @@ def _bl_to_native(symbol):
 # (native_base 0x7184000), the 27-era receiver has no 26.5-era native twin
 # (native text scanned: no bti+adrp+ldr#0x178+cbz claim shape, no
 # s3_4_c15_c10_6 reader), the call's result is ignored and x0 is dead after
-# it, and the receiver global has zero readers inside the hybrid image (the
-# 82 stock readers all live in the dropped donor kernel entry). Emitting the
-# call as-is therefore always panics (stubbed[corecrypto] lists 0xb42b4a0)
-# and the publish is semantically void in this world: NOP the single
-# fire-and-forget bl (old word 0x94003CE6 = bl 0xac726e8 -> stub 0xac81a80,
-# stable donor text).
-TEXT_WORD_PATCHES = (
-    (0xfffffe000ac726e8, 0x94003CE6, 0xD503201F,
-     'wall-53: corecrypto_kext_start kpis publish bl -> NOP (27-era kernel-entry '
-     'receiver 0xb42b4a0 replaced by native kernel, no twin, no hybrid readers)'),
-)
+# Session-54 (2026-11-05): the wall-53 kpis-publish NOP here is REVERSED. The
+# receiver 0xb42b4a0 does have a source-level twin - int register_crypto_functions
+# (register_crypto.h:284, noctf _register_crypto_functions) - and the reviewed
+# record added this round lets rewrite_branches retarget the fire-and-forget bl
+# to the native receiver instead of voiding the publish. No TEXT_WORD_PATCHES
+# remain; the retargeted word lives in the FIPS-hashed corecrypto
+# __TEXT_EXEC.__text, which is why the board now boots with fips_mode=4 (POST
+# disabled) - the integrity HMAC can never pass over a deliberately retargeted
+# kext word.
+TEXT_WORD_PATCHES = ()
 
 
 def inline_data_ranges(blob, pools=FILESET_MATH_POOLS):

@@ -294,6 +294,15 @@ kernel_args = [
   # 2 s into the 32 MiB window at the userdata tail — the forensic reader's
   # cargo (scripts/read-m2381-ufs-log.py parses it; ~17 min to wrap).
   "sheng-log=1",
+  # Session-54: FIPS_MODE_FLAG_DISABLE (fipspost.h 0x004). The wall-53 kpis
+  # publish bl is now retargeted to the native register_crypto_functions, and
+  # that retargeted word sits in the FIPS-hashed corecrypto
+  # __TEXT_EXEC.__text — the integrity HMAC can never match over a deliberate
+  # text change, so fipspost_post must return CCERR_OK at its DISABLE check
+  # (right after its one mach_absolute_time call, which is bound this round)
+  # instead of panicking "FIPS Kernel POST Failed". PE_parse_boot_argn is a
+  # reviewed binding since r53 (slot 0x84ac910), so the arg parses.
+  "fips_mode=4",
 ]
 
 [payload.adt]

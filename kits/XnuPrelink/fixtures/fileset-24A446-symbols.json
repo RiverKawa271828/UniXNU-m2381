@@ -1011,6 +1011,34 @@
    "original_sha256": "588972dc20d14f7f6a39608807f7559fa46881b00926f9552a1b15b5719f3997",
    "native_symbol": "_kprintf",
    "evidence": "Wall-53 (first boot 2026-11-05, payload r52-773d5578/kernel cfbe9b25): screen panic 'fileset: original component called an unmapped kernel function from 0xfffffff00ac72460 (x0 0xfffffff007dcbe3b x1 0x0) hit #1', crc 0xd3edecbb, t=1s, stage trail ends after mapping adjust. Caller = donor com.apple.kec.corecrypto kext exec text 0xfffffe000ac72428 (bti c+pacibsp, byte-verified identical in the emitted kernel) = corecrypto_kext_start; the stubbed call is its first statement kprintf(\"corecrypto_kext_start (tracing disabled)\\n\") - x0 = adrp 0x7dcb000+0xe3b = 0x7dcbe3b, and the bytes at 0x7dcbe3b in the stock KC read exactly that string (feeds corecrypto-2023 corecrypto_kext.c:332 verbatim; sibling strings fips_mode / FIPS Kernel POST Failed / corecrypto_kext.c confirm the region). Return address 0xac72460 = the bl's successor, matching the unixnu_fileset_unmapped stub contract (__builtin_return_address). The call goes bl 0xac81940 (auth stub) -> GOT slot 0x84ac948 -> braa; stock slot content 0x80110000045583e8 = compressed pointer (PAC 0x8011 | VA-0x7004000) to donor kernel-entry kprintf 0xb55c3e8; the emitted image rebinding replaced it with 0x80110000045a5c4c = the in-image unixnu_fileset_unmapped stub (0xb5a9c4c: xpaci'd LR, hits counter, panic string 0x71d9b11 - all byte-verified). kernel.json stubbed[com.apple.kec.corecrypto] lists 0xfffffff00b55c3e8. Function identity: 400 bytes 0xb55c3e8..0xb55c578 (LC_FUNCTION_STARTS), body = variadic console print: two log-gate bytes [0x7f08458/9], daif save/restore with the ml_set_interrupts_enabled_with_debug assertion (strings machine_routines_common.c / '%s: debug exceptions enabled in kernel mode @%s:%d'), console lock at 0xb9cf110, per-cpu cpu number ldrh [tpidr+0x1b0], format-dispatch tail bl 0xb41e81c with xpaci'd LR - kprintf semantics unambiguous. Native twin _kprintf (noctf 0xfffffff007b58cb8) = same-generation source, variadic ABI (fmt, ...) identical. Binding this function also repairs all 66 auth-GOT slots across the kept kexts that point at donor kprintf (they are all rebinding to the panic stub today), not just the corecrypto cluster."
+  },
+  {
+   "original": "0xfffffe000aecef24",
+   "original_size": 48,
+   "original_sha256": "abb7c19ec8e64fd9442b0ac63d517c44dd947f80781419e9cf943ce14161035b",
+   "native_symbol": "_mach_absolute_time",
+   "evidence": "Wall-54 (r54 first boot 2026-11-05, kernel 2221b0d2/payload df033828): screen 'fileset: original component called an unmapped kernel function from 0xfffffff00ac1536c (x0 0x0 x1 0xfffffff007dc74e0) hit #1', crc 0x196bb370 zero-correction hit, t=1s, stages through mapping adjust. bl 0xfffffe000ac15368 -> thunk 0xfffffe000ac819b0 -> auth-GOT 0xfffffe00084ac980 (rebase 0x8011|0x3ecaf24) -> this function. Caller 0xfffffe000ac15330 = corecrypto kext fipspost_post(fips_mode=0, mach_header=ki->address 0x7dc74e0): x1 is the kext base and the cbz/str/ldr tail is the static corecrypto_kext_pmach_header memoization of cc_fips/src/fipspost_post.c:106 verbatim, so the call is the entry's first kernel import cc_absolute_time() = mach_absolute_time() (cc/corecrypto/cc_absolute_time.h CC_KERNEL branch). 125 bl sites reach it through thunk 0xac819b0 across the kext exec - the single largest remaining import face. Native twin _mach_absolute_time (kern/clock.c), present in the r54 noctf."
+  },
+  {
+   "original": "0xfffffe000ad43134",
+   "original_size": 112,
+   "original_sha256": "62d425c1fccab767eb13ef76099c6b47a5492d511eb1b0bfe1a847c1becce662",
+   "native_symbol": "_lck_mtx_alloc_init",
+   "evidence": "Auth-GOT slot 0xfffffe00084ac958 sits between _lck_grp_alloc_init (0x84ac950 -> 0xad42f88, map-paired) and _lck_mtx_assert (0x84ac960 -> 0xad440c8, map-paired). Single bl site 0xac5718c; caller 0xac5710c pacda-signs the returned pointer (diversifier 0x4be6) before storing. Body allocates via _kalloc_type_impl_internal(&_KT_LCK_MTX@0x7f0a408, 0) (both map-paired), stores the 0x22000000|low24 mutex header word, ldadd +1 into grp+0x10 and grp+0x0, tails to _os_ref_panic_retain (map-paired) on the over-release path = lck_mtx_alloc_init(lck_grp_t *grp, lck_attr_t *attr) with attr=NULL; locks.c family."
+  },
+  {
+   "original": "0xfffffe000ad43db4",
+   "original_size": 36,
+   "original_sha256": "5502b04d1c521a1afc67b669680b0a1d9d386dd00b81120c93f889c6fa60d807",
+   "native_symbol": "_IOLockTryLock",
+   "evidence": "Auth-GOT slot 0xfffffe00084ac970 sandwiched between IOLockLock (0x84ac968 -> 0xad43318) and IOLockUnlock (0x84ac978 -> 0xad43ef8), both map-paired; donor VAs order IOLockLock 0xad43318 < this 0xad43db4 < IOLockUnlock 0xad43ef8 (same locks.c TU). Single bl site 0xac5aedc, caller 0xac5ae6c autda-verifies [x23+0x48] first. Body = one casa at x0+8 expecting 0 and storing the per-cpu [tpidr_el1+0x4f8] owner word, returning old==0 = IOLockTryLock(IOLockRef_t) boolean; native _IOLockTryLock exported by the built kernel."
+  },
+  {
+   "original": "0xfffffe000b42b4a0",
+   "original_size": 52,
+   "original_sha256": "a0a8e9d8176fe091eab91a813c8a37b34dbe1df609c14d3f6763dd1397a91d88",
+   "native_symbol": "_register_crypto_functions",
+   "evidence": "Receiver body: reads kernel global 0x7ec5178, returns -1 when already set, else stores the funcs pointer there, sets byte 0x7ec5170=1 and returns 0 = int register_crypto_functions(const crypto_functions_t) (libkern/libkern/crypto/register_crypto.h:284; noctf symbol verified in the r54 Mac build). Call site = the fire-and-forget bl 0xfffffe000ac726e8 in donor corecrypto_kext_start:417 register_crypto_functions(&kpis), which wall-53 NOP'd under the wrong no-twin premise. This record lets rewrite_branches retarget that bl to the native receiver, restoring the donor-faithful kpis publish; the TEXT_WORD_PATCHES NOP is removed in the same round. Because the retargeted word lives in the FIPS-hashed corecrypto __TEXT_EXEC.__text, session-54 also adds the fips_mode=4 boot-arg (POST disabled) so fipspost_post returns CCERR_OK after its one mach_absolute_time call instead of tripping 'FIPS Kernel POST Failed' on the deliberate text change."
   }
  ],
  "data": [
