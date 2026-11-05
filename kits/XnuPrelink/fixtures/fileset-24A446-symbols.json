@@ -5713,6 +5713,22 @@
    "native_symbol": "_read_frandom",
    "addend": 0,
    "evidence": "Wall-60 (payload-r61 first flash, crc 0xa9474625): AppleImage4 env-object callback adapter 0x902576c (ctx-drop tail (ctx,buf,len)->(buf,len)) -> GOT thunk 0x903a898 -> slot 0x80e1a40 sentinel; sentinel x0/x1 = (buf 0xba64b19 = struct+5 16B buffer, 0x10 = [x10+0x48]) = 16-byte random read (nonce manager, after corecrypto kext start). Donor 0xae9bd20 named by body forensics against osfmk/prng/prng_random.c (the wall-55 fips-gate TU): blraa via prng_generate fn-ptr global [0x7dff0a68] + per-processor mutex (tpidr_el1) + 0x100 chunks; no gate (post-PRNG specialist). Native twin: _read_frandom noctf-exact 0x7506bf8 (km 0xAEC2BF8), source read_frandom(buf,u_int){ read_erandom(buf,n); } = gate + (prng_ready ? PRNG : DRBG) - semantic superset of both donor imports; body shape verified (gate w32 + 0xedeb pacia per-cpu global + 0x100 chunks, same skeleton as donor). Faces bound: 7 sentinel slots -> 0x8011000003ebebf8 (A x1 slot 0x848d5e8, B x6 slots 0x80e1a40/0x8316e80/0x833c2e8/0x8479c28/0x849fa18/0x84ac9d8). Session-62 payload surgery (28B/7 clusters zero stray, seal untouched, payload-r62 2d3e8dd4)."
+  },
+  {
+   "original": "0xfffffe000b3d1700",
+   "original_size": 196,
+   "original_sha256": "a07b9e230a41dcf231ec2a129d00e617f9ea67af8b8879707441e9e09eb544fa",
+   "native_symbol": "_bdevsw_add",
+   "addend": 0,
+   "evidence": "Wall-61 (payload-r62 first flash, crc 0xaf0e2d21): kext driver registers a block device -> bdevsw_add(1, its 56B bdevsw template @0xbb651f8) -> GOT thunk 0xa422054 -> slot 0x83ae480 sentinel; return compared with the requested major (bdevsw_add contract). Donor 0xb3d1700 named by devsw-domain forensics (bsd/kern/bsd_stubs.c TU): devsw CAS lock on 0xb9ce228 (same global donor _cdevsw_add/_cdevsw_remove/_devsw_unlock use), per-cpu mtx stats [tpidr+0x1c0], bounds 0x17=nblkdev-1, memcmp vs the empty-bdevsw placeholder 0x7ec2aa8 (6 eno_* ptrs + 0); geometry proof: donor bdevsw[24x56B] @0xb89c1b0 abuts donor cdevsw[64x112B] @0xb89c6f0 (donor _cdevsw_add stride 0x70 bound 0x3f) = conf.c bdevsw[] then cdevsw[] layout. Native twin noctf exact 0x79eb810 (km 0xB3A7810), body-verified (same arg shuffle + cmn/negs overflow guards; native add calls lck_mtx_lock_spin). Faces: 2 sentinel slots 0x83ae480/0x849f240 -> 0x80110000043a3810. Session-63 payload surgery (6B/2 clusters zero stray, seal untouched, payload-r63 0cb17660)."
+  },
+  {
+   "original": "0xfffffe000b3d161c",
+   "original_size": 100,
+   "original_sha256": "e4412c0b2fd3e2b897739ed833954200829f4528160a4946766064760a6be4ab",
+   "native_symbol": "_bdevsw_isfree",
+   "addend": 0,
+   "evidence": "Wall-61 (payload-r62 first flash, crc 0xaf0e2d21): kext driver registers a block device -> bdevsw_add(1, its 56B bdevsw template @0xbb651f8) -> GOT thunk 0xa422054 -> slot 0x83ae480 sentinel; return compared with the requested major (bdevsw_add contract). Donor 0xb3d161c named by devsw-domain forensics (bsd/kern/bsd_stubs.c TU): devsw CAS lock on 0xb9ce228 (same global donor _cdevsw_add/_cdevsw_remove/_devsw_unlock use), per-cpu mtx stats [tpidr+0x1c0], bounds 0x17=nblkdev-1, memcmp vs the empty-bdevsw placeholder 0x7ec2aa8 (6 eno_* ptrs + 0); geometry proof: donor bdevsw[24x56B] @0xb89c1b0 abuts donor cdevsw[64x112B] @0xb89c6f0 (donor _cdevsw_add stride 0x70 bound 0x3f) = conf.c bdevsw[] then cdevsw[] layout. Native twin noctf exact 0x79eb700 (km 0xB3A7700), body-verified (same arg shuffle + cmn/negs overflow guards; native add calls lck_mtx_lock_spin). 0 sentinel faces: s61 696 batch already bound the 1 face (slot 0x83ae488) to the SAME native word 0x80110000043a3700 - independent cross-confirmation of the twin; record added for provenance. Session-63 payload surgery (6B/2 clusters zero stray, seal untouched, payload-r63 0cb17660)."
   }
  ],
  "data": [
