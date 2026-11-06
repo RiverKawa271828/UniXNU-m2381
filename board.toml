@@ -232,6 +232,22 @@ title = "m2381 first boot: source 4K XNU to console"
 dram_size = "0x400000000"            # [DEVICE] 16 GiB LPDDR5X
 skip_setup_tool = "scripts/seed-data-skip-setup.py"   # used by --skip-setup
 panic_screen = true
+# r74 wiring (2026-11-07, first SourceStorage boot r73 payload f38d11cc t=31s:
+# "SourceStorage: root policy handoff or authentication failed" @SourceStorage.cpp:102 —
+# the kernel step builds the VROOTB01 envelope (build/sheng-source-storage/root-policies.bin)
+# and embeds the same trusted key (RootAnchor.c), but the payload never carried it:
+# no .vroot on the ESP, no RootPolicies in /chosen/memory-map. The full-table bundle
+# (30.5 MB, OS+SystemOS) cannot fit the 99 MiB ESP next to the 91.4 MiB fileset kernel,
+# so the lane runs tables-in-userdata mode: build the kernel step with
+#   XNU_SOURCE_STORAGE_TABLES=userdata
+# (bundle shrinks to two 544-byte signed headers; NativeUfs then reads the full tables
+# from the "<window>.vroot" version-2 objects of the userdata image, which must be
+# rebuilt with --object OS.vroot=<pair>/OS/manifest.bin
+#            --object SystemOS.vroot=<pair>/SystemOS/manifest.bin
+# — the pair lives at .cache/firmware/verified-root-24A446/{OS,SystemOS} on the Mac,
+# generated 2026-11-05 by build-owner-policies-local.py from userdata-root.json and the
+# profile [root] pins; the r73 kernel's embedded key sha256 74e60348… is that pair's).
+root_policies = "{tree}/build/sheng-source-storage/root-policies.bin"
 # Probe round 2 (2026-10-30): stage 3 fired (device reset ~5 s after the
 # magenta bar) = execution passes the MMU-enable sequence. The reset probe
 # stands down so the boot-progress diagnostic page can live: it freezes on
