@@ -13,7 +13,7 @@ from kc_image import Image, scan
 from fileset_shape import checked_shape
 
 EXEC_SEGMENTS = ('__TEXT_EXEC', '__TEXT_BOOT_EXEC', '__KLD', '__LAST')
-MATCHER_VERSION = 11
+MATCHER_VERSION = 12
 BRAA_BLRAA = (0xD71F0800, 0xD73F0800)  # (word & 0xFFFF0C00) for braa/blraa
 MOVK48 = 0x1E5  # word >> 23 for a 64-bit movk with lsl #48
 BTI = (0xd503245f, 0xd503249f, 0xd50324df, 0xd50324ff, 0xd503241f)  # bti [c|j|jc|]
@@ -570,7 +570,10 @@ class Matcher:
                 if orig not in self.original.functions:
                     raise ValueError(f'Reviewed function is absent: {entry["original"]}')
                 fn = self.original.functions[orig]
-                if hashlib.sha256(self.original.image.read(orig, fn['end'] - orig)).hexdigest() != entry['original_sha256']:
+                # Surgery-era records pin the case-file body size, which may reach
+                # past the parsed function end; the recorded range is the identity.
+                size = entry.get('original_size') or fn['end'] - orig
+                if hashlib.sha256(self.original.image.read(orig, size)).hexdigest() != entry['original_sha256']:
                     raise ValueError(f'Reviewed function bytes changed: {entry["original"]}')
                 native = self.native.named_functions.get(entry['native_symbol'])
                 if native is not None:
@@ -873,6 +876,40 @@ class Matcher:
                     votes[target].add(native_target)
         return sum(self.bind(orig, next(iter(targets)), 'call-sites')
                    for orig, targets in votes.items() if len(targets) == 1)
+
+    def pair_call_shapes(self):
+        """Identify unpaired clones of an equal-shaped group by their call signature.
+
+        Inline-expanded KPI wrappers survive as many small clones with identical
+        relocation-masked bodies (the branch immediates the clones differ by are
+        masked out of the shape), so shape uniqueness never fires for them and
+        body-hash skips their sub-0x20 bodies.  A clone is identified when every
+        one of its call targets is already paired and exactly one unpaired native
+        clone of the same shape calls the natives of those targets at the same
+        instruction offsets.
+        """
+        shapes = defaultdict(list)
+        for native, fn in self.native.functions.items():
+            shapes[fn['digest'], fn['length']].append(native)
+        proposals, claimed = [], Counter()
+        for orig, left in self.original.functions.items():
+            if orig in self.pairs or not left['calls']:
+                continue
+            calls = [(offset, target) for offset, target in left['calls'] if target in self.pairs]
+            if len(calls) != len(left['calls']):
+                continue
+            candidates = []
+            for native in shapes[left['digest'], left['length']]:
+                right = self.native.functions[native]
+                if len(left['calls']) != len(right['calls']):
+                    continue
+                if all(offset == native_offset and self.pairs[target] == native_target
+                       for (offset, target), (native_offset, native_target) in zip(left['calls'], right['calls'])):
+                    candidates.append(native)
+            if len(candidates) == 1:
+                proposals.append((orig, candidates[0]))
+                claimed[candidates[0]] += 1
+        return sum(self.bind(orig, native, 'call-shapes') for orig, native in proposals if claimed[native] == 1)
 
     def pair_data_users(self, known):
         """Two identified data objects jointly identify their unique function user.
@@ -1239,6 +1276,7 @@ def match_images(raw, native_data, entry_name='com.apple.kernel', max_rounds=40,
         bound += matcher.pair_metaclass_getters(data) + matcher.pair_metaclass_vtables(data) + matcher.pair_vtable_users(data)
         bound += matcher.pair_vtables(data) + matcher.anchor_vtables(data)
         bound += matcher.pair_calls() + matcher.pair_data_users(data)
+        bound += matcher.pair_call_shapes()
         bound += matcher.pair_reference_shapes(data)
         if not bound:
             break
