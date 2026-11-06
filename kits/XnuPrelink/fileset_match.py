@@ -348,7 +348,7 @@ class Matcher:
         for _ in range(rounds):
             reverse = {v: k for k, v in pairs.items()}
             anchors = sorted(pairs)
-            added = {}
+            added, fills = {}, {}
             for left, right in zip(anchors, anchors[1:]):
                 if pairs[right] <= pairs[left]:
                     continue
@@ -361,7 +361,9 @@ class Matcher:
                 lengths = [self.original.functions[o]['length'] for o in gap], [reference.functions[n]['length'] for n in fill]
                 close = lambda i, j: abs(lengths[0][i] - lengths[1][j]) <= max(2, max(lengths[0][i], lengths[1][j]) // 10)
                 if len(gap) == len(fill):
-                    added.update((gap[i], (fill[i], True)) for i in range(len(gap)) if close(i, i))
+                    for i in range(len(gap)):
+                        if close(i, i):
+                            added[gap[i]], fills[gap[i]] = (fill[i], True), fill
                     continue
                 table = [[0] * (len(fill) + 1) for _ in range(len(gap) + 1)]
                 for i in range(len(gap) - 1, -1, -1):
@@ -370,7 +372,7 @@ class Matcher:
                 i = j = 0
                 while i < len(gap) and j < len(fill):
                     if close(i, j) and table[i][j] == table[i + 1][j + 1] + 1:
-                        added[gap[i]] = (fill[j], False)
+                        added[gap[i]], fills[gap[i]] = (fill[j], False), fill
                         i += 1
                         j += 1
                     elif table[i + 1][j] >= table[i][j + 1]:
@@ -391,6 +393,26 @@ class Matcher:
                 if (agree and miss * 4 <= agree) or (equal and not agree and not miss and exact) or \
                         (texts[0] and texts[0] == texts[1] and not miss):
                     checked[orig] = ref
+            # The order fill commits to one length-close candidate per gap position.  Where the
+            # reference layout scatters one object's functions across a wide span, the committed
+            # pick can fail the call-agreement check while exactly one other length-close
+            # candidate of the same fill passes it -- the true counterpart.  Rescue a failed pick
+            # only through that unique call-verified candidate.
+            for orig in [o for o in added if o not in checked]:
+                votes = []
+                for alt in fills.get(orig, ()):
+                    if alt == added[orig][0]:
+                        continue
+                    length = self.original.functions[orig]['length']
+                    if abs(length - reference.functions[alt]['length']) > max(2, max(length, reference.functions[alt]['length']) // 10):
+                        continue
+                    agree = sum(1 for t in self.original.callees[orig] if t in pairs and pairs[t] in reference.callees[alt])
+                    miss = sum(1 for t in self.original.callees[orig] if t in pairs and pairs[t] not in reference.callees[alt])
+                    texts = set(self.original.functions[orig]['strings'].values()), set(reference.functions[alt]['strings'].values())
+                    if agree and not miss and not (texts[0] and texts[1] and texts[0] != texts[1]):
+                        votes.append(alt)
+                if len(votes) == 1 and votes[0] not in checked.values():
+                    checked[orig] = votes[0]
             if not checked:
                 break
             pairs.update(checked)
