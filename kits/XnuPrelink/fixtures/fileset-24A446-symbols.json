@@ -5729,6 +5729,22 @@
    "native_symbol": "_bdevsw_isfree",
    "addend": 0,
    "evidence": "Wall-61 (payload-r62 first flash, crc 0xaf0e2d21): kext driver registers a block device -> bdevsw_add(1, its 56B bdevsw template @0xbb651f8) -> GOT thunk 0xa422054 -> slot 0x83ae480 sentinel; return compared with the requested major (bdevsw_add contract). Donor 0xb3d161c named by devsw-domain forensics (bsd/kern/bsd_stubs.c TU): devsw CAS lock on 0xb9ce228 (same global donor _cdevsw_add/_cdevsw_remove/_devsw_unlock use), per-cpu mtx stats [tpidr+0x1c0], bounds 0x17=nblkdev-1, memcmp vs the empty-bdevsw placeholder 0x7ec2aa8 (6 eno_* ptrs + 0); geometry proof: donor bdevsw[24x56B] @0xb89c1b0 abuts donor cdevsw[64x112B] @0xb89c6f0 (donor _cdevsw_add stride 0x70 bound 0x3f) = conf.c bdevsw[] then cdevsw[] layout. Native twin noctf exact 0x79eb700 (km 0xB3A7700), body-verified (same arg shuffle + cmn/negs overflow guards; native add calls lck_mtx_lock_spin). 0 sentinel faces: s61 696 batch already bound the 1 face (slot 0x83ae488) to the SAME native word 0x80110000043a3700 - independent cross-confirmation of the twin; record added for provenance. Session-63 payload surgery (6B/2 clusters zero stray, seal untouched, payload-r63 0cb17660)."
+  },
+  {
+   "original": "0xfffffe000b3d1d58",
+   "original_size": 260,
+   "original_sha256": "44f6e7c50b1e3bccc2f125a59bbb64ccdf9bf0025f9a215a0b96e81388e5d229",
+   "native_symbol": "_cdevsw_add_with_bdev",
+   "addend": 0,
+   "evidence": "Wall-62 (statically pre-read at s63 close-out, confirmed by r63 first flash crc 0x68352ecd zero-correct 124B: panic from 0xfffffff00a41cb1c, x0=0x1, x1=0xfffffff00bb65188 = the kext's own 112B cdevsw template @0xbb65188). Caller = IOStorageFamily registration fn [0xa41ca8c,0xa41ce70) (span-fix verdict; call order isomorphic to memdev.c:665-673): bl 0xa41cb18 -> slot 0x83ae510 -> donor 0xb3d1d58. Named cdevsw_add_with_bdev(int, cdevsw*, dev_t) by triple evidence: donor body first bl 0xb3d1a98 = donor _cdevsw_add (kernel.map how=calls); bdev stored into chrtoblktab 0xb89bea4[major] after cmp #0x17 (nblkdev-1); bdev out-of-range -> inline _cdevsw_remove rollback with five shared constants (cdevsw 0xb89c6f0 / nocdev placeholder 0x7ec2ae0 / flags 0xb9284f8 / devsw CAS lock 0xb9ce228 / memcmp 0xae82458); returns index/-1. s63's 'native has no such symbol' overturned: noctf-exact _cdevsw_add_with_bdev 0x79ebd74 (km 0xB3A7D74, 228B) exists, body 1:1 with donor (native bl _cdevsw_add 0xB3A7B3C then _chrtoblk_set 0xB3A0FEC; native cdevsw 0xB855118 = 0xB854BD8+24*0x38 closure; chrtoblktab 0xB856D18). Source anchor xnu bsd_stubs.c:266-284: with_bdev = cdevsw_add + chrtoblk_set + failure rollback; cdevsw_remove_with_bdev absent from tree; sole chrtoblktab reader chrtoblk() returns NODEV by design (no boot-early panic face). Sole donor caller _mdevadd+0x160; native _mdevadd+0x128. Face: 1 sentinel slot 0x83ae510 -> 0x80110000043A3D74. Session-64 payload surgery (9B/3 clusters zero stray, seal untouched, payload-r64 b7535382)."
+  },
+  {
+   "original": "0xfffffe000b3d1894",
+   "original_size": 148,
+   "original_sha256": "eb559c384471241564bd74e7428bb912b0efd85933a04df794cc21eeae57cca1",
+   "native_symbol": "_bdevsw_remove",
+   "addend": 0,
+   "evidence": "Wall-63 (s63 static one-scan-two-walls PoC, second hit; no runtime panic yet - conditional wall taken only on the with_bdev failure path by the IOStorageFamily caller, plus an unconditional caller). Donor 0xb3d1894 = bdevsw_remove(int): triple geometric fingerprint all hit (first cmp w0,#0x17 = nblkdev-1; stride 0x38 = 56B bdevsw entry; table 0xb89c1b0) + devsw CAS lock 0xb9ce228 + memcmp vs kext template (56B) + writes empty-bdevsw placeholder 0x7ec2aa8 (q-reg 56B clear), returns major/-1 -- mirror of bdevsw_add (wall-61 0xb3d1700). Native twin noctf exact _bdevsw_remove 0x79eb968 (km 0xB3A7968, 196B): nblkdev global 0x71A07C8 (reads 24), table 0xB854BD8, lock 0xB996210, placeholder 0x7E4AF30; geometry closure 0xB854BD8+24*0x38 = 0xB855118 = native cdevsw base (donor mirror +0x540 = 0xb89c6f0). Faces: 2 sentinel slots 0x83ae490 (IOStorageFamily error-cleanup of the registration fn + unload fn 0xa417f18) and 0x849f248 (apfs deregistration fn 0xaaedb8c, flag-guarded block). Erratum: s64 workorder said 0x849f240 -- that slot is wall-61's bdevsw_add face, already bound in r63. Words -> 0x80110000043A3968. Session-64 payload surgery (9B/3 clusters zero stray, seal untouched, payload-r64 b7535382)."
   }
  ],
  "data": [
