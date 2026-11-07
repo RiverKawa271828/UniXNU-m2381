@@ -22,7 +22,26 @@ int main()
   reset(); r[0x800/4]=0x80000061; r[0xc00/4]=69; r[0x804/4]=0x80000062; r[0xc04/4]=68; r[(128+67)*4096/4]=1; p=plan(); assert(!p.error && p.bank==66);
   reset(); for(unsigned k=0;k<8;++k){r[(0x800+4*k)/4]=0x80000100+k;r[(0xc00+4*k)/4]=69-k;}
   p=plan(); assert(p.error && !__builtin_strcmp(p.error,"reserved context bank already used") && p.bank==69);
-  reset(); r[0x800/4]=0x80000060; r[0xc00/4]=1; assert(plan().error);
+  // The handoff firmware's own UFS mapping of our stream (the binary UFSDxe
+  // leaves SMR2 stream 0x60 -> S2CR2 TRANSLATE CBNDX=2 behind) is retaken,
+  // not refused: the group keeps its slot and configure retargets it.
+  reset(); r[(0x800+4*2)/4]=0x80000060; r[(0xc00+4*2)/4]=2; p=plan();
+  assert(!p.error && !p.reuse && p.slot==2 && p.bank==69);
+  {
+    auto read=[&](unsigned at){return r.at(at/4);};
+    std::vector<std::pair<unsigned,uint32_t>> order;
+    auto write=[&](unsigned at,uint32_t value){ r.at(at/4)=value; order.emplace_back(at,value); };
+    assert(!configureUfsSmmu(p,0x60,read,write));
+    unsigned s2crAt=0xffffffffU, smrAt=0xffffffffU;
+    for (unsigned k=0;k<order.size();++k) {
+      if (order[k].first==0xc00+4*2) s2crAt=k;
+      if (order[k].first==0x800+4*2) smrAt=k;
+    }
+    assert(s2crAt!=0xffffffffU && smrAt!=0xffffffffU && s2crAt<smrAt);
+    assert(r[(0xc00+4*2)/4]==69 && r[(0x800+4*2)/4]==0x80000060U);
+  }
+  reset(); r[0x800/4]=0x80000060; r[0xc00/4]=1;
+  p=plan(); assert(!p.error && !p.reuse && p.slot==0 && p.bank==69);
   // Our stream already mapped to the fallback bank by an earlier run (the top bank held by another stream): reused, not refused.
   reset(); r[0x800/4]=0x80000061; r[0xc00/4]=69; r[0x804/4]=0x80000060; r[0xc04/4]=68; r[(0x1000+4*68)/4]=0x10000;
   p=plan(); assert(!p.error && p.reuse && p.bank==68 && p.slot==1);
@@ -82,9 +101,12 @@ int main()
   assert(!planUfsSmmu(0x60,0xfffffffffULL,1,read).error);
   r[0x28/4]&=~(1U<<12); assert(plan().error);
   reset(); r[0x20/4]&=~(1U<<30); assert(plan().error);
-  // Reused context with an unexpected VMID/attribute must not be repaired.
+  // A reused context with an unexpected VMID/attribute is not repaired: the
+  // plan abandons that bank and retakes the stream group onto a clean one.
   reset(); p=plan(); drop=0xffffffffU; assert(!configure());
-  r[(0x1800+4*p.bank)/4]=0x10001; p=plan(); assert(p.error);
-  writes.clear(); assert(configure() && writes.empty());
+  r[(0x1800+4*p.bank)/4]=0x10001; p=plan();
+  assert(!p.error && !p.reuse && p.slot==127 && p.bank==68);
+  writes.clear(); assert(!configure() && writes.size()>=5);
+  assert(r[(0xc00+4*127)/4]==68 && read((128+68)*4096/4)==0);
   puts("PASS: SMMU geometry/conflicts, VA64 high-DMA regression, full-range width limits, ordered configuration, reuse/repair and blocked-write refusal");
 }

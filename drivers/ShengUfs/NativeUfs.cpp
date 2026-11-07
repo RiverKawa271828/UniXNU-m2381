@@ -282,6 +282,10 @@ static void zero32 (void *start, size_t length)
 // Hardware 2026-10-17: after hand-off apps_smmu has sCR0 = 0x002f0406 (USFCFG=1, unmatched
 // streams fault), no stream-match entry for the UFS host (ID 0x60, `iommus = <&apps_smmu 0x60
 // 0x0>` in the board DT), a TYPE=BYPASS S2CR reads back as FAULT, and sCR0 writes are ignored.
+// 2026-11-07 (r74 boot): the handoff state now carries the boot chain's own UFS mapping —
+// the binary mars-blob UFSDxe leaves SMR2 (stream 0x60, exact) -> S2CR2 TYPE=TRANSLATE
+// CBNDX=2 behind and nothing detaches it, so the planner retakes that group onto the
+// reserved bank (SmmuTakeover.h) instead of refusing to boot.
 // Linux (drivers/iommu/arm/arm-smmu/arm-smmu-qcom.c, qcom_smmu_cfg_probe + qcom_smmu_write_s2cr,
 // "bypass_quirk") meets exactly this: it reserves the LAST context bank (num_context_banks-1),
 // writes SCTLR=0 (stage 1 disabled) and CBAR.TYPE=S1_TRANS_S2_BYPASS there, and maps a bypass

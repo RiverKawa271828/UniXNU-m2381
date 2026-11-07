@@ -44,10 +44,11 @@ static UfsSmmuPlan planUfsSmmuBank(uint16_t stream, uint64_t dma, uint64_t bytes
   if (bankFromTop >= banks - 1) {p.error = "no free context bank"; return p;}
   p.bank = banks - 1 - bankFromTop;
   unsigned matches = 0;
+  bool retaken = false;
   for (unsigned i = 0; i < count; ++i) {
     uint32_t smr = read(0x800 + 4 * i);
     if (!(smr & 0x80000000U)) {
-      if (!p.reuse) p.slot = i;
+      if (!p.reuse && !retaken) p.slot = i;
       continue;
     }
     uint32_t s2cr = read(0xc00 + 4 * i);
@@ -56,11 +57,20 @@ static UfsSmmuPlan planUfsSmmuBank(uint16_t stream, uint64_t dma, uint64_t bytes
     bool ourBank = ((s2cr >> 16) & 3) == 0 && (s2cr & 255) == p.bank;
     if (match) {
       ++matches;
-      if (matches > 1 || mask || !ourBank) {
+      if (matches > 1 || mask) {
         p.slot = i; p.smr = smr; p.s2cr = s2cr;
         p.error = "conflicting UFS stream mapping"; return p;
       }
-      p.reuse = true; p.slot = i;
+      // An exclusive mapping of our own stream through another bank is the
+      // handoff firmware's own UFS DMA setup (the binary UFSDxe programs
+      // SMR/S2CR for stream 0x60 and nothing detaches it before the boot).
+      // The queue is quiesced here and the SMMU matches the lowest-indexed
+      // group, so the group is retaken: reuse stays off and configure
+      // rewrites this S2CR (before SMR) at the reserved bank. Later free
+      // slots must not displace the claimed group.
+      p.slot = i;
+      retaken = true;
+      if (ourBank) p.reuse = true;
     } else if (ourBank) {
       p.slot = i; p.smr = smr; p.s2cr = s2cr;
       p.error = "reserved context bank already used"; return p;
