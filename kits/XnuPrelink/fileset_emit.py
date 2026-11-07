@@ -89,12 +89,30 @@ def _bl_to_native(symbol):
 # receiver 0xb42b4a0 does have a source-level twin - int register_crypto_functions
 # (register_crypto.h:284, noctf _register_crypto_functions) - and the reviewed
 # record added this round lets rewrite_branches retarget the fire-and-forget bl
-# to the native receiver instead of voiding the publish. No TEXT_WORD_PATCHES
-# remain; the retargeted word lives in the FIPS-hashed corecrypto
-# __TEXT_EXEC.__text, which is why the board now boots with fips_mode=4 (POST
-# disabled) - the integrity HMAC can never pass over a deliberately retargeted
-# kext word.
-TEXT_WORD_PATCHES = ()
+# to the native receiver instead of voiding the publish. The retargeted word
+# lives in the FIPS-hashed corecrypto __TEXT_EXEC.__text, which is why the board
+# booted with fips_mode=4 (POST disabled) - the integrity HMAC can never pass
+# over a deliberately retargeted kext word.
+#
+# Wall-76 (2026-11-07, r75 first boot, screen crc 0xf063fb5b): the 23F84-lane
+# wall-42 recipe re-derived on the 24A446 collection. The donor AMFI
+# ConfigurationSettings cluster collapsed into one combined latch function at
+# 0xfffffe000924e7b0 (probes /arm-io/soc-misc, then waits 30s for ApplePMGRNub
+# before latching the boot policy register; SM8550 has neither, so the wait
+# always expires and trips the extracted assert helper 0x926ff1c -> panic
+# "AMFI: No PMGR?\n" @ConfigurationSettings.cpp:392). Reference-surface audit:
+# exactly three branch sites target the latch across the whole kext (no tail
+# calls, no chained fixups, no data pointers), all direct bl - so the callers
+# are the stations. Old words pin the donor bytes (fail-fast); station 1's word
+# 0x9400000D is bit-identical to its 23F84 sibling by encoding coincidence.
+TEXT_WORD_PATCHES = (
+    (0xfffffe000924e77c, 0x9400000D, _bl_to_native('_unixnu_amfi_devmode_config'),
+     'wall-76: AMFI ConfigurationSettings developer-mode config station (caller re-checks the config-done flag right after)'),
+    (0xfffffe000924ef1c, 0x97FFFE25, _bl_to_native('_unixnu_amfi_devmode_config'),
+     'wall-76: AMFI ConfigurationSettings developer-mode config station'),
+    (0xfffffe000924ef5c, 0x97FFFE15, _bl_to_native('_unixnu_amfi_devmode_config'),
+     'wall-76: AMFI ConfigurationSettings developer-mode config station'),
+)
 
 
 def inline_data_ranges(blob, pools=FILESET_MATH_POOLS):
