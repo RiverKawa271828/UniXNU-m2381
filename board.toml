@@ -301,6 +301,12 @@ kernel_args = [
   "use_contiguous_hint=0",
   "native-source-storage=1",
   "native-ufs-root=1",
+  # r76 first boot (wall-77, SourceStorage.cpp:124 root step 3 "root window
+  # preparation failed", phase=Prepare): the full diagnostic panic channel
+  # (rootDiagnosticFailure -> formatUfsRootDiagnostics, stage=WINDOWS/verify=
+  # lines) is gated on this arg and the panic screen carried only the generic
+  # wrapper. Zero code cost: arg only, the pipe is already built.
+  "native-ufs-diagnostics=1",
   "noidle=1",
   # Upstream blind-zone channel (guide/debugging): the on-screen diagnostic
   # page — 120x48 stage history, registers, storage counters; freezes on
