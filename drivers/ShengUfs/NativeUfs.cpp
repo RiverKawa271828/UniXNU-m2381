@@ -1224,6 +1224,7 @@ static uint32_t be32w (const uint8_t *at)
 #include "RootLayout.h"
 #include "RootWindowRead.h"
 #include "RootPublication.h"
+static_assert (VR_BLOCK_BYTES == kVerifyUnit, "ufsReadWindow verifies whole verifier blocks");
 
 }
 

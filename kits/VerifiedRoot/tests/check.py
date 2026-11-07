@@ -32,7 +32,7 @@ for name in ('owner', 'other'):
 spec = importlib.util.spec_from_file_location('manifest', ROOT / 'tools/manifest.py')
 manifest = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(manifest)
-data = bytes((i * 23 + i // 4096) & 255 for i in range(4096 * 3 + 512))
+data = bytes((i * 23 + i // 16384) & 255 for i in range(16384 + 4624))   # one full unit plus an unaligned tail unit
 record = manifest.make(io.BytesIO(data), len(data), keys / 'owner.pem', keys / 'owner-public.pem',
                        uuid.UUID('01e286f1-f4dd-4b2f-99d9-4973337fc788'), 7, out / 'signed')
 library = out / 'verified-root.dylib'
@@ -76,20 +76,19 @@ def opened(blob, anchor=key, generation=7, expected=0):
 
 
 view = opened(envelope)
-assert view.image_bytes == len(data) and view.block_count == 4 and view.generation == 7
+assert view.image_bytes == len(data) and view.block_count == 2 and view.generation == 7
 assert bytes(view.volume_uuid) == uuid.UUID(record['volume_uuid']).bytes
 checks.append('real RSA3072-SHA256 verification and signed metadata')
-for index in range(4):
-    block = data[index * 4096:(index + 1) * 4096]
+for index in range(view.block_count):
+    block = data[index * 16384:(index + 1) * 16384]
     assert native.vr_host_block(ctypes.byref(view), index, block, len(block)) == 0
-checks.append('all original blocks including the exact final 512-byte tail')
-for index in range(4):
-    block = bytearray(data[index * 4096:(index + 1) * 4096])
+checks.append('all original blocks including the exact unaligned tail')
+for index in range(view.block_count):
+    block = bytearray(data[index * 16384:(index + 1) * 16384])
     block[0] ^= 1
     assert native.vr_host_block(ctypes.byref(view), index, bytes(block), len(block)) == 5
 checks.append('one-byte mutation refused in every actual block')
-assert native.vr_host_block(ctypes.byref(view), 1, data[:4096], 4096) == 5
-assert native.vr_host_block(ctypes.byref(view), 4, data[:4096], 4096) == 5
+assert native.vr_host_block(ctypes.byref(view), view.block_count, data[:16384], 16384) == 5
 assert native.vr_host_block(ctypes.byref(view), 0, data[:512], 512) == 5
 checks.append('block substitution, outside index and partial-block reads refused')
 for offset, expected in ((40, 3), (160, 3), (544, 4)):
@@ -122,7 +121,7 @@ def header_opened(blob, anchor=key, generation=7, expected=0):
 
 header = envelope[:544]
 view = header_opened(header)
-assert view.image_bytes == len(data) and view.block_count == 4 and bytes(view.volume_uuid) == uuid.UUID(record['volume_uuid']).bytes
+assert view.image_bytes == len(data) and view.block_count == 2 and bytes(view.volume_uuid) == uuid.UUID(record['volume_uuid']).bytes
 for offset, expected in ((40, 3), (160, 3)):
     changed = bytearray(header)
     changed[offset] ^= 1

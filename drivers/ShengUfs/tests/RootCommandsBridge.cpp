@@ -37,6 +37,7 @@ static uint64_t mach_absolute_time() { return callback(4,0,0,nullptr); }
 static void IODelay(uint32_t us) { callback(5,0,us,nullptr); }
 static void IOLockLock(void *) {}
 static void IOLockUnlock(void *) {}
+static bool IOLockTryLock(void *) { return true; }
 static IOReturn recordTransport(IOReturn result,uint32_t ocs) {
   gRootDiagnostic.result=result; gRootDiagnostic.ocs=ocs; return result;
 }

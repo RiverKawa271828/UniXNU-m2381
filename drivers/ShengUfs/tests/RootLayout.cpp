@@ -121,5 +121,5 @@ int main(int argc,char **argv) {
     printf("PASS: existing root image's 4096-byte manifest, OS=%llu SystemOS=%llu; synthetic GPT uses recorded geometry, no full-image rehash\n",
            (unsigned long long)layout.window[0].size,(unsigned long long)layout.window[1].size);
   }
-  puts("PASS: GPT CRC/geometry/partition faults, manifest hashes/names/attributes/overlap/overflow, version 2 objects, 2048 bounded mutations");
+  printf("PASS: GPT CRC/geometry/partition faults, manifest hashes/names/attributes/overlap/overflow, version 2 objects, 2048 bounded mutations (%u transport reads)\n", reads);
 }
