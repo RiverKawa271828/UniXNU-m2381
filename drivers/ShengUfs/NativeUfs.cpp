@@ -1669,23 +1669,28 @@ static uint64_t gRootObjectBase;
 #if defined(NATIVE_VERIFIED_BLOCK) && NATIVE_VERIFIED_BLOCK
 volatile uint64_t native_ufs_verified_blocks = 0;
 
-// Read the hash table of a header-only policy from the root image object "<window>.vroot" into `table`.
-// The bytes are untrusted here; vr_open checks them against the digest in the signed header.
-static bool readPolicyTable (const char *window, uint8_t *table, uint64_t tableBytes)
+// Read a header-only policy's root image object "<window>.vroot" into `out`.
+// The object carries the FULL manifest - header + signature + hash table (the
+// r74 wiring stages <pair>/<policy>/manifest.bin verbatim; wall-78: the old
+// hash-table-only read demanded object->size == tableBytes, off by the 544
+// signed-header bytes, and this path had never executed before the AMFI fix
+// uncovered it). The object bytes are the signed original, so vr_open
+// verifies exactly what was staged instead of a header reassembly.
+static bool readPolicyObject (const char *window, uint8_t *out, uint64_t objectBytes)
 {
   char name[32];
   if (snprintf (name, sizeof (name), "%s.vroot", window) >= static_cast<int> (sizeof (name))) return false;
   const RootWindow *object = nullptr;
   for (unsigned i = 0; i < gRootObjects; ++i)
     if (!strcmp (gRootObject[i].name, name)) object = &gRootObject[i];
-  if (!object || object->size != tableBytes) return false;
+  if (!object || object->size != objectBytes) return false;
   uint64_t lba = (gRootObjectBase + object->offset) / 4096, done = 0;
-  while (done < tableBytes) {
-    uint64_t left = tableBytes - done;
+  while (done < objectBytes) {
+    uint64_t left = objectBytes - done;
     uint32_t blocks = static_cast<uint32_t> (left >= kDataMax ? kDataMax / 4096 : (left + 4095) / 4096);
     if (hostRead4k (0, lba, blocks, gScratch) != kIOReturnSuccess) return false;
     uint64_t take = left < blocks * 4096ULL ? left : blocks * 4096ULL;
-    memcpy (table + done, gScratch, take);
+    memcpy (out + done, gScratch, take);
     done += take;
     lba += blocks;
   }
@@ -1759,10 +1764,10 @@ bool NativeUfsBlock::configureVerification ()
     return false;
   }
   if (headerOnly) {
-    memcpy (reinterpret_cast<void *> (verifiedStorage), manifest, VR_HEADER_BYTES + VR_SIGNATURE_BYTES);
     gRootDiagnostic.stage = "policy table object read";
-    if (!readPolicyTable (label, reinterpret_cast<uint8_t *> (verifiedStorage) + VR_HEADER_BYTES + VR_SIGNATURE_BYTES,
-                          hashBytes)) {
+    // One whole-object read: the staged manifest IS the signed original, and
+    // the compiled policy header holds the very same bytes.
+    if (!readPolicyObject (label, reinterpret_cast<uint8_t *> (verifiedStorage), manifestBytes)) {
       return false;
     }
   } else {
