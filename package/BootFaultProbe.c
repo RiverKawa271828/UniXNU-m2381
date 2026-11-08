@@ -44,6 +44,20 @@ static void capture_exception(void *saved,unsigned esr,uint64_t far) {
 
 void boot_progress_user_breakpoint(void *saved,unsigned esr) {capture_exception(saved,esr,0);}
 void boot_progress_user_abort(void *saved,unsigned esr,uint64_t far) {capture_exception(saved,esr,far);}
+
+// wall-85 (r86b): the console ring stops consuming once boot_progress goes
+// active (serial/video console take over), so a printf from handle_pac_fail
+// never reaches the boot-diag page. Render the PAC-fail site into the two
+// wide rows instead — BootLog emits them ("W0/W1") into the page on every
+// writer tick. W0 is the UIKit probe's row only once SpringBoard-era probing
+// runs; a launchd that never reached main never gets there.
+void boot_progress_pac_wide(const char *r0, const char *r1) {
+ for(unsigned i=0;i<111;++i){
+  boot_progress_ext_wide[0][i]=r0[i]?r0[i]:' ';
+  boot_progress_ext_wide[1][i]=r1[i]?r1[i]:' ';
+ }
+ boot_progress_ext_wide[0][111]=0;boot_progress_ext_wide[1][111]=0;
+}
 // No user memory access on the ordinary noncritical exit reporting path.
 // A captured exception can have a handler; correlate only with a real exit.
 void boot_progress_exit_fault(int pid,unsigned signal,char *out,unsigned long capacity) {
