@@ -188,6 +188,9 @@ struct boot_log_header {
 };
 // Writer state for the board page: 0 off, 1 waiting for the window, 2 writing, 3 stopped after errors, 4 stopped (GPT changed).
 volatile uint32_t boot_log_state, boot_log_rounds, boot_log_errors;
+// Death capture (sheng-death-flush): kern_exit.c's critical-exit path calls this for one
+// synchronous final window round before the panic parks the cores; assigned in boot_log_tick.
+extern void (*sheng_death_flush_hook)(void) __attribute__((weak_import));
 // Why the last open attempt refused (SourceStorage's boot_log_check prints it
 // when the writer never reached round 1; sheng feat27's BootLog.c contract).
 const char *volatile boot_log_open_refusal;
@@ -1057,6 +1060,43 @@ static uint32_t copy_msgbuf(uint8_t *out) {
   return n;
 }
 
+// The writer's live header state plus the clock it measures rounds with, kept in sync at the end
+// of every round so boot_log_flush_now can write one correct round on its own.
+static struct boot_log_header boot_log_live;
+static uint64_t boot_log_start_ticks, boot_log_freq_hz;
+static IOLock *boot_log_round_lock;
+
+// One synchronous window round from an arbitrary kernel thread: the death capture. The critical
+// exit path (kern_exit.c, before the panic parks the cores) calls it through sheng_death_flush_hook;
+// the writer thread would never run again once the panic stops the machine, so r94's launchd abort
+// printed its reason into the message buffer and the window froze at the previous 2 s round.
+void boot_log_flush_now(void) {
+  if (!boot_log_round_lock) return;
+  IOLockLock(boot_log_round_lock);
+  if (boot_log_state == 2) {
+    struct boot_log_header h = boot_log_live;
+    const unsigned now = (unsigned)((log_ticks() - boot_log_start_ticks) / boot_log_freq_hz);
+    memset(boot_log_buffer, 0, LogSlotBlocks * LogBlock);
+    compose((char *)boot_log_buffer, LogSlotBlocks * LogBlock, h.slots_written, now);
+    int ok = native_ufs_log_write(LogSlotFirst + (uint64_t)(h.slots_written % h.slot_count) * LogSlotBlocks, LogSlotBlocks, boot_log_buffer);
+    h.msg_bytes = copy_msgbuf(boot_log_buffer);
+    ok &= native_ufs_log_write(LogMsgFirst, LogMsgBlocks, boot_log_buffer);
+    if (ok) ++h.slots_written; else ++h.write_errors;
+    IOLockLock(export_lock);
+    h.export_generation = export_ready; h.export_bytes = export_ready_bytes; h.export_first = export_ready_first;
+    h.diag_first = diag_first; h.diag_bytes = diag_bytes;
+    IOLockUnlock(export_lock);
+    h.uptime_s = now; h.rounds = ++boot_log_rounds; h.state = boot_log_state;
+    boot_log_live = h;
+    memset(boot_log_buffer, 0, LogBlock);
+    memcpy(boot_log_buffer, &h, sizeof h);
+    ok &= native_ufs_log_write(0, 1, boot_log_buffer);
+    ok &= native_ufs_log_sync();
+    if (!ok) ++boot_log_errors;
+  }
+  IOLockUnlock(boot_log_round_lock);
+}
+
 static void writer(void *arg, wait_result_t result) {
   (void)arg; (void)result;
   thread_set_thread_name(current_thread(), "boot_log");
@@ -1085,6 +1125,7 @@ static void writer(void *arg, wait_result_t result) {
   if (&boot_progress_tag) strlcpy(h.tag, boot_progress_tag(), sizeof h.tag);
   uint64_t f = 0; __asm__ volatile("mrs %0, cntfrq_el0" : "=r"(f)); if (!f) f = 19200000;
   const uint64_t start = log_ticks();
+  boot_log_freq_hz = f; boot_log_start_ticks = start;
   // The reboot-into-fastboot path, read only: PSCI features and the PMIC cell. sheng-autoreset=<seconds of log time> then writes the cell and
   // restarts once, after that round's log is on the medium, but only when the probe found the cell writable.
   uint32_t autoreset = 0;
@@ -1098,7 +1139,9 @@ static void writer(void *arg, wait_result_t result) {
   if (&boot_diag_scan && &boot_diag_stream) PE_parse_boot_argn("sheng-diag-export", &diag_at, sizeof diag_at);
   uint32_t errors = 0;
   boot_log_state = 2;
+  boot_log_live = h;
   for (;;) {
+    IOLockLock(boot_log_round_lock);
     const unsigned now = (unsigned)((log_ticks() - start) / f);
     int ok = 1;
     // Text slot, then the message buffer, then the header that makes both visible.
@@ -1123,10 +1166,12 @@ static void writer(void *arg, wait_result_t result) {
     h.uptime_s = now; h.rounds = ++boot_log_rounds; h.state = boot_log_state;
     // Every 30 rounds the GPT is read back; any change stops the writer for good.
     if (&native_ufs_store_gpt_check && !(h.rounds % 30)) h.gpt_last = native_ufs_store_gpt_check();
+    boot_log_live = h;
     memset(boot_log_buffer, 0, LogBlock);
     memcpy(boot_log_buffer, &h, sizeof h);
     ok &= native_ufs_log_write(0, 1, boot_log_buffer);
     ok &= native_ufs_log_sync();
+    IOLockUnlock(boot_log_round_lock);
     if (!ok) {boot_log_errors = ++errors;} else errors = 0;
     if (errors >= LogMaxErrors) {boot_log_state = 3; return;}
     if (h.gpt_last != h.gpt_open) {boot_log_state = 4; return;}
@@ -1165,6 +1210,10 @@ void boot_log_tick(unsigned now) {
   boot_log_buffer = (uint8_t *)IOMallocAligned(LogMsgBlocks * LogBlock, LogBlock);
   if (!boot_log_buffer) return;
   export_lock = IOLockAlloc();
+  boot_log_round_lock = IOLockAlloc();
+  // The death capture hook (kern_exit.c's critical-exit path): assign only now, once the window
+  // is open and boot_log_round_lock exists - boot_log_flush_now refuses to run before that.
+  if (&sheng_death_flush_hook) sheng_death_flush_hook = boot_log_flush_now;
   thread_t thread;
   if (kernel_thread_start_priority(writer, 0, BASEPRI_KERNEL, &thread) == KERN_SUCCESS) thread_deallocate(thread);
 }
