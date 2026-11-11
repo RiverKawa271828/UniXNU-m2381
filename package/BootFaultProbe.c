@@ -83,8 +83,12 @@ void boot_progress_exit_fault(int pid,unsigned signal,char *out,unsigned long ca
  if(!f.valid)return;
  // X0/X1/X16/X17: the msgSend receiver/SEL and the class/IMP the fast path loaded
  // from __DATA_CONST slots — the transient the three-window scan cannot see.
- unsigned long n=snprintf(out,capacity,"p%d %.20s sig%u PC%llx LR%llx SP%llx E%llx F%llx +%llx R%u X0%llx X1%llx X16%llx X17%llx bt",
-  f.pid,f.name,signal,f.pc,f.lr,f.sp,f.esr,f.far,f.slide,f.src,f.x[0],f.x[1],f.x[16],f.x[17]);
+ // r104: +X3-X8 — the abort-message channel. abort() stages its message-string
+ // pointer and the abort-with-payload arguments in x0-x3, and x4-x8 carry the
+ // dispatch callout context the dying launchd worker passes through; the record
+ // already holds all 29 registers, so this only widens the printed row.
+ unsigned long n=snprintf(out,capacity,"p%d %.20s sig%u PC%llx LR%llx SP%llx E%llx F%llx +%llx R%u X0%llx X1%llx X16%llx X17%llx X3%llx X4%llx X5%llx X6%llx X7%llx X8%llx bt",
+  f.pid,f.name,signal,f.pc,f.lr,f.sp,f.esr,f.far,f.slide,f.src,f.x[0],f.x[1],f.x[16],f.x[17],f.x[3],f.x[4],f.x[5],f.x[6],f.x[7],f.x[8]);
  uint64_t btv[8]; unsigned btn=0;
  if(pid==proc_selfpid()) {
   uint64_t frame=f.fp;
