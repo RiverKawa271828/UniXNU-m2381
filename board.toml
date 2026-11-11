@@ -316,6 +316,20 @@ kernel_args = [
   # 2 s into the 32 MiB window at the userdata tail — the forensic reader's
   # cargo (scripts/read-m2381-ufs-log.py parses it; ~17 min to wrap).
   "sheng-log=1",
+  # r102 (s90): the r101 32-frame launchd stack pinned the r94 wall to
+  # AccessoryInteraction.handleMeDeviceUpdate aborting pid 1 at the first
+  # MKBGetDeviceLockState failure — this no-SEP board has nothing answering
+  # the unchanged libaks/MobileKeyBag AppleKeyStore state queries (the exact
+  # situation upstream's sirius/sheng records document; sheng enables the
+  # answer service with aks=1). The publication probe rides KeyStoreProbe.cpp
+  # (offline-keystore=1 wrapper, offline-key-events=1 service publish, aks=1
+  # user client answering selector 7 "unlocked-since-boot"; key wrapping
+  # seeds from /chosen/unique-chip-id, already in the payload ADT); all three
+  # gates are self-gated so the kernel stays inert on lanes that do not pass
+  # the args.
+  "offline-keystore=1",
+  "offline-key-events=1",
+  "aks=1",
   # Session-55: fips_mode (FIPS_MODE_FLAG_DISABLE, session-54) withdrawn.
   # The upstream source-corecrypto14-bootstrap gate (prng_random.c:665,
   # STARTUP SYSCTL RANK_LAST, before the provider start) panics

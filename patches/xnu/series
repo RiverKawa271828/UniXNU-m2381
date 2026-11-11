@@ -1,2 +1,19 @@
 linux-clang-ptrauth-null-fallback.patch
 reference-build-release-export-bypass.patch
+
+# r102 (2026-11-11, s90): the r101 window pinned the r94 wall to launchd's
+# AccessoryInteraction aborting pid 1 at the first MKBGetDeviceLockState
+# failure -- on this no-SEP board nothing answers the unchanged
+# libaks/MobileKeyBag AppleKeyStore state queries (the same situation the
+# upstream sirius/sheng records document; sheng enables the answer service
+# with aks=1). This row is the m2381 keystore-face fork of the arch
+# series' offline-legacy-start.patch: the hook site is already patched into
+# the tree by that row, so this patch retargets the compile-time gate so
+# XNU_NATIVE_KEYSTORE wires ONLY the AppleKeyStore stand-in publication
+# (device package KeyStoreProbe.cpp + the AppleKeyStoreState component's
+# NativeKeyStoreEvents user client, both upstream-proven on sheng hardware)
+# while the display late probe keeps its own XNU_NATIVE_LEGACY_DISPLAY gate
+# and stays compiled out on this donor-kext display lane. All three gates
+# are boot-arg self-gated (offline-keystore/offline-key-events/aks),
+# so the row is inert without the board.toml args even when compiled in.
+offline-keystore-start.patch
