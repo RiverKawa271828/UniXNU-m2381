@@ -112,6 +112,8 @@ TEXT_WORD_PATCHES = (
      'wall-76: AMFI ConfigurationSettings developer-mode config station'),
     (0xfffffe000924ef5c, 0x97FFFE15, _bl_to_native('_unixnu_amfi_devmode_config'),
      'wall-76: AMFI ConfigurationSettings developer-mode config station'),
+    (0xfffffe000925d040, 0x94001f14, _bl_to_native('_unixnu_amfi_ent_copy_probe'),
+     'r106/A12 blade-1: AMFI entitlements copy probe - the OSEntitlements.cpp:863 panic (s95 RE: lambda 0x925d014 reads the credential blob holder at [x1+0xd0] and makes the single intra-kext bl to the copy helper 0x9264c90, whose constructor NULL becomes the hardcoded errno 14). SegmentedEmit skips unmapped (intra-kext) targets, so this station is a text-word pin: the probe (security/mac_base.c) calls the original first (collection VA + vm_kernel_slide, displacement preserved by the whole-collection rebase, bti c landing verified), mirrors its result, and on failure kprintfs holder+0x8/+0x10/+0x20 (type/tag/shape) and pulls one synchronous sheng-death-flush window round before the panic freezes the writer.'),
 )
 
 
