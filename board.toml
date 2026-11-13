@@ -352,6 +352,14 @@ kernel_args = [
   # the database file itself) behind this arg. Path evidence = the 24A446 dyld cache RE
   # (scratch-r112 REPORT-cache-symbolication.md §6/§7).
   "sheng-container-db=1",
+  # NOTE (r112 first boot, s102): the policy panicked EBUSY(16) on its first Data
+  # write — the same 16 as r111's terminal "cluster_push() failed with 16 on
+  # ino(249)" storm: the r111 crash-loop thrash left the RamBlock/D-store Data
+  # volume unable to take writes. The one-shot repair payload
+  # payload-r113-datareset-8dbe873b.img carries data-reset=1 (NativeRamBlock
+  # discardRequested(): drop the persisted overlay, boot from the seed; the r43
+  # precedent). The arg must NOT come back in ordinary builds — do not re-add
+  # unless a volume reset is explicitly wanted again.
   # Session-55: fips_mode (FIPS_MODE_FLAG_DISABLE, session-54) withdrawn.
   # The upstream source-corecrypto14-bootstrap gate (prng_random.c:665,
   # STARTUP SYSCTL RANK_LAST, before the provider start) panics
