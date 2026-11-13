@@ -423,8 +423,13 @@ kernel_args = [
   # NativeGOPPresenter::start maps it behind PE_current_console. Arg-by-arg
   # provenance (every one is a real PE_parse_boot_argn consumer in this tree;
   # sheng board args with no consumer here — offline-apfs-load,
-  # offline-mobile-graphics-*, boot-ui-focus4, sheng-backlight, sheng-touch,
-  # sheng-lite — are deliberately NOT carried):
+  # boot-ui-focus4, sheng-backlight, sheng-touch,
+  # sheng-lite — are deliberately NOT carried; offline-mobile-graphics-load IS
+  # carried since r117: its consumer is the bsd_init.c hook in
+  # offline-component-load-probes.patch, not the driver tree — the r115 recon
+  # missed it and both r115/r116 boots ran the display lane dark with stage
+  # stuck at 0, because native_legacy_display_probe() is only ever called
+  # behind that gate + a successful IOMobileGraphicsFamily load):
   #   offline-legacy-register=1  NativeLegacyDisplay.cpp:554 the explicit
   #                              offline system-client registration experiment
   #   offline-legacy-gop=1       NativeLegacyDisplay.cpp:983 the GOP presenter
@@ -441,6 +446,11 @@ kernel_args = [
   #                              520/424 — the phase-4 lifecycle sheng ships
   #   offline-legacy-unit-scale=2 LegacyDisplayProbe.cpp:421 display-scale/
   #                              rotation unit policy (sheng same value)
+  #   offline-mobile-graphics-load=1  bsd_init.c hook (offline-component-load-
+  #                              probes.patch): loads IOMobileGraphicsFamily,
+  #                              then calls native_legacy_display_probe() behind
+  #                              offline-legacy-register. The lane's only arg
+  #                              trigger; without it r115/r116 sat at stage=0.
   #   fb-gpu=1                   NativeGOPPresenter.cpp:107 + probe (24A446 fork)
   #                              the GPU hand-off wiring; the component dropped
   #                              the sheng- prefix (GopFramebuffer fa2fa49), so
@@ -460,8 +470,16 @@ kernel_args = [
   "offline-legacy-cpu-present=1",
   "offline-legacy-phase=4",
   "offline-legacy-unit-scale=2",
+  "offline-mobile-graphics-load=1",
   "fb-gpu=1",
   "vsync=120",
+  # r116 forensics: SpringBoard crash-looped twice this boot (p118/p126 corpses
+  # @157s/176s) with zero sheng-exc output because the exception dumper's default
+  # name list is "backboardd,chronod,liveactivitiesd". PE_parse_boot_argn
+  # overwrites that default, so the full list is repeated here plus SpringBoard;
+  # the sheng_exc_ring[4] rows also land in the [spawn] log section, which
+  # survives the msg-ring's ~60 s wrap.
+  "sheng-exc-name=SpringBoard,backboardd,chronod,liveactivitiesd",
 ]
 
 [payload.adt]
