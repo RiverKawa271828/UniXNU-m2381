@@ -152,6 +152,19 @@ archives = [
   # .cache/firmware/sheng-gpu pinned blobs) and CONFIG_XNU_NATIVE_ADRENO=n
   # skips the libAdreno740.a link requirement. Bring-up to launchd needs no
   # GPU; the chain returns with its own topic once those inputs are ported.
+  # 2026-11-14 (r116, s105): the 10-29 retirement of build-native-legacy-display.py
+  # was correct for the 23F84 lane and wrong to stay for 24A446 -- the r115 sealed
+  # kernel carried zero display components (offline-legacy-*/NativeLegacyDisplay
+  # string census all zero) and FBSDisplayMonitor found no display service. This
+  # is the sheng 24A446 display builder port (display core only): the reviewed
+  # fixture legacy-display-24A446.json (kernelcache sha 38e6d9fa... = this lane's
+  # donor pin) drives the class ABI; the sheng board suite (HID, USB, WiFi, ADSP,
+  # audio, battery, backlight, GPU power, keyboard) stays out. Needs the kernel
+  # step env XNU_NATIVE_LEGACY_DISPLAY=1 (the link gate at
+  # build-xnu-4k-baseline.sh force_loads build/native-legacy-display/
+  # libNativeLegacyDisplay.late.a against its build-report.json sha) and the
+  # hook sites the arm64e series' offline-legacy-start.patch already patches.
+  "build-gop-legacy-display-27.py",
 ]
 # [kernel.prelink] is inherited from the OS profile (ipados-27.0.1-24A446):
 # tool kits/XnuPrelink/emit_prelink.py (the kits/XnuPrelink vendored copy of
@@ -428,9 +441,10 @@ kernel_args = [
   #                              520/424 — the phase-4 lifecycle sheng ships
   #   offline-legacy-unit-scale=2 LegacyDisplayProbe.cpp:421 display-scale/
   #                              rotation unit policy (sheng same value)
-  #   sheng-fb-gpu=1             LegacyDisplayProbe.cpp:546 the GPU hand-off
-  #                              wiring on the probe side (sheng carries this
-  #                              name, not the upstream fb-gpu)
+  #   fb-gpu=1                   NativeGOPPresenter.cpp:107 + probe (24A446 fork)
+  #                              the GPU hand-off wiring; the component dropped
+  #                              the sheng- prefix (GopFramebuffer fa2fa49), so
+  #                              r115's sheng-fb-gpu=1 had no consumer
   #   vsync=120                  NativeLegacyDisplay.cpp:108 work-loop vsync
   #                              tick in Hz (sheng same value; timer only arms
   #                              once a client registers and a boot mapping
@@ -446,7 +460,7 @@ kernel_args = [
   "offline-legacy-cpu-present=1",
   "offline-legacy-phase=4",
   "offline-legacy-unit-scale=2",
-  "sheng-fb-gpu=1",
+  "fb-gpu=1",
   "vsync=120",
 ]
 

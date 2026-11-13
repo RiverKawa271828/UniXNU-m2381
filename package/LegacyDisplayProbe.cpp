@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 // Bounded offline original lifecycle instrument; no desktop claim.
-// m2381 fork of the sheng probe (same donor build 21H461): the registration
-// path, observation surfaces and GPU hand-off wiring are unchanged. The five
-// sheng board probes (KeyStore/cpufreq/GpuPower/touch/HID) are not linked on
-// this board (NATIVE_HID_INPUT=n, no touch/GPU topics), so their calls are
-// removed — this board reaches SpringBoard through the display lane alone.
+// m2381 fork of the sheng 24A446 probe (donor iPadOS 27.0.1-24A446, the lane this
+// board switched to on 2026-10-29): the registration path, observation surfaces and
+// GPU hand-off wiring are unchanged. The sheng board probes the late sweep calls
+// strongly (cpufreq, GPU power, touch, WiFi, ADSP, battery, audio, buttons,
+// backlight, DPU, HID) are not compiled on this board -- their calls are removed;
+// the weak-import probes resolve to null and skip. The keystore face keeps its
+// own trigger (the device series' offline-keystore-start.patch site), so its call
+// is removed here too. This board reaches SpringBoard through the display lane alone.
 #include <IOKit/IOPlatformExpert.h>
 #include <IOKit/IODeviceMemory.h>
 #include <IOKit/IODeviceTreeSupport.h>
@@ -14,6 +17,7 @@
 #include <libkern/c++/OSSerialize.h>
 #include <libkern/c++/OSData.h>
 #include <kern/task.h>
+#include <kern/thread.h>
 #include <sys/proc.h>
 #include <pexpert/pexpert.h>
 #include <mach/kmod.h>
@@ -25,9 +29,9 @@ extern "C" void native_gop_presenter_static_init(void) __asm__("__GLOBAL__sub_I_
 extern "C" IOService *native_gop_presenter_create(void);
 static IOService *pendingLegacyDisplay;
 static IOService *activeGOPPresenter,*activeGOPNub;
-// GPU hand-off presenter (sheng-fb-gpu=1, phase 4): lives beside the display driver, which offers it frames instead of copying them.
+// GPU hand-off presenter (fb-gpu=1, phase 4): lives beside the display driver, which offers it frames instead of copying them.
 static IOService *gpuHandoffPresenter;
-extern "C" bool native_gop_gpu_offer(IOService *,void *display,IOMemoryDescriptor *,uint64_t stride,uint32_t width,uint32_t height);
+extern "C" bool native_gop_gpu_offer(IOService *,void *display,IOMemoryDescriptor *,uint64_t stride,uint32_t width,uint32_t height,uint32_t format);
 extern "C" void native_gop_presenter_set_source(IOService *presenter,IOService *nub);
 volatile uint32_t native_legacy_gpu_fallbacks,native_legacy_gpu_last_status;
 static IOService *activeLegacyDisplay;
@@ -82,7 +86,6 @@ volatile uint32_t native_legacy_retirement_calls,native_legacy_retired_generatio
 volatile uint64_t native_legacy_retired_current,native_legacy_retired_pending;
 char native_legacy_properties[4096];
 volatile uint32_t native_legacy_client_calls,native_legacy_client_type;
-volatile uint32_t native_legacy_wait_standin_calls;
 volatile int native_legacy_client_pid,native_legacy_client_status=-1;
 volatile uint64_t native_legacy_client_task,native_legacy_client_object;
 char native_legacy_client_class[64];
@@ -118,7 +121,16 @@ bool native_legacy_prepare_scanout(void) {
     if(boot_progress_cancel_scanout)boot_progress_cancel_scanout();
     return false;
 }
-__attribute__((noinline)) void native_legacy_display_checkpoint(void) {__asm__ volatile("" ::: "memory");}
+// Every exit of the display probes passes here. A probe that did not publish the display (stage 10) says where it stopped, once
+// per exit: without the display the OS finds no framebuffer, and the stage is otherwise visible only in memory.
+__attribute__((noinline)) void native_legacy_display_checkpoint(void) {
+    __asm__ volatile("" ::: "memory");
+    if(native_legacy_stage==10)return;
+    IOLog("NativeLegacyDisplay: not published: stage %u meta %d init %u surface %d/%u probe %u start %u dt %u scale %d\n",
+          native_legacy_stage,native_legacy_meta_status,native_legacy_init_result,native_legacy_surface_status,
+          native_legacy_surface_found,native_legacy_probe_match,native_legacy_start_result,native_legacy_dt_attached,
+          native_legacy_unit_scale_status);
+}
 __attribute__((noinline)) void native_legacy_gop_mapping_checkpoint(void) {__asm__ volatile("" ::: "memory");}
 __attribute__((noinline)) void native_legacy_client_checkpoint(void) {__asm__ volatile("" ::: "memory");}
 void native_legacy_pm_observed(unsigned stage,IOReturn status,unsigned long ordinal) {
@@ -138,17 +150,20 @@ void native_legacy_surface_rejected(uint64_t width,uint64_t height,uint32_t form
     native_legacy_rej_surface[0]=width;native_legacy_rej_surface[1]=height;native_legacy_rej_surface[2]=format;native_legacy_rej_surface[3]=planes;
     native_legacy_rej_surface[4]=stride;native_legacy_rej_surface[5]=allocation;native_legacy_rej_surface[6]=bytes;
 }
+// The display's request layout (rectangles, masks, options, dimensions, surfaces); the iPadOS 17 one when the display has none.
+extern "C" const unsigned native_legacy_request_layout[6] __attribute__((weak_import));
 static void recordRejectedSwap(unsigned reason,const void *request,const void *surface) {
     const unsigned char *bytes=reinterpret_cast<const unsigned char *>(request);
     if(!bytes)return;
+    static const unsigned ios17[6]={17,81,792,804,816,2624};
+    const unsigned *layout=&native_legacy_request_layout?native_legacy_request_layout:ios17;
     native_legacy_rej_reason=reason;
-    uint64_t surfaces[4]={};memcpy(surfaces,bytes+2624,sizeof(surfaces));
+    uint64_t surfaces[4]={};memcpy(surfaces,bytes+layout[5],sizeof(surfaces));
     for(unsigned i=0;i<4;++i)native_legacy_rej_surfaces[i]=surfaces[i];
-    const unsigned stateOffsets[3]={792,796,800},optionOffsets[3]={804,808,812};
-    for(unsigned i=0;i<3;++i){uint32_t a=0,b=0;memcpy(&a,bytes+stateOffsets[i],4);memcpy(&b,bytes+optionOffsets[i],4);
+    for(unsigned i=0;i<3;++i){uint32_t a=0,b=0;memcpy(&a,bytes+layout[2]+4*i,4);memcpy(&b,bytes+layout[3]+4*i,4);
         native_legacy_rej_state[i]=a;native_legacy_rej_options[i]=b;}
-    uint32_t w=0,h=0;memcpy(&w,bytes+816,4);memcpy(&h,bytes+820,4);native_legacy_rej_size[0]=w;native_legacy_rej_size[1]=h;
-    const unsigned rectOffsets[2]={17,81};
+    uint32_t w=0,h=0;memcpy(&w,bytes+layout[4],4);memcpy(&h,bytes+layout[4]+4,4);native_legacy_rej_size[0]=w;native_legacy_rej_size[1]=h;
+    const unsigned rectOffsets[2]={layout[0],layout[1]};
     for(unsigned r=0;r<2;++r){uint32_t rect[4]={};memcpy(rect,bytes+rectOffsets[r],sizeof(rect));
         for(unsigned i=0;i<4;++i)native_legacy_rej_rects[r][i]=rect[i];}
     char name[32]={};
@@ -177,6 +192,8 @@ void native_legacy_frame_observed(unsigned kind,uint64_t count,uint64_t minx,uin
         native_legacy_frame_stats[n][3]=maxx;native_legacy_frame_stats[n][4]=maxy;
     }
     native_legacy_frame_count=n+1;
+    if(n<NATIVE_LEGACY_FRAMES)
+        printf("sheng-fb: frame %u kind %u: %llu lit pixels in (%llu,%llu)-(%llu,%llu)\n",n,kind,count,minx,miny,maxx,maxy);
 }
 volatile uint32_t native_legacy_frame_colors[8][4];
 volatile uint64_t native_legacy_frame_color_counts[8][4],native_legacy_frame_color_other[8];
@@ -217,19 +234,37 @@ extern "C" unsigned native_legacy_swap_timeline(char *out,unsigned cap) {
     }
     return at;
 }
-// The display refresh tick (NativeLegacyDisplay, sheng-vsync): vsync messages sent, arms, idle stops, late ticks, starts, refresh
+// The display refresh tick (NativeLegacyDisplay, vsync): vsync messages sent, arms, idle stops, late ticks, starts, refresh
 // properties reported at that rate, and the rate.
 static volatile uint64_t vsyncEvents[6];
 static volatile unsigned vsyncHz;
+// Each tick event while the diagnostic export holds a ring (BootDiagExport.c kernel.vsync.bin): (mach time << 3) | event, events as above
+// (0 armed, 1 sent, 2 idle stop, 3 late, 4 started, 5 refresh reported). native_legacy_vsync_count counts every one.
+extern "C" {uint64_t *native_legacy_vsync_ring;volatile uint32_t native_legacy_vsync_count;}
 void native_legacy_vsync_observed(unsigned event,unsigned hz) {
     if(event<6)vsyncEvents[event]=vsyncEvents[event]+1;
     vsyncHz=hz;
+    if(uint64_t *ring=native_legacy_vsync_ring) {
+        const uint32_t n=__atomic_fetch_add(&native_legacy_vsync_count,1u,__ATOMIC_RELAXED);
+        ring[n&65535]=(mach_absolute_time()<<3)|(event&7);
+    }
 }
+// What the compositor presents and where each frame goes (NativeLegacyDisplay.cpp native_legacy_formats).
+extern "C" volatile uint32_t native_legacy_formats[10] __attribute__((weak_import));
+// The scanout report: the prepare counters, the refresh tick (sent stays 0 while no client asks for vsync messages: the macOS render server
+// paces itself with its own display timer at the published refresh interval), then the formats: swaps accepted as BGRA/compressed BGRA/half
+// float, refused for their format with the last such format, and the frames' paths: fetched by the display pipes, copied by the GPU client
+// (8-bit/half float), converted by the CPU (8-bit/half float).
 extern "C" unsigned native_legacy_prepare_report(char *out,unsigned cap) {
-    return snprintf(out,cap,"prepare calls=%u failures=%u retried=%u max_attempts=%u waited_ms=%llu vsync hz=%u sent=%llu arms=%llu idle=%llu late=%llu start=%llu refresh=%llu",
+    unsigned at=(unsigned)snprintf(out,cap,"prepare calls=%u failures=%u retried=%u max_attempts=%u waited_ms=%llu vsync hz=%u sent=%llu arms=%llu idle=%llu late=%llu start=%llu refresh=%llu",
         native_legacy_prepare_calls,native_legacy_prepare_failures,native_legacy_prepare_retried,native_legacy_prepare_max_attempts,
         (unsigned long long)(native_legacy_prepare_wait_us/1000),vsyncHz,(unsigned long long)vsyncEvents[1],(unsigned long long)vsyncEvents[0],
         (unsigned long long)vsyncEvents[2],(unsigned long long)vsyncEvents[3],(unsigned long long)vsyncEvents[4],(unsigned long long)vsyncEvents[5]);
+    if(&native_legacy_formats && at<cap) {
+        const volatile uint32_t *f=native_legacy_formats;
+        at+=(unsigned)snprintf(out+at,cap-at," fmt %u/%u/%u no %u:%08x direct %u gpu %u/%u cpu %u/%u",f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8],f[9]);
+    }
+    return at;
 }
 void native_legacy_swap_validation_observed(bool accepted,unsigned reason,const void *request,const void *surface) {
     if(accepted)native_legacy_swap_stage(0);
@@ -246,6 +281,10 @@ void native_legacy_copy_timing_observed(uint64_t ticks,uint64_t bytes) {
     native_legacy_copy_bytes_last=bytes;native_legacy_copy_bytes_sum=native_legacy_copy_bytes_sum+bytes;
     native_legacy_copy_n=native_legacy_copy_n+1;native_legacy_copy_last=ticks;native_legacy_copy_sum=native_legacy_copy_sum+ticks;
     if(ticks>native_legacy_copy_max)native_legacy_copy_max=ticks;
+    if(native_legacy_copy_n<=32) {
+        uint64_t frequency;__asm__ volatile("mrs %0, cntfrq_el0":"=r"(frequency));
+        printf("sheng-fb: copy %u: %llu bytes in %llu us\n",(unsigned)native_legacy_copy_n,bytes,frequency?ticks*1000000/frequency:0);
+    }
 }
 __attribute__((noinline)) void native_legacy_transfer_observed(IOReturn status,const void *request,uint64_t bytes) {
     native_legacy_transfer_calls=native_legacy_transfer_calls+1;
@@ -257,8 +296,8 @@ __attribute__((noinline)) void native_legacy_transfer_observed(IOReturn status,c
         boot_progress_stage(message);
     }
 }
-bool native_legacy_gpu_offer(void *display,IOMemoryDescriptor *memory,uint64_t stride,uint32_t width,uint32_t height) {
-    return gpuHandoffPresenter && native_gop_gpu_offer(gpuHandoffPresenter,display,memory,stride,width,height);
+bool native_legacy_gpu_offer(void *display,IOMemoryDescriptor *memory,uint64_t stride,uint32_t width,uint32_t height,uint32_t format) {
+    return gpuHandoffPresenter && native_gop_gpu_offer(gpuHandoffPresenter,display,memory,stride,width,height,format);
 }
 void native_legacy_gpu_fallback_observed(int status) {
     native_legacy_gpu_last_status=(uint32_t)status;native_legacy_gpu_fallbacks=native_legacy_gpu_fallbacks+1;
@@ -349,6 +388,10 @@ static IOReturn wrappedRegister(IOUserClient *client,mach_port_t port,UInt32 typ
     return status;
 }
 static void interpose(IOUserClient *client,int pid) {
+#if __has_feature(ptrauth_calls)
+    // The vtable pointer and its entries are signed: a copied vtable would not authenticate. Clients are not interposed.
+    (void)client;(void)pid;return;
+#endif
     if(seenClientCount>=kSeenClients)return;
     ClientStat &stat=seenClients[seenClientCount];
     memset(&stat,0,sizeof stat);
@@ -372,7 +415,6 @@ extern "C" unsigned native_legacy_state_words(char *out,unsigned cap) {
 }
 extern "C" unsigned native_legacy_clients_dump(char *out,unsigned cap) {
     unsigned at=0;out[0]=0;
-    at+=snprintf(out+at,cap-at,"wait-standin %u\n",native_legacy_wait_standin_calls);
     for(unsigned c=0;c<seenClientCount && at+120<cap;++c) {
         const ClientStat &s=seenClients[c];
         at+=snprintf(out+at,cap-at,"C%u pid=%d calls=%u fails=%u regs=%u",c,s.pid,s.calls,s.fails,s.regs);
@@ -485,24 +527,122 @@ void native_legacy_display_probe(void) {
     native_legacy_display_checkpoint();
 }
 void native_legacy_display_late_probe(void);
-extern void native_keystore_probe(void);
-extern void native_uikit_cache_probe_start(void);
-// The charging lane (sheng-adsp=2 / sheng-battery=1): each probe reads its own
-// boot argument and returns immediately when off, so the calls are unconditional.
-extern void sheng_adsp_probe(void);
-extern void sheng_battery_probe(void);
+// m2381 fork: the strong board-probe externs (native_hid_input_probe, native_keystore_probe,
+// native_touch_probe, sheng_cpufreq_probe, sheng_gpu_power_probe, sheng_wifi_probe,
+// sheng_adsp_probe, sheng_battery_probe, sheng_audio_probe, sheng_buttons_probe,
+// sheng_backlight_probe, sheng_dpu_probe) and their calls are removed -- none of those
+// probes is compiled on this board; the keystore face keeps its own trigger
+// (offline-keystore-start.patch). The weak imports below resolve to null and skip.
+extern void sheng_thermal_probe(void) __attribute__((weak_import));       // ThermalProbe.cpp, thermal=1
+extern void sheng_thermal_level_probe(void) __attribute__((weak_import)); // ThermalLevel.cpp, thermal-level=1
+extern void sheng_board_clock_probe(void) __attribute__((weak_import));   // BoardClock.cpp, board-clock=<bits>
+extern void sheng_gpu_pool_probe(void) __attribute__((weak_import));      // GpuMemoryPool.cpp, before the GPU driver allocates
+extern void sheng_bluetooth_probe(void) __attribute__((weak_import));
+extern void sheng_usb_probe(void) __attribute__((weak_import));
+extern "C" void sheng_ethernet_probe(void) __attribute__((weak_import));   // macOS builds only (ShengEthernet.cpp)
+extern "C" void sheng_software_aes_probe(void) __attribute__((weak_import));   // macOS builds only (SoftwareAesProbe.cpp)
+extern "C" void sheng_keyboard_probe(void) __attribute__((weak_import));
+// IOKit's busy services while the registry is not quiet: the network configuration names interfaces only once IOKit is quiet (or after its
+// 240 s limit), and the TimeSync clock manager waits for quiet too, so a service whose matching never ends holds up the network, TimeSync
+// and everything waiting on them (macOS run28: en0 named after 240 s, WindowServer waiting on clocksyncd). Every 10 s for 10 minutes, while
+// the root's busy count is not 0, the busy leaves (a busy service none of whose children is busy) are logged when the set changes: class,
+// name, busy count, and whether the service's own matching has finished.
+extern "C" int boot_kthread_report_nth(const char *prefix, unsigned nth, char *name, unsigned name_size, char *out, unsigned size);
+// [0] the latest busy set, [1..3] matching threads that are not idle, for the diagnostic page (BootLog.c).
+extern "C" {char native_iokit_busy_text[4][192];}
+namespace {
+// IOKit's matching threads, once, when the same busy set has stayed for two rounds: which thread holds a service's matching and where.
+void reportConfigThreads() {
+    unsigned kept = 1;
+    for (unsigned n = 0, tries = 0; n < 16 && tries < 64; ++tries) {
+        char name[64], where[400];
+        // The kernel task's lock is only tried: a busy lock is taken again a little later.
+        if (boot_kthread_report_nth("IOConfigThread", n, name, sizeof name, where, sizeof where)) {
+            if (n >= 1 && tries > 8) break;
+            IOSleep(5);
+            continue;
+        }
+        IOLog("IOKit matching thread %u %s: %s\n", n, name, where);
+        if (kept < 4) snprintf(native_iokit_busy_text[kept++], sizeof native_iokit_busy_text[0], "T%u %.40s %.140s", n, name, where);
+        ++n;
+    }
+}
+void busyReport(void *, wait_result_t) {
+    char last[400] = "";
+    unsigned same = 0;
+    bool threadsShown = false;
+    for (unsigned round = 1; round <= 60; ++round) {
+        IOSleep(10000);
+        IOService *root = IOService::getServiceRoot();
+        const UInt32 busy = root ? root->getBusyState() : 0;
+        char line[400];
+        int at = snprintf(line, sizeof line, "IOKit busy %u:", (unsigned)busy);
+        unsigned shown = 0;
+        if (busy) {
+            if (IORegistryIterator *it = IORegistryIterator::iterateOver(gIOServicePlane, kIORegistryIterateRecursively)) {
+                while (OSObject *object = it->getNextObject()) {
+                    IOService *service = OSDynamicCast(IOService, object);
+                    if (!service || !service->getBusyState()) continue;
+                    bool busyChild = false;
+                    if (OSIterator *children = service->getChildIterator(gIOServicePlane)) {
+                        while (OSObject *child = children->getNextObject()) {
+                            IOService *c = OSDynamicCast(IOService, child);
+                            if (c && c->getBusyState()) {busyChild = true; break;}
+                        }
+                        children->release();
+                    }
+                    if (busyChild) continue;
+                    if (at < (int)sizeof line - 2)
+                        at += snprintf(line + at, sizeof line - at, " %s(%s,%u,%c)", service->getName(), service->getMetaClass()->getClassName(),
+                                       (unsigned)service->getBusyState(), (service->getState() & kIOServiceMatchedState) ? 'm' : '-');
+                    if (++shown >= 8) break;
+                }
+                it->release();
+            }
+        }
+        if (strcmp(line, last)) {
+            IOLog("%s\n", line);
+            strlcpy(last, line, sizeof last);
+            snprintf(native_iokit_busy_text[0], sizeof native_iokit_busy_text[0], "%u s %.170s", round * 10, line);
+            same = 0;
+        } else if (busy && ++same == 2 && !threadsShown) {
+            threadsShown = true;
+            reportConfigThreads();
+        }
+        if (!busy && round > 3) break;
+    }
+    thread_terminate(current_thread());
+}
+}  // namespace
+
 void native_legacy_display_late_probe(void) {
-    // The AppleKeyStore stand-in (sheng's board integration: the offline-key-events
-    // + sheng-aks gates live inside the probe) publishes before SB's keybag stage.
-    native_keystore_probe();
-    // r64 cache-global audit: the UIKitCore __DATA_DIRTY watcher (uikit-cache-probe=1).
-    native_uikit_cache_probe_start();
-    // The audio DSP bring-up and the battery power source over its PMIC GLINK.
-    sheng_adsp_probe();
-    sheng_battery_probe();
-    IOService *display=pendingLegacyDisplay;if(!display)return;pendingLegacyDisplay=nullptr;
+    {thread_t thread = nullptr; if (kernel_thread_start(busyReport, nullptr, &thread) == KERN_SUCCESS) thread_deallocate(thread);}
+    // First: AppleImage4's start already waits for an IOAESAccelerator, holding its expert lock (SoftwareAesProbe.cpp).
+    if (sheng_software_aes_probe) sheng_software_aes_probe();
+    // m2381 fork: the strong board-probe calls (keystore, cpufreq, GPU power, touch, WiFi,
+    // ADSP, battery, audio, buttons, backlight, DPU, HID) are removed -- none of those
+    // probes is compiled on this board and the keystore face keeps its own trigger
+    // (offline-keystore-start.patch). The weak imports skip on their null checks.
+    if (sheng_thermal_probe) sheng_thermal_probe();
+    if (sheng_thermal_level_probe) sheng_thermal_level_probe();
+    if (sheng_board_clock_probe) sheng_board_clock_probe();
+    if (sheng_gpu_pool_probe) sheng_gpu_pool_probe();
+    if (sheng_bluetooth_probe) sheng_bluetooth_probe();
+    if (sheng_usb_probe) sheng_usb_probe();
+    if (sheng_ethernet_probe) sheng_ethernet_probe();
+    if (sheng_keyboard_probe) sheng_keyboard_probe();
+    IOService *display=pendingLegacyDisplay;if(!display){native_legacy_display_checkpoint();return;}pendingLegacyDisplay=nullptr;
     native_legacy_surface_status=OSKextLoadKextWithIdentifier("com.apple.iokit.IOSurface");
-    OSDictionary *matching=IOService::nameMatching("IOCoreSurfaceRoot");
+    // The IOSurface root service: iOS and iPadOS name it IOCoreSurfaceRoot; macOS leaves it unnamed, so its name is its class,
+    // IOSurfaceRoot. IONameMatch takes either.
+    OSDictionary *matching=OSDictionary::withCapacity(1);
+    {
+        const OSObject *names[]={OSString::withCString("IOCoreSurfaceRoot"),OSString::withCString("IOSurfaceRoot")};
+        OSArray *list=names[0] && names[1]?OSArray::withObjects(names,2):nullptr;
+        if(!matching || !list || !matching->setObject(gIONameMatchKey,list))OSSafeReleaseNULL(matching);
+        OSSafeReleaseNULL(list);
+        for(const OSObject *name:names)if(name)name->release();
+    }
     IOService *surface=matching?IOService::waitForMatchingService(matching,5000000000ULL):nullptr;
     native_legacy_surface_found=surface!=nullptr;OSSafeReleaseNULL(surface);OSSafeReleaseNULL(matching);
     PE_Video video={};
@@ -514,7 +654,8 @@ void native_legacy_display_late_probe(void) {
         // A real firmware framebuffer resource, with addresses and extent
         // obtained from the actual GOP handoff. It has no invented compatible,
         // display list, panel timing, GPU/fence completion or vendor registers.
-        native_legacy_stage=4;IOPlatformDevice *nub=new IOPlatformDevice;
+        // A plain service: an IOPlatformDevice expects the platform expert as its provider (compareName calls it), not the resources.
+        native_legacy_stage=4;IOService *nub=new IOService;
         native_legacy_nub=(uintptr_t)nub;bool nubAttached=false,nubStarted=false,attached=false,started=false;
         IORegistryEntry *displayTreeParent=nullptr;bool dtAttached=false;
         IOService *parent=IOService::getResourceService();
@@ -522,12 +663,21 @@ void native_legacy_display_late_probe(void) {
         OSArray *ranges=OSArray::withCapacity(1);
         if(nub && memory && ranges && parent && nub->init()) {
             ranges->setObject(memory);nub->setDeviceMemory(ranges);nub->setName("NativeGOPFramebuffer");
+#if defined(XNU_TARGET_OS_OSX) && XNU_TARGET_OS_OSX
+            // macOS: the panel's density (12.4 inch, 3048 x 2032: 294 dots per inch), which the framebuffer reports as its dot pitch
+            // and turns into the display's physical size. Without one WindowServer saw a 0 x 0 inch panel and made the unscaled
+            // 3048 x 2032 mode the default (macOS run40); with it the default is the 2x mode, 1524 x 1016 points.
+            {
+                const uint32_t dotsPerInch=294;
+                if(OSData *pitch=OSData::withBytes(&dotsPerInch,sizeof(dotsPerInch))){nub->setProperty("dot-pitch",pitch);pitch->release();}
+            }
+#endif
             nubAttached=nub->attach(parent);if(nubAttached)nubStarted=nub->start(parent);
             if(nubStarted) {
                 unsigned phase=0;PE_parse_boot_argn("offline-legacy-phase",&phase,sizeof(phase));
                 if(phase==4) {
                     // This is the actually implemented GOP display subsystem,
-                    // attached to its real IOPlatformDevice memory resource.
+                    // attached to its real firmware framebuffer memory resource.
                     // No Apple/vendor compatible or panel timing is supplied.
                     displayTreeParent=IORegistryEntry::fromPath("/arm-io",gIODTPlane);
                     const char type[]="display-subsystem";OSData *data=OSData::withBytes(type,sizeof(type));
@@ -550,7 +700,7 @@ void native_legacy_display_late_probe(void) {
                     if(started && phase==4) {
                         activeLegacyDisplay=display;activeGOPNub=nub;native_legacy_stage=10;
                         {
-                            unsigned gpu=0;PE_parse_boot_argn("sheng-fb-gpu",&gpu,sizeof gpu);
+                            unsigned gpu=0;PE_parse_boot_argn("fb-gpu",&gpu,sizeof gpu);
                             if(gpu==1) {
                                 IOService *handoff=native_gop_presenter_create();
                                 // Not a child of the display subsystem's node: the original display code enumerates that node's children (int-075/077:
