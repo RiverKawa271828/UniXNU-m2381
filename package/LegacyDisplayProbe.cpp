@@ -5,7 +5,10 @@
 // GPU hand-off wiring are unchanged. The sheng board probes the late sweep calls
 // strongly (cpufreq, GPU power, touch, WiFi, ADSP, battery, audio, buttons,
 // backlight, DPU, HID) are not compiled on this board -- their calls are removed;
-// the weak-import probes resolve to null and skip. The keystore face keeps its
+// the weak-import probes (thermal, thermal level, board clock, GPU pool,
+// bluetooth, USB, ethernet, software AES, keyboard) are removed too -- this
+// ld64 errors on unresolved weak references where Apple's binds them to zero
+// (the BootProgressTelemetryDefs.c zero-link rule). The keystore face keeps its
 // own trigger (the device series' offline-keystore-start.patch site), so its call
 // is removed here too. This board reaches SpringBoard through the display lane alone.
 #include <IOKit/IOPlatformExpert.h>
@@ -238,19 +241,16 @@ extern "C" unsigned native_legacy_swap_timeline(char *out,unsigned cap) {
 // properties reported at that rate, and the rate.
 static volatile uint64_t vsyncEvents[6];
 static volatile unsigned vsyncHz;
-// Each tick event while the diagnostic export holds a ring (BootDiagExport.c kernel.vsync.bin): (mach time << 3) | event, events as above
-// (0 armed, 1 sent, 2 idle stop, 3 late, 4 started, 5 refresh reported). native_legacy_vsync_count counts every one.
-extern "C" {uint64_t *native_legacy_vsync_ring;volatile uint32_t native_legacy_vsync_count;}
+// Each tick event: (0 armed, 1 sent, 2 idle stop, 3 late, 4 started, 5 refresh reported).
+// m2381 fork: the kernel.vsync.bin ring (sheng BootDiagExport.c native_legacy_vsync_ring)
+// is not carried on this board, so only the event counters are kept.
 void native_legacy_vsync_observed(unsigned event,unsigned hz) {
     if(event<6)vsyncEvents[event]=vsyncEvents[event]+1;
     vsyncHz=hz;
-    if(uint64_t *ring=native_legacy_vsync_ring) {
-        const uint32_t n=__atomic_fetch_add(&native_legacy_vsync_count,1u,__ATOMIC_RELAXED);
-        ring[n&65535]=(mach_absolute_time()<<3)|(event&7);
-    }
 }
-// What the compositor presents and where each frame goes (NativeLegacyDisplay.cpp native_legacy_formats).
-extern "C" volatile uint32_t native_legacy_formats[10] __attribute__((weak_import));
+// m2381 fork: the compositor format counters (native_legacy_formats, component b0d812d)
+// are not carried at this board's component pin, so the scanout report keeps the
+// prepare counters and the vsync events only.
 // The scanout report: the prepare counters, the refresh tick (sent stays 0 while no client asks for vsync messages: the macOS render server
 // paces itself with its own display timer at the published refresh interval), then the formats: swaps accepted as BGRA/compressed BGRA/half
 // float, refused for their format with the last such format, and the frames' paths: fetched by the display pipes, copied by the GPU client
@@ -260,10 +260,6 @@ extern "C" unsigned native_legacy_prepare_report(char *out,unsigned cap) {
         native_legacy_prepare_calls,native_legacy_prepare_failures,native_legacy_prepare_retried,native_legacy_prepare_max_attempts,
         (unsigned long long)(native_legacy_prepare_wait_us/1000),vsyncHz,(unsigned long long)vsyncEvents[1],(unsigned long long)vsyncEvents[0],
         (unsigned long long)vsyncEvents[2],(unsigned long long)vsyncEvents[3],(unsigned long long)vsyncEvents[4],(unsigned long long)vsyncEvents[5]);
-    if(&native_legacy_formats && at<cap) {
-        const volatile uint32_t *f=native_legacy_formats;
-        at+=(unsigned)snprintf(out+at,cap-at," fmt %u/%u/%u no %u:%08x direct %u gpu %u/%u cpu %u/%u",f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8],f[9]);
-    }
     return at;
 }
 void native_legacy_swap_validation_observed(bool accepted,unsigned reason,const void *request,const void *surface) {
@@ -533,39 +529,18 @@ void native_legacy_display_late_probe(void);
 // sheng_backlight_probe, sheng_dpu_probe) and their calls are removed -- none of those
 // probes is compiled on this board; the keystore face keeps its own trigger
 // (offline-keystore-start.patch). The weak imports below resolve to null and skip.
-extern void sheng_thermal_probe(void) __attribute__((weak_import));       // ThermalProbe.cpp, thermal=1
-extern void sheng_thermal_level_probe(void) __attribute__((weak_import)); // ThermalLevel.cpp, thermal-level=1
-extern void sheng_board_clock_probe(void) __attribute__((weak_import));   // BoardClock.cpp, board-clock=<bits>
-extern void sheng_gpu_pool_probe(void) __attribute__((weak_import));      // GpuMemoryPool.cpp, before the GPU driver allocates
-extern void sheng_bluetooth_probe(void) __attribute__((weak_import));
-extern void sheng_usb_probe(void) __attribute__((weak_import));
-extern "C" void sheng_ethernet_probe(void) __attribute__((weak_import));   // macOS builds only (ShengEthernet.cpp)
-extern "C" void sheng_software_aes_probe(void) __attribute__((weak_import));   // macOS builds only (SoftwareAesProbe.cpp)
-extern "C" void sheng_keyboard_probe(void) __attribute__((weak_import));
 // IOKit's busy services while the registry is not quiet: the network configuration names interfaces only once IOKit is quiet (or after its
 // 240 s limit), and the TimeSync clock manager waits for quiet too, so a service whose matching never ends holds up the network, TimeSync
 // and everything waiting on them (macOS run28: en0 named after 240 s, WindowServer waiting on clocksyncd). Every 10 s for 10 minutes, while
 // the root's busy count is not 0, the busy leaves (a busy service none of whose children is busy) are logged when the set changes: class,
 // name, busy count, and whether the service's own matching has finished.
-extern "C" int boot_kthread_report_nth(const char *prefix, unsigned nth, char *name, unsigned name_size, char *out, unsigned size);
 // [0] the latest busy set, [1..3] matching threads that are not idle, for the diagnostic page (BootLog.c).
 extern "C" {char native_iokit_busy_text[4][192];}
 namespace {
-// IOKit's matching threads, once, when the same busy set has stayed for two rounds: which thread holds a service's matching and where.
+// IOKit's matching threads, once, when the same busy set has stayed for two rounds.
+// m2381 fork: the thread walker (BootUiTraceProbe.c boot_kthread_report_nth) is not
+// carried on this board, so the thread rows are not reported.
 void reportConfigThreads() {
-    unsigned kept = 1;
-    for (unsigned n = 0, tries = 0; n < 16 && tries < 64; ++tries) {
-        char name[64], where[400];
-        // The kernel task's lock is only tried: a busy lock is taken again a little later.
-        if (boot_kthread_report_nth("IOConfigThread", n, name, sizeof name, where, sizeof where)) {
-            if (n >= 1 && tries > 8) break;
-            IOSleep(5);
-            continue;
-        }
-        IOLog("IOKit matching thread %u %s: %s\n", n, name, where);
-        if (kept < 4) snprintf(native_iokit_busy_text[kept++], sizeof native_iokit_busy_text[0], "T%u %.40s %.140s", n, name, where);
-        ++n;
-    }
 }
 void busyReport(void *, wait_result_t) {
     char last[400] = "";
@@ -617,20 +592,10 @@ void busyReport(void *, wait_result_t) {
 
 void native_legacy_display_late_probe(void) {
     {thread_t thread = nullptr; if (kernel_thread_start(busyReport, nullptr, &thread) == KERN_SUCCESS) thread_deallocate(thread);}
-    // First: AppleImage4's start already waits for an IOAESAccelerator, holding its expert lock (SoftwareAesProbe.cpp).
-    if (sheng_software_aes_probe) sheng_software_aes_probe();
     // m2381 fork: the strong board-probe calls (keystore, cpufreq, GPU power, touch, WiFi,
     // ADSP, battery, audio, buttons, backlight, DPU, HID) are removed -- none of those
     // probes is compiled on this board and the keystore face keeps its own trigger
     // (offline-keystore-start.patch). The weak imports skip on their null checks.
-    if (sheng_thermal_probe) sheng_thermal_probe();
-    if (sheng_thermal_level_probe) sheng_thermal_level_probe();
-    if (sheng_board_clock_probe) sheng_board_clock_probe();
-    if (sheng_gpu_pool_probe) sheng_gpu_pool_probe();
-    if (sheng_bluetooth_probe) sheng_bluetooth_probe();
-    if (sheng_usb_probe) sheng_usb_probe();
-    if (sheng_ethernet_probe) sheng_ethernet_probe();
-    if (sheng_keyboard_probe) sheng_keyboard_probe();
     IOService *display=pendingLegacyDisplay;if(!display){native_legacy_display_checkpoint();return;}pendingLegacyDisplay=nullptr;
     native_legacy_surface_status=OSKextLoadKextWithIdentifier("com.apple.iokit.IOSurface");
     // The IOSurface root service: iOS and iPadOS name it IOCoreSurfaceRoot; macOS leaves it unnamed, so its name is its class,
