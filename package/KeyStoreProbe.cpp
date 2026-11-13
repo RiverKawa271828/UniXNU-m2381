@@ -56,7 +56,7 @@ static void aks_publish(void) {
         used += (unsigned)n;
     }
     char head[48];
-    snprintf(head, sizeof head, "AKS opens=%u calls=%u", native_aks_opens, native_aks_calls);
+    snprintf(head, sizeof head, "AKS st=%d sg=%u opens=%u calls=%u", native_keyevents_status, native_keyevents_stage, native_aks_opens, native_aks_calls);
     for (unsigned i = 0; i < 47; ++i) boot_progress_ext[0][i] = head[i] ? head[i] : ' ';
     boot_progress_ext[0][47] = 0;
     unsigned i = 0;
@@ -92,6 +92,7 @@ static void native_keyevents_probe(void) {
     if (!PE_parse_boot_argn("offline-key-events", &enabled, sizeof(enabled)) || enabled != 1 ||
         native_keyevents_stage) return;
     native_keyevents_stage = 1;
+    aks_publish();
     PE_parse_boot_argn("offline-keystore", &original, sizeof(original));
     native_keyevents_status = kIOReturnNotPermitted;
     // An explicit plane requires a path without a second plane prefix.
@@ -116,6 +117,7 @@ static void native_keyevents_probe(void) {
     native_keyevents_status = OSMetaClass::postModLoad(handle);
     if (native_keyevents_status) return;
     native_keyevents_stage = 2;
+    aks_publish();
     IOService *service = native_keyevents_allocate();
     bool initialized = service && service->init();
     bool attached = initialized && service->attach(provider);
@@ -129,6 +131,7 @@ static void native_keyevents_probe(void) {
     native_keyevents_service = (uintptr_t)service;
     native_keyevents_status = kIOReturnSuccess;
     native_keyevents_stage = 3;
+    aks_publish();
 }
 volatile uint32_t native_keystore_stage;
 volatile int native_keystore_load_status = -1;
@@ -138,7 +141,9 @@ __attribute__((noinline)) void native_keystore_checkpoint(void) {
     __asm__ volatile("" ::: "memory");
 }
 void native_keystore_probe(void) {
+    aks_publish();  /* unconditional first-flash: the probe ran, initial st/sg visible */
     native_keyevents_probe();
+    aks_publish();  /* final state after the keyevents probe returns */
     unsigned enabled = 0;
     if (!PE_parse_boot_argn("offline-keystore", &enabled, sizeof(enabled)) || enabled != 1 ||
         native_keystore_stage) return;
