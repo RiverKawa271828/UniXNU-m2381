@@ -119,3 +119,10 @@ does not land in ABL fastboot on this chain.
 - **出件（Mac 链 payload-only，2s 完成）**：scp board.toml → `./unixnu payload -D ../UniXNU-m2381 --trust-cache ~/unixnu/original-trust-24A446.bundle --data-ramdisk ~/unixnu/scratch-data.img --unique-chip-id 3645AD55D47E77C1 --kernel-arg data-reset=1`（三 env 硬律照带）。**payload-r114-datastore-f8bfc54d.img**（sha f8bfc54dfb842b5a…，103,809,024B 与 r112/r113 同规格，双端 sha 对拍绿）。
 - **静态门全绿**：unixnu.toml args 行在件验真 `…sheng-container-db=1 sheng-data-persist=2 data-reset=1`；**kernel.macho sha=7bb29a9654c8772c = r112/r113 逐字节同（零代码漂移）**；scratch-data.img 1,032,320B（grown seed）+ vroot 1152B（userdata 截断 env 生效）+ trustcache 88,308B 四件在位。
 - **刷写卡 = out/m2381/R114-CARD.md**：getvar current-slot → sha 门 f8bfc54d → 单件 flash recovery_a → dd 读回对拍 → set-active b → reboot ~3min 屏摄 → 硬断电 → reader 拉窗。判读单 G0-G5 见卡。
+
+## r114 拉窗记录（2026-11-14 会话一百零三下半，用户刷 r114 实机跑 1083s 后拉窗；判读移交下会话）
+
+- **窗 = out/m2381/reader-r114/**（log.bin sha **2b486d50c2bf416f** 双端对拍绿；parsed-msg 1411 行/parsed-all 81815/deaths 484/spawn 23588；屏摄 IMG_20261114_010453.jpg 同目录）。
+- **窗身份 = r114 boot 无疑**：rounds=542 slots_written=**542/509**（回绕 33 槽）uptime=**1083s** write_errors=0 state=2 gpt 0->0。**最早存活槽=#33=t=66s**（t=0..65s 槽被回绕覆盖——boot 跑到 1083s 才断电，超出 1018s 窗容量）；**但 stage 史页保留关键 2s 行**：`2s pid=1 init temporary watchdog launch policy enter` + **`temporary watchdog launch policy ready`** —— **G0（policy 越墙）已在拉窗完整性检查中直接可见**，下会话判读以此起手。
+- **屏摄（820s 时）已见**：无 policy panic；DEADLINE EXCEEDED 横幅；`p30 SpringBoard sig5 PC1a841e63c`（去滑 0x1a7d7663c，shared cache slide 0x6a8000）+ `SpringBoard: absent from this process pass` = **新墙=SB crash loop**；containermanage p74 存活；msg 尾部（1108s）SpringBoard pid 已爬到 4164（重生链）。
+- **设备现态 = recovery_a=reader（用户亲手刷）**；r114 payload 的 dd 读回对拍作废（被 reader 覆盖——flash 完整性证据灭失，boot 行为证据（820s 无 panic+cmdline 生效）不受影响）。下会话判读完回刷 r114 或新件。
