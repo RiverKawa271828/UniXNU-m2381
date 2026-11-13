@@ -200,9 +200,12 @@ volatile uint32_t native_wifi_ev[48] = {0};
 volatile uint32_t native_wifi_ldo[24] = {0};
 volatile uint32_t native_wifi_mhi[16] = {0};
 volatile uint32_t native_wifi_mhi_ms[8] = {0};
-char native_wifi_text[512][112] = {{0}};
+// m2381 (r116): the 512-row ring (57KB) and the 128-row note ring are cut to
+// 128/64 rows -- this board has no WifiProbe lane, and the head hole of the
+// collection __DATA (the donor kernel data footprint, 0x1e8000) has no room.
+char native_wifi_text[128][112] = {{0}};
 volatile uint32_t native_wifi_text_n = 0;
-char native_wifi_note[128][112] = {{0}};
+char native_wifi_note[64][112] = {{0}};
 volatile uint32_t native_wifi_note_n = 0;
 struct nw_wifi_stats_shape { uint32_t stage, scans, frames, beacons, bss_seen; int last_err; };
 struct nw_wifi_stats_shape nw_wifi_stats = {0};
