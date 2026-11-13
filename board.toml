@@ -395,6 +395,59 @@ kernel_args = [
   # since the emitter rebind (TEXT_WORD_PATCHES cleared, FIPS hash segment
   # [0xac12c00,0xac818b0) donor-identical, session-54), leaving only the
   # KAT surface as the unknown — triage as a normal sentinel wall if hit.
+  # r115 (s104): the display lane, dark since session-13's Case-A args rewrite
+  # retired the whole offline-legacy-*/sheng-* team (73de03e, 2026-10-30).
+  # r114 verdict: SpringBoard sig5-loops 475x at FBSDisplayMonitor
+  # _initWithDisplays:.cold.6 (init failure branch) — FBDisplayManager's first
+  # dispatch_once cannot find a display, and the r114 window proves the whole
+  # stack dark: GOP actual mapping =0 / DISPLAY stage=0 / IOMFB_FDR_Loader
+  # exit=1. sheng (same SoC, Pad 6S Pro) runs the native legacy display stack,
+  # NOT donor IOMFB: these args arm exactly the consumers already compiled
+  # into this kernel (drivers/GopFramebuffer/NativeLegacyDisplay.cpp +
+  # NativeGOPPresenter.cpp + package/LegacyDisplayProbe.cpp). The UEFI -> XNU
+  # video chain needs no new code: DarwinBoot BootVideo.h fills boot_args.Video
+  # from the firmware GOP, xnu pe_init.c:458 fills PE_state.video, and
+  # NativeGOPPresenter::start maps it behind PE_current_console. Arg-by-arg
+  # provenance (every one is a real PE_parse_boot_argn consumer in this tree;
+  # sheng board args with no consumer here — offline-apfs-load,
+  # offline-mobile-graphics-*, boot-ui-focus4, sheng-backlight, sheng-touch,
+  # sheng-lite — are deliberately NOT carried):
+  #   offline-legacy-register=1  NativeLegacyDisplay.cpp:554 the explicit
+  #                              offline system-client registration experiment
+  #   offline-legacy-gop=1       NativeLegacyDisplay.cpp:983 the GOP presenter
+  #                              arm path
+  #   offline-legacy-pm=1        NativeLegacyDisplay.cpp:524 logical power
+  #                              management for the display family
+  #   offline-legacy-validate=1  NativeLegacyDisplay.cpp:905 swap-gate
+  #                              validation
+  #   offline-legacy-transfer=1  NativeLegacyDisplay.cpp:596 transfer path
+  #   offline-legacy-cpu-present=1 NativeLegacyDisplay.cpp:789 cpu-present
+  #                              quirk (alongside offline-legacy-retire, whose
+  #                              default sheng also rides)
+  #   offline-legacy-phase=4     NativeLegacyDisplay.cpp:526/478 + probe:478/
+  #                              520/424 — the phase-4 lifecycle sheng ships
+  #   offline-legacy-unit-scale=2 LegacyDisplayProbe.cpp:421 display-scale/
+  #                              rotation unit policy (sheng same value)
+  #   sheng-fb-gpu=1             LegacyDisplayProbe.cpp:546 the GPU hand-off
+  #                              wiring on the probe side (sheng carries this
+  #                              name, not the upstream fb-gpu)
+  #   vsync=120                  NativeLegacyDisplay.cpp:108 work-loop vsync
+  #                              tick in Hz (sheng same value; timer only arms
+  #                              once a client registers and a boot mapping
+  #                              exists)
+  # Judgment gates (R115-CARD): GOP actual mapping virtual/physical/bytes all
+  # nonzero, DISPLAY stage advances, and SpringBoard stops sig5-looping at
+  # _initWithDisplays:.cold.6.
+  "offline-legacy-register=1",
+  "offline-legacy-gop=1",
+  "offline-legacy-pm=1",
+  "offline-legacy-validate=1",
+  "offline-legacy-transfer=1",
+  "offline-legacy-cpu-present=1",
+  "offline-legacy-phase=4",
+  "offline-legacy-unit-scale=2",
+  "sheng-fb-gpu=1",
+  "vsync=120",
 ]
 
 [payload.adt]
