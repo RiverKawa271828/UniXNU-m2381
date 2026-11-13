@@ -62,9 +62,51 @@ static int append_job(const char **cursor) {
  *cursor=*e?e+1:e;return 0;
 }
 
+// sheng-container-db=1 (r112, s102): containermanagerd died 3x at spawn here, inside
+// +[MCMSQLiteDB openDBWithURL:queue:error:] — sqlite3_open_v2(READWRITE|CREATE) cannot
+// create /private/var/root/Library/MobileContainerManager/containers.sqlite3 because a
+// fresh Data volume has no /var/root/Library chain at all (the OS volume ships no
+// data-side template), and the MCMLibraryRepair permissions retry cannot create
+// directories; the daemon then aborts and launchd's _PanicOnConsecutiveCrash (deadline
+// 60) drives the diagnostic screen. Preset the daemon's own path skeleton — exactly the
+// URLs its _initPathPropertiesWithDaemonUser builds (daemon runs as root): the store
+// root with its staging subdirectories and the caches root with System/Dead. sqlite
+// creates the database file itself; every level is mkdir'd so a bare seed works.
+// Path evidence: the 24A446 dyld cache RE (scratch-r112 REPORT-cache-symbolication.md).
+static int sheng_container_db_prepare(proc_t p,uint64_t scratch) {
+ static const char *const dirs[]={
+  "/private/var/root",
+  "/private/var/root/Library",
+  "/private/var/root/Library/MobileContainerManager",
+  "/private/var/root/Library/MobileContainerManager/PendingUpdates",
+  "/private/var/root/Library/MobileContainerManager/Replace",
+  "/private/var/root/Library/MobileContainerManager/Delete",
+  "/private/var/root/Library/Caches",
+  "/private/var/root/Library/Caches/com.apple.containermanagerd",
+  "/private/var/root/Library/Caches/com.apple.containermanagerd/System",
+  "/private/var/root/Library/Caches/com.apple.containermanagerd/System/Dead"};
+ int enabled=0;
+ PE_parse_boot_argn("sheng-container-db",&enabled,sizeof(enabled));
+ if(enabled!=1)return 0;
+ for(unsigned i=0;i<sizeof(dirs)/sizeof(dirs[0]);++i) {
+  int32_t result=0;
+  int error=copyout(dirs[i],scratch,strlen(dirs[i])+1);
+  if(error)return error;
+  struct mkdir_args mk={.path=scratch,.mode=0755};
+  error=mkdir(p,&mk,&result);
+  if(error && error!=EEXIST)return error;
+ }
+ printf("sheng container db skeleton ready\n");
+ return 0;
+}
+
 int sheng_boot_watchdog_policy(void *process, uint64_t scratch) {
  proc_t p=process;
  int enabled=0,error=0,fd=-1;int32_t result=0;
+ if((error=sheng_container_db_prepare(p,scratch))) {
+  sheng_watchdog_policy_status=error;
+  printf("sheng container db skeleton failed: %d (continuing)\n",error);
+ }
  PE_parse_boot_argn("sheng-disable-watchdogd",&enabled,sizeof(enabled));
  if(!PE_parse_boot_argn("sheng-disable-jobs",jobs,sizeof(jobs)))jobs[0]=0;jobs[sizeof(jobs)-1]=0;
  int lite=0;PE_parse_boot_argn("sheng-lite",&lite,sizeof(lite));if(lite!=1)lite=0;

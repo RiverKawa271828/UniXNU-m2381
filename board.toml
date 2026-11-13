@@ -330,6 +330,28 @@ kernel_args = [
   "offline-keystore=1",
   "offline-key-events=1",
   "aks=1",
+  # r112 (s102, r111 first boot): watchdogd spawned 3x and brk'd itself each
+  # time ("connect_to_kext() unexpectedly failed - unable to lookup watchdog
+  # KEXT service") — the donor AppleARMWatchdogTimer kext IS in our kernel but
+  # its personality needs an arm-io "wdt" device node that this ADT does not
+  # carry (and the Qualcomm WDT has different register semantics anyway), so
+  # the "IOWatchdog" service never publishes. The BootWatchdogPolicy lane is
+  # the validated answer (20H392 r36-r43; sheng Pad 6S Pro production ships
+  # the same arg on this SoC): write com.apple.watchdogd into launchd's
+  # disabled.plist at the pre-exec policy point. Symbolic "IOWatchdog" service
+  # remains a later-lane option (upstream raphael/nx769j records).
+  "sheng-disable-watchdogd=1",
+  # r112 (s102, r111 first boot): containermanagerd died 3x at spawn, at
+  # +[MCMSQLiteDB openDBWithURL:] — sqlite3_open_v2(READWRITE|CREATE) cannot create
+  # /private/var/root/Library/MobileContainerManager/containers.sqlite3 on a fresh Data
+  # volume (no /var/root/Library chain; the OS volume ships no data-side template) and
+  # the MCMLibraryRepair permissions retry cannot mkdir; launchd's
+  # _PanicOnConsecutiveCrash(deadline 60) then drove the diagnostic screen. The
+  # BootWatchdogPolicy lane now presets the daemon's path skeleton (store root +
+  # PendingUpdates/Replace/Delete + Caches/System/Dead, root-owned 0755; sqlite creates
+  # the database file itself) behind this arg. Path evidence = the 24A446 dyld cache RE
+  # (scratch-r112 REPORT-cache-symbolication.md §6/§7).
+  "sheng-container-db=1",
   # Session-55: fips_mode (FIPS_MODE_FLAG_DISABLE, session-54) withdrawn.
   # The upstream source-corecrypto14-bootstrap gate (prng_random.c:665,
   # STARTUP SYSCTL RANK_LAST, before the provider start) panics
