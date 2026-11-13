@@ -352,14 +352,39 @@ kernel_args = [
   # the database file itself) behind this arg. Path evidence = the 24A446 dyld cache RE
   # (scratch-r112 REPORT-cache-symbolication.md §6/§7).
   "sheng-container-db=1",
-  # NOTE (r112 first boot, s102): the policy panicked EBUSY(16) on its first Data
-  # write — the same 16 as r111's terminal "cluster_push() failed with 16 on
-  # ino(249)" storm: the r111 crash-loop thrash left the RamBlock/D-store Data
-  # volume unable to take writes. The one-shot repair payload
-  # payload-r113-datareset-8dbe873b.img carries data-reset=1 (NativeRamBlock
-  # discardRequested(): drop the persisted overlay, boot from the seed; the r43
-  # precedent). The arg must NOT come back in ordinary builds — do not re-add
-  # unless a volume reset is explicitly wanted again.
+  # r114 (s103): the r112/r113 "policy panicked EBUSY(16) on its first Data
+  # write" root cause. The Data disk is the 16 GiB packed RamBlock (r111 window
+  # "RAMDISK sparse=1 capacityMiB=16384 residentKiB=1008"; seed d04a0153 is the
+  # grown 1008 KiB image). RamBlock serves a >2 GiB disk by the direct
+  # store-backed path ALONE (NativeRamBlock.cpp isBig branch): with the store
+  # closed every write returns kIOReturnNotReady — reads ride the seed, writes
+  # are only "successful" while they sit in the page cache. The r111 boot never
+  # fsynced Data (the policy was inert without its args), so the first device
+  # write was the 179.7 s userland fsync storm ("device is not ready" paired
+  # 1:1 with "cluster_push() failed with 16"). r112's policy fsync is the first
+  # device write of the boot: EBUSY(16) at 2 s. Since the 24A446 Case-A args
+  # rewrite dropped sheng-data-persist, this lane has had NO writable Data at
+  # all (the 21H461 lane carried it: r41a "D st=2 resumed wr=12"). mode 2
+  # (direct) is the only writable mode for an isBig disk (mode 1 keeps
+  # direct=false and even lands on a null sparse.pages Loader path — do not
+  # use). sheng production ships the same arg on this SoC. Geometry pre-checked
+  # (s103): window 4,194,434 blocks (16 GiB) at first LBA 119,414,649 in the
+  # 121,540,755-block userdata partition, 1 GiB log reserve at the tail — all
+  # native_ufs_store_open gates pass; checkHeader carries only
+  # magic/pages/seed-hash so the grown seed's store is position-independent.
+  # native_ufs_store_write_cached is absent, so direct runs write-through
+  # (forced unit access per write; fsync = doSynchronizeCache success).
+  "sheng-data-persist=2",
+  # NOTE (r114 first boot, s103; supersedes the s102 "thrash left the volume
+  # unwritable" reading): the one-shot first-boot payload adds data-reset=1
+  # (NativeRamBlock discardRequested(): start the overlay over; the r43
+  # precedent, r113 rode the same arg inertly at mode 0). The on-device store
+  # region (~446.5 GiB) holds unknown 21H461-era state — the reflashed userdata
+  # image (14.5 GiB) never reaches it — and without reset a foreign/blank
+  # header means Open::Kept (overlay.active=false, direct=false: writes STILL
+  # fail NotReady). Reset forces Fresh, which works for every on-device state.
+  # The arg must NOT come back in ordinary builds — it wipes the store every
+  # boot; do not re-add unless a volume reset is explicitly wanted again.
   # Session-55: fips_mode (FIPS_MODE_FLAG_DISABLE, session-54) withdrawn.
   # The upstream source-corecrypto14-bootstrap gate (prng_random.c:665,
   # STARTUP SYSCTL RANK_LAST, before the provider start) panics
