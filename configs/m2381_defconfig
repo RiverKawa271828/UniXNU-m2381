@@ -30,7 +30,12 @@ CONFIG_XNU_NATIVE_CS_HASH_CACHE=y
 # CONFIG_XNU_NATIVE_VIRTIO_BLOCK is not set
 # CONFIG_XNU_SOURCE_MOCKFS is not set
 # CONFIG_XNU_VERIFIED_ROOT_PROBE is not set
-# CONFIG_XNU_NATIVE_LEGACY_DISPLAY is not set
+# 2026-11-14 (r116, s105): the 10-29 lane switch left this =n behind the
+# archives retirement - the display archive built but the kernel-side hook
+# compiled out and the link gate skipped the force_load (bsd_init.o flags
+# XNU_NATIVE_LEGACY_DISPLAY=0, stamp 0:0, zero display strings in the noctf).
+# The 24A446 display lane needs it =y (the 21H461 lane carried it =y).
+CONFIG_XNU_NATIVE_LEGACY_DISPLAY=y
 # OWNER_ROOT_AUDIT/TRUST stay ON (sheng_ipados26_defconfig parity): the
 # owner-root kernel paths bind to the source-storage archive's
 # SourceRootBinding.cpp queries, not to the dropped probe/stub archives.
