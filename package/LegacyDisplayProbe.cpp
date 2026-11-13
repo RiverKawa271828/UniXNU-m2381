@@ -153,13 +153,14 @@ void native_legacy_surface_rejected(uint64_t width,uint64_t height,uint32_t form
     native_legacy_rej_surface[0]=width;native_legacy_rej_surface[1]=height;native_legacy_rej_surface[2]=format;native_legacy_rej_surface[3]=planes;
     native_legacy_rej_surface[4]=stride;native_legacy_rej_surface[5]=allocation;native_legacy_rej_surface[6]=bytes;
 }
-// The display's request layout (rectangles, masks, options, dimensions, surfaces); the iPadOS 17 one when the display has none.
-extern "C" const unsigned native_legacy_request_layout[6] __attribute__((weak_import));
+// The display's request layout (rectangles, masks, options, dimensions, surfaces).
+// m2381 fork: the driver's native_legacy_request_layout definition dies under
+// dead-strip and this ld64 errors on the unresolved weak reference, so the
+// 24A446 layout (legacy-display-24A446.json request offsets) is carried here.
 static void recordRejectedSwap(unsigned reason,const void *request,const void *surface) {
     const unsigned char *bytes=reinterpret_cast<const unsigned char *>(request);
     if(!bytes)return;
-    static const unsigned ios17[6]={17,81,792,804,816,2624};
-    const unsigned *layout=&native_legacy_request_layout?native_legacy_request_layout:ios17;
+    static const unsigned layout[6]={17,81,984,996,1008,2944};
     native_legacy_rej_reason=reason;
     uint64_t surfaces[4]={};memcpy(surfaces,bytes+layout[5],sizeof(surfaces));
     for(unsigned i=0;i<4;++i)native_legacy_rej_surfaces[i]=surfaces[i];
