@@ -408,6 +408,17 @@ kernel_args = [
   # native_ufs_store_write_cached is absent, so direct runs write-through
   # (forced unit access per write; fsync = doSynchronizeCache success).
   "sheng-data-persist=2",
+  # r123b (s112, one-shot): the BLSH-suppression round re-injected the Data
+  # seed (add mobile/Library/Preferences/com.apple.BacklightServices.plist via
+  # inject-prefs-into-data-seed.py), which CHANGES the seed identity — and the
+  # on-device store window still carries the r122-era overlay bound to the old
+  # seed hash (PersistOverlay checkHeader -> 3 = foreign seed -> Open::Kept,
+  # overlay inactive, direct=false: every Data write fails NotReady(16) and the
+  # launch policy panics at first exec — the r112/r113 wall shape, this time
+  # seeded by the surgery, not a missing arg). data-reset=1 forces Fresh so the
+  # store re-binds to the new seed; REMOVE THIS ARG IN r124 (it wipes the
+  # overlay every boot — the r114 note's standing warning).
+  "data-reset=1",
   # NOTE (r114 first boot, s103; supersedes the s102 "thrash left the volume
   # unwritable" reading): the one-shot first-boot payload adds data-reset=1
   # (NativeRamBlock discardRequested(): start the overlay over; the r43
