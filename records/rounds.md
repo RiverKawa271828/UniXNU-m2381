@@ -136,3 +136,13 @@ does not land in ABL fastboot on this chain.
 - **根因链（Mac git diff 拍刀）**：11-14 08:28:37 s108 kit 手术以主树上游 submodule（TEXT_WORD_PATCHES=()，11-05 换道清空）为源覆盖 Mac 设备仓权威副本（tree/kits symlink→设备仓副本=emit 真身）；r119/r120 出件静默丢 9 站。撤 offline-keystore=1 与新鲜 seed-0 配对均无辜（r121 原"arg 对照件"工单作废）。
 - **修复落地**：Mac 设备仓 kit 还原 9 站（bbb124ae 双端 byte 同）；board.toml 恢复 r118 三 arg（offline-keystore=1 回归）；工具三件（audit 站哨兵门/audit-boot-args.py/scan-wall-museum.py）。**下会话=s110 刷 r121**（链修复轮，R121-CARD：emit 报告 text_word_patches=9 + 三件套门全绿才刷；G0=存活≥667s + 新鲜确定性配对能开机一并关账）。
 - **设备现态 = recovery_a = r120 死件（3cfff0dc）→ reader ESP（拉窗毕）**；回退锚 = recovery_a ← payload-r118-stubfix-9787f368.img。
+
+## r121 拉窗判读（2026-11-14 会话一百一十，同会话拉窗即判；G0/G1 双 PASS + 显示面首次推进 + 新崩族 dasd）
+
+- **窗 = out/m2381/reader-r121/**（log.bin sha **66bf2a37** 双端对拍绿；298 rounds/595s=第二轮 + 残影 205 槽拆两代=第一轮 t=767-1008（gen2）与 t=1605-1775（gen1 尾）；msg 环 131072B 跑满=595s 深度；环位守恒：round2 占 0-297、round1 终页 round885/t=1775 在环位 382）。
+- **G0（链修复门）PASS**：第一轮活到 **t≈1775s = 车道史最长**（旧纪录 r114 1083s），第二轮 595s 主动断电取证非死；墙博馆扫描 **0 ALIVE**；wall-76 死透；新鲜确定性配对能开机=双轮实证（r121 密封面 7cbd2697=r118 全同）。
+- **G1（r118 行为对齐）PASS**：AKS st=-536870174 sg=1 opens=0 calls=0 全窗 298 槽逐字贯穿；起飞曲线逐点对齐（页 3s→74s 卡等→spawn 爆发）；SB p29/backboardd p64 存活但 parked（trap=-47 FPerr=2 = s108 挂账同款）；liveactivitiesd sig5 循环在（OPEN，648 行 vs r118 窗内 1175 行率同量级）。
+- **显示面首次推进**：SWAP calls=5-6 **accepted=1 reason=5 status=00000000** bytes=10368000（整帧）retired=5-6 + **DISPLAY owned=1**（r118 全零 status=ffffffff）——换帧链第一帧已过，但 SB 不渲染（桌面未达）。
+- **新崩族 = dasd sig6**：434 行（r118 基线 **0**），首崩 t=366s（r118 窗深 643s 内→r118 零崩）→ **同字节脸下非确定行为 = Data 卷用户态分歧**（r119/r120 两场 31s 死+r121 两轮演化数据面）；dasd 进 corpse（"Corpse allowed 2 of 5"）；两轮崩点 unslid 差 0x4000（slide 行内直印 +58c000/+12bc000）=状态相关分支；符号化近邻泛型（libsystem 区），RE 立开放项；候选根因=缺服务 assert 家族，r122 去互斥可能顺带治愈。
+- **判读工具实战**：scan-wall-museum.py 首战（0 ALIVE 判 PASS）；audit 双门在出件侧已过（见 R121-CARD 出件节）。
+- **设备现态 = recovery_a = reader ESP**；下会话 = s111：r122 出件（撤 offline-keystore=1 + KeyStoreProbe.cpp 去互斥 = hunk 轮照红线单变量）→刷→判读（G 门=R121-CARD 预案 + dasd 是否顺带停走）。
