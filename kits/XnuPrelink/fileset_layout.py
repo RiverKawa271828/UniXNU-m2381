@@ -6,6 +6,7 @@ Section zero denotes the Mach-O header; other ordinals follow load-command order
 from collections import Counter
 import struct
 
+LC_SYMTAB = 0x2
 PAGE = 0x4000
 MASK64 = (1 << 64) - 1
 
@@ -222,6 +223,7 @@ def relocate_native(data, layout):
     native, base = layout.native, layout.cache.base
     fixups = native.fixups()
     pointers, counts, written = {}, Counter(), set()
+    branches = []
     for kind, si, so, ti, to in split_references(native):
         source = layout.section_address(si, so)
         target = layout.section_address(ti, to)
@@ -286,4 +288,49 @@ def relocate_native(data, layout):
         if new_site not in pointers:
             pointers[new_site] = (layout.translate(pointer[0]),) + pointer[1:]
             counts['pointers_without_split_record'] += 1
-    return pointers, counts
+    # Branches to absolute symbols (stub islands whose `.set` targets live outside this
+    # image) carry no split-segment record: ld only records section-to-section
+    # references, and N_ABS symbols own no section. Their pc-relative encoding goes
+    # stale when the image moves, so keep the absolute target and re-encode against
+    # the new pc.
+    absolute = absolute_symbols(native)
+    if absolute:
+        for segment in native.segments:
+            if not segment['filesize'] or segment['name'] not in ('__TEXT', '__TEXT_EXEC',
+                                                                 '__KLD', '__PLK_TEXT_EXEC'):
+                continue
+            for offset in range(0, segment['filesize'] - 3, 4):
+                word, = struct.unpack_from('<I', native.data, segment['fileoff'] + offset)
+                if word >> 26 not in (0b000101, 0b100101):
+                    continue
+                source = segment['va'] + offset
+                if source in written:
+                    continue
+                target = source + signed(word & 0x3ffffff, 26) * 4
+                if target not in absolute:
+                    continue
+                new_source = layout.placements[segment['name']] + offset
+                displacement = target - new_source
+                if displacement % 4 or not -(1 << 27) <= displacement < 1 << 27:
+                    raise ValueError(f'Absolute branch out of range at {source:#x}')
+                struct.pack_into('<I', data, new_source - base,
+                                 (word & 0xfc000000) | ((displacement >> 2) & 0x3ffffff))
+                counts['abs_branches'] += 1
+                branches.append({'symbol': absolute[target][0], 'source': hex(source),
+                                 'target': hex(target)})
+    return pointers, counts, branches
+
+
+def absolute_symbols(image):
+    """N_ABS symbols as value -> names: linker-resolved constants owning no section."""
+    found = image.command(LC_SYMTAB)
+    if found is None:
+        return {}
+    symoff, count, stroff, _ = struct.unpack_from('<4I', image.data, found[0] + 8)
+    result = {}
+    for index in range(count):
+        strx, kind, _, _, value = struct.unpack_from('<IBBHQ', image.data, symoff + 16 * index)
+        if kind & 0xe0 == 0 and kind & 0x0e == 0x2:  # N_ABS, no extension bits
+            end = image.data.index(b'\0', stroff + strx)
+            result.setdefault(value, []).append(image.data[stroff + strx:end].decode())
+    return result

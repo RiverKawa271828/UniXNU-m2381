@@ -58,9 +58,11 @@ class SegmentedEmit(Emit):
         return at
 
     def rewrite_native_chains(self):
-        self.native_pointers, counts = relocate_native(self.data, self.layout)
+        self.native_pointers, counts, self.native_original_branches = \
+            relocate_native(self.data, self.layout)
         self.report['native_split_relocations'] = dict(counts)
         self.report['native_chain_sites'] = len(self.native_pointers)
+        self.report['native_original_branches'] = self.native_original_branches
 
     def rebuild_linkedit(self):
         # Read original chains before any native bytes were placed in vacated
