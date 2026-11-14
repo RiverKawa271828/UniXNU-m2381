@@ -340,11 +340,15 @@ kernel_args = [
   # seeds from /chosen/unique-chip-id, already in the payload ADT); all three
   # gates are self-gated so the kernel stays inert on lanes that do not pass
   # the args.
-  # r121 (s109 verdict): offline-keystore=1 RESTORED to the exact r118 args
-  # triple — the r119/r120 31s wall-76 deaths were the emit kit losing
-  # TEXT_WORD_PATCHES (9 stations), NOT this arg (byte-proven on the sealed
-  # faces; the r108 "arg removal" fix moves to r122 with the KeyStoreProbe
-  # de-mutex hunk).
+  # r122 (s110 verdict): offline-keystore=1 REMOVED — arg-only round. s109
+  # byte-proved the r119/r120 31s wall-76 deaths were the emit kit losing
+  # TEXT_WORD_PATCHES (9 stations), NOT this arg and NOT its SEP-load kick
+  # (r121 restored the triple with a fixed kit and ran green, 1775s lane
+  # record), so the s108 fix lands WITHOUT the KeyStoreProbe de-mutex hunk:
+  # the mutex gate opens naturally once the arg is gone and the keyevents
+  # service can publish (sheng production ships this exact pair). The
+  # de-mutex hunk is demoted to the r123 fallback, only if keyevents still
+  # refuses with the arg absent.
   # History: offline-keystore=1 is mutually exclusive with offline-key-events
   # in KeyStoreProbe.cpp — passing both made the
   # keyevents service refuse to publish with kIOReturnNotPermitted for every
@@ -357,7 +361,6 @@ kernel_args = [
   # venus record = same wall, fixed by the notification service +
   # offline-key-events=1 + aks=1; sheng production ships the same pair
   # without offline-keystore).
-  "offline-keystore=1",
   "offline-key-events=1",
   "aks=1",
   # r112 (s102, r111 first boot): watchdogd spawned 3x and brk'd itself each
