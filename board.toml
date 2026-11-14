@@ -340,8 +340,13 @@ kernel_args = [
   # seeds from /chosen/unique-chip-id, already in the payload ADT); all three
   # gates are self-gated so the kernel stays inert on lanes that do not pass
   # the args.
-  # offline-keystore=1 stays OFF (r118 verdict): it is mutually exclusive
-  # with offline-key-events in KeyStoreProbe.cpp — passing both made the
+  # r121 (s109 verdict): offline-keystore=1 RESTORED to the exact r118 args
+  # triple — the r119/r120 31s wall-76 deaths were the emit kit losing
+  # TEXT_WORD_PATCHES (9 stations), NOT this arg (byte-proven on the sealed
+  # faces; the r108 "arg removal" fix moves to r122 with the KeyStoreProbe
+  # de-mutex hunk).
+  # History: offline-keystore=1 is mutually exclusive with offline-key-events
+  # in KeyStoreProbe.cpp — passing both made the
   # keyevents service refuse to publish with kIOReturnNotPermitted for every
   # boot since r102 (AKS st=-536870174 sg=1 opens=0 calls=0), and the real
   # AppleSEPKeyStore it loads never starts on a no-SEP board anyway (its
@@ -352,6 +357,7 @@ kernel_args = [
   # venus record = same wall, fixed by the notification service +
   # offline-key-events=1 + aks=1; sheng production ships the same pair
   # without offline-keystore).
+  "offline-keystore=1",
   "offline-key-events=1",
   "aks=1",
   # r112 (s102, r111 first boot): watchdogd spawned 3x and brk'd itself each

@@ -126,3 +126,13 @@ does not land in ABL fastboot on this chain.
 - **窗身份 = r114 boot 无疑**：rounds=542 slots_written=**542/509**（回绕 33 槽）uptime=**1083s** write_errors=0 state=2 gpt 0->0。**最早存活槽=#33=t=66s**（t=0..65s 槽被回绕覆盖——boot 跑到 1083s 才断电，超出 1018s 窗容量）；**但 stage 史页保留关键 2s 行**：`2s pid=1 init temporary watchdog launch policy enter` + **`temporary watchdog launch policy ready`** —— **G0（policy 越墙）已在拉窗完整性检查中直接可见**，下会话判读以此起手。
 - **屏摄（820s 时）已见**：无 policy panic；DEADLINE EXCEEDED 横幅；`p30 SpringBoard sig5 PC1a841e63c`（去滑 0x1a7d7663c，shared cache slide 0x6a8000）+ `SpringBoard: absent from this process pass` = **新墙=SB crash loop**；containermanage p74 存活；msg 尾部（1108s）SpringBoard pid 已爬到 4164（重生链）。
 - **设备现态 = recovery_a=reader（用户亲手刷）**；r114 payload 的 dd 读回对拍作废（被 reader 覆盖——flash 完整性证据灭失，boot 行为证据（820s 无 panic+cmdline 生效）不受影响）。下会话判读完回刷 r114 或新件。
+
+## r120 拉窗判读（2026-11-14 会话一百零九；wall-76 复发定谳=emit kit 丢 9 站，arg/配对假说证伪）
+
+- **窗 = out/m2381/reader-r120/**（log.bin sha **f65c186e126de03c** 双端对拍绿；parsed-msg 425 行/parsed-all 全；15 rounds slots_written=15/503 uptime=28s write_errors=0 msg_bytes=37260 boot_id=0x1d5c321d；无 CRASH 行/退出表非零=内核 panic 冻结 writer）。屏摄 IMG_20261114_104317.jpg：CRC 0xf063fb5b = **wall-76**（`"AMFI: No PMGR?\n" @ConfigurationSettings.cpp:392`，verify-panic-crc.py 注册表命中）。
+- **钟基定谳（更正 s108）**：诊断页 `stage +Xs`=距最近 stage 事件的秒数（r118 首页 time=3s+δ0 ↔ r120 死页 time=31s+δ28）→ exec 签名通过同在页 3s；s108"signature accepted 拖 25s"=钟语义误读。死亡时间线 = exec(页3s) → AMFI 30s 等 ApplePMGRNub → 页 31s panic。
+- **绿轮对照**：r118 窗（out/m2381/reader-r118/）页 31s 诊断页与 r120 死页几乎逐字同（launchd 卡同 PC fffffff00aef5e18、spawn=2 procs=1 exits=2 全零）；**r118 卡到页 74s 才解卡 spawn 爆发**（20→300+）——r119/r120 在同款等待中被 wall-76 提前杀。DISPLAY stage=10 + GOP 三值非零死前已立（display 里程碑无损）。
+- **9/9 站字节级（k118 密封面 7cbd2697 vs k120 7d9dcd07）**：wall76×3 + entcopy×2 + entconv×2 + entval×2 —— r118 全 PATCHED（bl→native 0xb51ca44+），r120 全 donor 原字（wall76 bl→LATCH 0x924e7b0=30s 等 PMGR 的组合函数，与 s76 侦察逐位互证）。audit-boot-face-delta.py 三区 16KB=恰好 9 站区，s108 以 --expect-native 误放行。
+- **根因链（Mac git diff 拍刀）**：11-14 08:28:37 s108 kit 手术以主树上游 submodule（TEXT_WORD_PATCHES=()，11-05 换道清空）为源覆盖 Mac 设备仓权威副本（tree/kits symlink→设备仓副本=emit 真身）；r119/r120 出件静默丢 9 站。撤 offline-keystore=1 与新鲜 seed-0 配对均无辜（r121 原"arg 对照件"工单作废）。
+- **修复落地**：Mac 设备仓 kit 还原 9 站（bbb124ae 双端 byte 同）；board.toml 恢复 r118 三 arg（offline-keystore=1 回归）；工具三件（audit 站哨兵门/audit-boot-args.py/scan-wall-museum.py）。**下会话=s110 刷 r121**（链修复轮，R121-CARD：emit 报告 text_word_patches=9 + 三件套门全绿才刷；G0=存活≥667s + 新鲜确定性配对能开机一并关账）。
+- **设备现态 = recovery_a = r120 死件（3cfff0dc）→ reader ESP（拉窗毕）**；回退锚 = recovery_a ← payload-r118-stubfix-9787f368.img。
