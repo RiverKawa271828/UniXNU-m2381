@@ -416,9 +416,10 @@ kernel_args = [
   # overlay inactive, direct=false: every Data write fails NotReady(16) and the
   # launch policy panics at first exec — the r112/r113 wall shape, this time
   # seeded by the surgery, not a missing arg). data-reset=1 forces Fresh so the
-  # store re-binds to the new seed; REMOVE THIS ARG IN r124 (it wipes the
-  # overlay every boot — the r114 note's standing warning).
-  "data-reset=1",
+  # store re-binds to the new seed; REMOVED in r124 (s113) — the one-shot
+  # re-bind landed in r123b (overlay now bound to the 9c28654c seed; r123b
+  # window shows DATA st=3 hdr=3 healthy). It must NOT come back in ordinary
+  # builds — it wipes the store every boot (the r114 note's standing warning).
   # NOTE (r114 first boot, s103; supersedes the s102 "thrash left the volume
   # unwritable" reading): the one-shot first-boot payload adds data-reset=1
   # (NativeRamBlock discardRequested(): start the overlay over; the r43
