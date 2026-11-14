@@ -408,6 +408,15 @@ kernel_args = [
   # native_ufs_store_write_cached is absent, so direct runs write-through
   # (forced unit access per write; fsync = doSynchronizeCache success).
   "sheng-data-persist=2",
+  # r124 (s113): the IOMFB user-client selector probe. The
+  # iomfb-uc-selector-probe.patch hooks IOUserClient::callExternalMethod (the
+  # non-virtual funnel every is_io_connect_method branch uses) into the
+  # LegacyDisplayProbe recorder; this arg arms it. It answers "which selector
+  # exchange does backboardd stall in" — the r123b window pinned the render
+  # server's display creation to open-then-park (CLIENT calls=1 pid=64 status=0
+  # at t=98 s, then mach_msg2 forever). Remove with the round that fixes the
+  # stall selector; the hot path is one volatile load.
+  "iomfb-uc-probe=1",
   # r123b (s112, one-shot): the BLSH-suppression round re-injected the Data
   # seed (add mobile/Library/Preferences/com.apple.BacklightServices.plist via
   # inject-prefs-into-data-seed.py), which CHANGES the seed identity — and the
