@@ -45,9 +45,12 @@ REGISTRY = [
     ('vnode-rele-underflow', 'screen', r'vnode_rele_ext.*underflow|underflow.*vnode_rele_ext', 'r118 (not seen since)', ''),
     ('liveactivitiesd-sig5', 'open', r'CRASH.*liveactivitiesd', 'closed r122 (AKS publish signature st=0 sg=3, 0 current-gen rows)',
      'judge current-gen only: residue slots (unwritten ring tail) still carry r121-era rows until the ring wraps over them'),
-    ('sb-blsh-watchdog-abort', 'open', r'CRASH.*SpringBoard sig6', 'OPEN r122',
-     'BacklightServicesHost BLSHWatchdogProvider _fireWatchdogWithTimer -> _abortForWatchdogFire -> abort_with_payload; '
-     'SB crashed 2x (p29 t~419s, p251 t~783s, same PC) and respawned both times; board has no backlight lane (P3 unported)'),
+    ('sb-blsh-watchdog-abort', 'open', r'CRASH.*SpringBoard sig6', 'closed r123b (backlightWatchdogsDisabled=true seed default; 0 current-gen rows)',
+     'BacklightServicesHost BLSHWatchdogProvider fire -> abort_with_payload; suppressed via com.apple.BacklightServices seed '
+     'default; judge current-gen only — residue slots carry r122 rows until wrap'),
+    ('ca-ensure-displays-abort', 'open', r'CRASH.*chronod sig6', 'OPEN r123b',
+     'QuartzCore ensure_displays -> +[CADisplay displays] absent -> abort at +[UIScreen initialize]; CA display service = '
+     'render-server lane missing (SB trap=-47 parked face same root, s108 pinned-face RE)'),
     # milestone sentinels (same first-grep discipline, inverted polarity)
     ('display-stage10', 'present', r'DISPLAY stage=10', 'r116', 'G0 display lane gate'),
     ('gop-mapping-nonzero', 'present', r'GOP actual mapping virtual=[0-9a-f]+ physical=[0-9a-f]+ bytes=[1-9]', 'r116', ''),
