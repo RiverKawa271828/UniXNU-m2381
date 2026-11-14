@@ -105,17 +105,9 @@ static void native_keyevents_probe(void) {
     OSSafeReleaseNULL(chosen);
     // A persistent Data store (no ephemeral-storage) still has no SEP: aks keeps the owned service for it.
     if ((ephemeral != 1 && !native_aks_state_enabled()) || original) return;
-    // A prelinked AppleSEPKeyStore registers its metaclass without ever
-    // starting a service on a board with no SEP node (r118 verdict: its
-    // personality needs an arm-io SEP node this ADT does not carry), so a
-    // metaclass-absence gate would refuse to publish forever. Gate on a live
-    // service instead: liveactivitiesd's MobileKeyBag events registration
-    // ("mkb events" IOGeneralInterest on the AppleKeyStore service) only
-    // succeeds when an actual service exists to be found.
-    IOService *existing = IOService::copyMatchingService(
-        IOService::serviceMatching("AppleKeyStore"));
-    bool absent = existing == nullptr;
-    if (existing) OSSafeReleaseNULL(existing);
+    const OSSymbol *name = OSSymbol::withCString("AppleKeyStore");
+    bool absent = name && !OSMetaClass::getMetaClassWithName(name);
+    OSSafeReleaseNULL(name);
     if (!absent) return;
     IOService *provider = IOService::getResourceService();
     if (!provider) return;
