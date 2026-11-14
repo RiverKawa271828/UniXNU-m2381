@@ -340,7 +340,18 @@ kernel_args = [
   # seeds from /chosen/unique-chip-id, already in the payload ADT); all three
   # gates are self-gated so the kernel stays inert on lanes that do not pass
   # the args.
-  "offline-keystore=1",
+  # offline-keystore=1 stays OFF (r118 verdict): it is mutually exclusive
+  # with offline-key-events in KeyStoreProbe.cpp — passing both made the
+  # keyevents service refuse to publish with kIOReturnNotPermitted for every
+  # boot since r102 (AKS st=-536870174 sg=1 opens=0 calls=0), and the real
+  # AppleSEPKeyStore it loads never starts on a no-SEP board anyway (its
+  # personality needs an arm-io SEP node this ADT does not carry).
+  # liveactivitiesd then crash-loops in SessionSyncEngine: its MobileKeyBag
+  # events registration ("mkb events" IOGeneralInterest on the AppleKeyStore
+  # service) finds no service and returns nil into a force unwrap (upstream
+  # venus record = same wall, fixed by the notification service +
+  # offline-key-events=1 + aks=1; sheng production ships the same pair
+  # without offline-keystore).
   "offline-key-events=1",
   "aks=1",
   # r112 (s102, r111 first boot): watchdogd spawned 3x and brk'd itself each
