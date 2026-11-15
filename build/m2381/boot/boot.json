@@ -1,25 +1,25 @@
 {
   "kernel_sha256": "fbac92af2228ec1f8ab8f959fdefb030a39c476b1eeaaf24dea36e4a7684b187",
   "fd_sha256": "53fbdeb9dfc92baf09053bac71b7cef49a8b4cc897a55751f6b81d113ee21c23",
-  "image_sha256": "d0200a6b67406f7933948f4bd2c57f67bd26dc41f1e8c15522c2984a72d4f9e9",
-  "image_bytes": 31793152,
+  "image_sha256": "9c181ee4bd33f436b1456ee432d2596b7197afb69c8528eecf1157905118edc1",
+  "image_bytes": 31899648,
   "boot_image_sha256": "cb0b5f5a3d24fc63a4e03418d498fe6eee4468d58b3ffd8d1bfe197f2c593e6b",
   "boot_image_bytes": 1269760,
   "segment": {
-    "bytes": 30523392,
+    "bytes": 30629888,
     "boot_image_bytes": 1269760,
     "entries": [
       {
         "name": "adsp",
         "offset": 4096,
-        "size": 30499631,
-        "sha256": "acf95fd57030abb3a5a7b6e8fc830153d04bc54ab6a3d6eda898d9ea52c0eae1"
+        "size": 30607704,
+        "sha256": "a9b3fd8a370124c504dfaa0a388553fb5e8c15e603890b959a4c8517a6f3399d"
       },
       {
         "name": "adsp_dtb",
         "offset": 30507008,
-        "size": 12420,
-        "sha256": "db6a6478771b28154d845b207a0e391c7c9037514cb6dd061d2e83cb7d7154f1"
+        "size": 16184,
+        "sha256": "ee426dfc9807d4476ec45b7efc7efb5ad2c5a07f2a5cc06dc57f87aaec875faa"
       }
     ]
   },
@@ -28,5 +28,6 @@
   "os_patch_level": "2025-11",
   "shim_bytes": 144,
   "fd_bytes": 3145728,
-  "hardware_tested": false
+  "hardware_tested": false,
+  "r128b_note": "segment rebuilt with the V8-form squashes (make-adsp-firmware.py r128b): every segment at its stock p_offset, program header table verbatim \u2014 PAS metadata blobs byte-identical to the stock pair (adsp 3b7e8e71, dtb e8a96a82); boot image region byte-identical to the r128-resident d0200a6b build (fd unchanged); recovery_a untouched"
 }

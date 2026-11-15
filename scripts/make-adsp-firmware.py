@@ -3,15 +3,17 @@
 
 Input:  .cache/firmware/adsp-src/{adsp.mdt,adsp.b01..,adsp_dtb.mdt,adsp_dtb.b01..} staged from the
         stock firmware harvest (vendor-fw-harvest/modem/image; the vendor firmware never enters git).
-Output: .cache/firmware/adsp/{adsp.mbn,adsp_dtb.mbn} — one flat file per image: ELF header + program
-        header table, then every segment with data (including the trailing hash segment, which this
-        SoC's mdt carries behind the header table and the stock pil-squasher skips) concatenated in
-        phdr order with p_offset/p_filesz rewritten. p_vaddr/p_paddr stay untouched, so the PAS/TZ-signed
-        metadata (header + hash, the shape QcomMdt.c hands to SCM) is byte-identical to the stock pair.
+Output: .cache/firmware/adsp/{adsp.mbn,adsp_dtb.mbn} — one flat file per image in the stock V8
+        single-file form: ELF header + program header table verbatim, then every segment with data
+        (including the trailing hash segment, which this SoC's mdt carries behind the header table
+        and the stock pil-squasher skips) placed at its OWN stock p_offset (zero-filled gaps).
+        Byte-faithful to what the stock pair describes: PAS_INIT_IMAGE authenticates the metadata
+        blob = header table + hash, so the table must stay byte-identical to the stock pair (r128b:
+        the sequential squash rewrote the table and TZ rejected the dtb image with 0xFFCFFFBB — the
+        r128 verdict; the r128 kernel needs no change for this form).
 
-The kernel-side consumer is package/AdspProbe.cpp + package/QcomMdt.c: qcom_mdt_metadata reads
-ph[0].p_filesz (headers) plus the hash segment at its rewritten p_offset, and the segment loader
-reads each PT_LOAD at its rewritten p_offset. Nothing in the consumer assumes the stock offsets.
+The kernel-side consumer is package/AdspProbe.cpp + package/QcomMdt.c, unchanged: the offsets are
+true file offsets, exactly like the stock form it already parses.
 """
 import struct
 import sys
@@ -51,11 +53,19 @@ def squash(name: str) -> Path:
     if header_end < phdrs[-1][0] + (len(phdrs[0][1]) * 4):
         raise SystemExit(f'{name}: ph[0] too small for the header table')
     hash_tail = mdt[header_end:]  # the hash segment's bytes ride behind the header table in this SoC's mdt
-    out = bytearray(mdt[:header_end])
+    # r128b: the file is the stock V8 single-file form, byte-faithful — every segment (with data)
+    # placed at its OWN stock p_offset, program header table and every field verbatim. PAS_INIT_IMAGE
+    # authenticates the metadata blob = header table + hash; the r128 verdict showed the rewritten
+    # table made that blob differ from the stock pair and TZ rejected the dtb image (0xFFCFFFBB).
+    # QcomMdt.c needs no special case: the offsets are true file offsets, exactly like the stock
+    # form it already parses.
+    file_end = max(f[off_ix] + f[filesz_ix] for _, f in phdrs if f[filesz_ix])
+    out = bytearray(file_end)
+    out[:header_end] = mdt[:header_end]
     for index, (at, f) in enumerate(phdrs):
-        filesz, memsz, flags = f[filesz_ix], f[memsz_ix], f[flags_ix]
+        filesz, memsz, flags, off = f[filesz_ix], f[memsz_ix], f[flags_ix], f[off_ix]
         if index == 0 or filesz == 0:
-            continue  # ph[0] stays at offset 0 (the metadata contract reads the header there); skip BSS-only segments
+            continue  # ph[0] is the header itself; skip BSS-only segments
         piece = SRC / f'{name}.b{index:02d}'
         if piece.exists():
             data = piece.read_bytes()
@@ -67,11 +77,7 @@ def squash(name: str) -> Path:
             raise SystemExit(f'{name}: missing {piece.name} (phdr wants {filesz:#x} bytes)')
         if len(data) != filesz:
             raise SystemExit(f'{name}: {piece.name} is {len(data)} bytes, phdr wants {filesz:#x}')
-        f[off_ix] = len(out)    # p_offset: sequential placement
-        f[filesz_ix] = len(data)
-        out += data
-    for at, f in phdrs:
-        struct.pack_into(ph, out, at, *f)
+        out[off:off + filesz] = data
     DST.mkdir(parents=True, exist_ok=True)
     dst = DST / f'{name}.mbn'
     dst.write_bytes(out)
