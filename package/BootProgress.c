@@ -170,6 +170,12 @@ extern char native_touch_rows[4][120] __attribute__((weak_import));
 extern char native_cpufreq_row[120] __attribute__((weak_import));
 extern volatile uint32_t native_hid_input_events[8] __attribute__((weak_import));
 extern volatile int native_hid_input_results[8] __attribute__((weak_import));
+// r130 stage 4: the offline HID probe's own gates. The owned IOHIDDevice is registered behind offline-hid-home=1 and an
+// IOHIDDevice instance-size match, and an unmet gate is silent, so the page carries them beside the report counters.
+extern volatile uint32_t native_hid_stage __attribute__((weak_import));
+extern volatile uint32_t native_hid_resource_found __attribute__((weak_import));
+extern volatile int native_hid_load_status __attribute__((weak_import));
+extern volatile uint32_t native_hid_class_sizes[5] __attribute__((weak_import));
 extern volatile uint32_t native_touch_loop_step __attribute__((weak_import));
 extern volatile uint32_t native_touch_seq,native_touch_count __attribute__((weak_import));
 extern volatile int native_touch_xs[12],native_touch_ys[12],native_touch_ids[12] __attribute__((weak_import));
@@ -497,7 +503,12 @@ static void draw(unsigned now) {
   if(&native_touch_stage_req && native_touch_stage_req && &native_touch_rows) {
     // Touch replaces the TIMER/OBS rows (42-43) while it is requested: its summary row and the HID report counters.
     line(42,native_touch_rows[0],0xff00ffcc);
-    if(&native_hid_input_events) {
+    if(&native_hid_input_events && &native_hid_stage) {
+      snprintf(b,sizeof(b),"TOUCH HID started=%u driver=%u touch-reports=%u result=%d key-reports=%u | h st=%u ld=%d rs=%u sz=%u | pad dots=%u",
+        native_hid_input_events[2],native_hid_input_events[4],native_hid_input_events[6],native_hid_input_results[6],
+        native_hid_input_events[5],native_hid_stage,native_hid_load_status,native_hid_resource_found,native_hid_class_sizes[4],touch_dots);
+      line(43,b,0xff00ffcc);
+    } else if(&native_hid_input_events) {
       snprintf(b,sizeof(b),"TOUCH HID started=%u driver=%u touch-reports=%u result=%d key-reports=%u | pad dots=%u",
         native_hid_input_events[2],native_hid_input_events[4],native_hid_input_events[6],native_hid_input_results[6],
         native_hid_input_events[5],touch_dots);

@@ -108,18 +108,20 @@ evidence = [
 
 [[area]]
 id = "input"
-status = "planned"
-components = []
-paths = ["configs/**", "dts/**"]
-inputs = ["Goodix GT9916 (berlin family) touch: GENI I2C4 0xa90000 400 kHz, addr 0x5d, irq tlmm25 edge-falling, reset tlmm24 active-low, avdd l14b_3p2 / vddio l12b_1p8", "Buttons: PMK8550 PON pwrkey + resin (vol-down) via SPMI", "Upstream sheng touch lanes (ShengHidInput/ShengNovatekTouch pattern; sheng-touch=4 sheng-touch-hid=1 args reserved)"]
-configuration = ["No touch driver wired yet on m2381; args reserved for the sheng lane"]
-procedure = ["Inventory the GT9916 firmware and bring-up order from the nura/linux-mobile-ports references, then adapt the sheng touch lane"]
-findings = ["UEFI-level buttons verified in normal operation: vol-down enters fastboot, power selects in the menu; r55e slot lines [touch edge]/[touch multi] stay at zero (driver not yet attached)"]
-completion = ["Touches map to the display, simultaneous contacts keep stable IDs, release events arrive, and buttons produce expected HID reports"]
-limits = ["Touch unexercised on iOS; only the hardware constants and the UEFI button path are established"]
-next_action = ["After the SpringBoard wall clears: adapt the sheng touch lane to GT9916 (I2C4/0x5d) with the documented pins"]
+status = "device-verified"
+components = ["GeniI2c (vendored from sheng) plus the board Goodix probe in package/", "ShengHidInput/NativeHidInput (source API) as the HID producer"]
+paths = ["configs/**", "dts/**", "package/GoodixTouch*", "package/GoodixBerlin*", "package/GeniI2c*", "package/HidInputProbe.cpp", "package/NativeHidInput.cpp"]
+inputs = ["Goodix GT9916R (berlin family) touch: GENI I2C4 SE4 0xa90000, addr 0x5d, irq tlmm25 edge-falling, reset tlmm24 active-low, avdd ldob14/l14b 2960-3200 mV and vddio ldob12 1800 mV voted through RPMh TCS2", "This board's SE4 boot firmware is the GSI/DMA variant (GENI_IF_DISABLE bit 0 set), so its FIFO interface never completes a command; the bus is driven as open-drain GPIO (SDA gpio44 / SCL gpio45, <=100 kHz) after the engine refuses", "Buttons: PMK8550 PON pwrkey + resin (vol-down) via SPMI", "Upstream sheng touch lanes; args: touch=1..4 and offline-hid-input=1 + offline-hid-home=1 + touch-hid=1"]
+configuration = ["Staged touch=1..4 through package/GoodixTouchProbe.cpp; the transport falls back to open-drain bit-bang when the GENI engine does not answer", "The owned IOHIDDevice needs BOTH offline-hid-input=1 (the probe runs) and offline-hid-home=1 (HidInputProbe.cpp registers it); an unmet gate is silent"]
+procedure = ["Judge each stage from the reader window rows [touch 1]/[touch 2]/[touch 3] and the page lines TCH1..TCH4/TCHE/TOUCH HID", "r130 rounds: stage2 clock and pin row, stage3 identify, stage3b open-drain transport, stage4 frames, stage4b HID"]
+findings = ["r130 stage 2: clocks and pins verified on device (s4 CLK_OFF cleared, rcg=0 selects TCXO, sda/scl=0x7 = qup1_se4 function with pull-up); engine init stopped on GENI_IF_DISABLE, which prepare() wrongly treated as fatal (Linux i2c-qcom-geni only uses it to pick GPI DMA)", "r130 stage 3: with the false gate removed the engine setup completes (fw=00000303, ifd=1, cfg=03000021), but a probe transfer never completes (p=to, error_status 0) and device confirm returns -2: the FIFO interface is genuinely disabled", "r130 stage 3b: the same pins as open-drain GPIO identify the part: pid=9916R, touch data address 0x10308, panel axes 1080x2400, avdd voted as ldob14 3200 mV (railResult=1)", "r130 stage 4/4b: the frame thread parses Berlin frames and publishes contacts (strokes grow through the boot), and the HID device delivers 1794 reports (TOUCH HID started=1 result=0; class size 208 equals the 24A446 fixture instance_size 0xd0); a slow swipe up on the lock screen brings up the unlock spinner", "UEFI-level buttons verified in normal operation: vol-down enters fastboot, power selects in the menu"]
+completion = ["Touches map to the display, simultaneous contacts keep stable IDs, release events arrive, and buttons produce expected HID reports", "The lock screen unlocks to the home screen"]
+limits = ["The unlock does not complete: backboardd aborts (sig6) at the same shared PC/LR as chronod and duetexpertd (one framework abort site, only the slide differs between boots), so the spinner returns to the lock screen", "The open-drain transport costs a few milliseconds of CPU per frame at 100 kHz and is not yet optimised", "Multi-finger behaviour and coordinate mirroring are untested by hand (a single swipe was used)", "Buttons are still unimplemented (r132)"]
+next_action = ["Symbolize the shared abort site from the 24A446 dyld cache (s117 pipeline: remove the slide, then look the PC up) and open an unlock-wall work order", "Raise the bit-bang throughput once unlocking no longer blocks judgement"]
 evidence = [
   { kind = "source", reference = "dts/m2381.dts", result = "touch/button hardware constants carried in the board DTS source" },
+  { kind = "device", reference = "../ios-m2381-unixnu/out/m2381/R130-STAGE3B-CARD.md", result = "stage 3 passed on device over open-drain GPIO: [touch 3] TCH4 rst=000002c3 iox=00000003 irq=00000001 pid=9916R/255 addr=10308 axes=1080x2400 rail=ldob14/3200mV(1), and TCHE st=00000041 cmd=0800ba04 tx=00000000 proves the FIFO interface is disabled" },
+  { kind = "device", reference = "../ios-m2381-unixnu/out/m2381/R130-STAGE4B-CARD.md", result = "TOUCH HID started=1 touch-reports=1794 result=0 | h st=3 ld=0 rs=1 sz=208; [touch edge] installed=1 contacts=17 from_edge=9; the swipe brings up the unlock spinner" },
 ]
 
 [[area]]

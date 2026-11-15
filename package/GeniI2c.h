@@ -84,6 +84,7 @@ typedef struct {
     uint32_t tx[2], length;
     uint32_t rx;                     /* the bytes read, first byte in bits 7:0 */
     uint32_t error_status;           /* the M_IRQ status of the last failure */
+    uint32_t if_disable;             /* GENI_IF_DISABLE as prepared: bit 0 = the SE firmware is the GSI/DMA variant (no FIFO interface) */
     uint32_t done, failed, timeouts, stray;
     /* Buffered transfers: the owner's buffers (its own until the transfer ends), the bytes moved so far, the FIFO depths in words. */
     const uint8_t *tx_buffer;

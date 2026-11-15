@@ -79,6 +79,14 @@ struct Session {
     QcomRscLayout rscLayout;
     GeniI2c engine;
     int lastError;
+    // Stage 2's engine readbacks: GENI_IF_DISABLE (bit 0 = the SE's boot firmware has no FIFO interface) and the result of
+    // the address-only probe transfer that follows the setup.
+    uint32_t ifd;
+    int probeResult;
+    uint32_t probeIrq;
+    // The engine's state right after a failed probe, and whether the pins have been taken over as open-drain GPIOs.
+    uint32_t engStatus, engCommand, engTxFifo, engIrq;
+    bool gpioBus = false;
     uint32_t regs[16];
     uint8_t version[GX_VERSION_LEN];
     uint8_t icInfo[GX_IC_INFO_MAX];
@@ -102,8 +110,21 @@ struct Session {
 
 Session *gSession;
 
+// The page's summary row (row 0) is the one touch line a reader window always carries, so a stopped stage's step and code
+// ride on it: the per-stage rows are only written once their stage gets far enough to format them.
+void appendRow(unsigned row, const char *text) {
+    char *r = native_touch_rows[row];
+    const size_t used = strlen(r), room = sizeof native_touch_rows[row] - used;
+    if (used < sizeof native_touch_rows[row] && room > 1) snprintf(r + used, room, "%s", text);
+}
+
 void mark(unsigned step) {native_touch_step = step;}
-void fail(unsigned step, int code) {native_touch_loop_step = 0; native_touch_error = code; mark(step);}
+void fail(unsigned step, int code) {
+    native_touch_loop_step = 0; native_touch_error = code; mark(step);
+    char note[40];
+    snprintf(note, sizeof note, " fail=s%u/c%d", step, code);
+    appendRow(0, note);
+}
 uint32_t touchMs() {
     uint32_t frequency = 0;
     __asm__ volatile("mrs %0, cntfrq_el0" : "=r"(frequency));
@@ -140,11 +161,135 @@ int waitEngine(Session *s) {
     return -2;
 }
 
+// ---- GPIO open-drain transport ----------------------------------------------------------------------------------------
+// The SE4 firmware on this board is the GSI/DMA variant (GENI_IF_DISABLE bit 0 set): its FIFO interface is reported dead by
+// every transfer (r130 stage 3: probe p=to, error_status 0, device confirm -2). The same pins can carry the same bus as
+// open-drain GPIOs, which is what the device-verified GENI I2C component does in that case (unixnu-nativegenii2c, SM-T733).
+// Only the pins change: START/repeated START/ACK/NACK/STOP and clock stretching are done here, <= 100 kHz at 5 us a phase.
+constexpr unsigned kBitUs = 5;          // one phase; a bit is two phases, so ~100 kHz with the pull-up rise
+constexpr unsigned kStretchSpins = 200; // a stretched clock gets 200 us before the transfer is abandoned
+bool gxLine(Session &s, unsigned gpio) {return (rd32(s.tlmmBus.va, (gpio - GX_GPIO_SDA) * GX_GPIO_STRIDE + 4u) & 1u) != 0;}
+// Open drain: driving low enables the output with a zero; releasing turns the output off and the pin's pull-up lifts the line.
+void gxDrive(Session &s, unsigned gpio, bool low) {
+    wr32(s.tlmmBus.va, (gpio - GX_GPIO_SDA) * GX_GPIO_STRIDE, gx_pin_ctl(GX_FUNC_GPIO, GX_DRIVE_2MA, GX_PULL_UP, low ? 1 : 0));
+    if (low) {
+        const uint32_t io = rd32(s.tlmmBus.va, (gpio - GX_GPIO_SDA) * GX_GPIO_STRIDE + 4u);
+        wr32(s.tlmmBus.va, (gpio - GX_GPIO_SDA) * GX_GPIO_STRIDE + 4u, io & ~GX_IO_OUT_BIT);
+    }
+}
+bool gxClockHigh(Session &s) {
+    for (unsigned spin = 0; spin < kStretchSpins; ++spin) {
+        if (gxLine(s, GX_GPIO_SCL)) return true;
+        IODelay(1);
+    }
+    return false;
+}
+// START (or a repeated START when a transfer is already open): both lines idle high, SDA falls first.
+int gxStart(Session &s) {
+    gxDrive(s, GX_GPIO_SDA, false);
+    gxDrive(s, GX_GPIO_SCL, false);
+    if (!gxClockHigh(s) || !gxLine(s, GX_GPIO_SDA)) return -3;   // a held line means someone else owns the bus
+    IODelay(kBitUs);
+    gxDrive(s, GX_GPIO_SDA, true);
+    IODelay(kBitUs);
+    gxDrive(s, GX_GPIO_SCL, true);
+    IODelay(kBitUs);
+    return 0;
+}
+// STOP: SDA rises while SCL is high. Best effort: a stretched or held clock must not leave the pins mid-transfer.
+void gxStop(Session &s) {
+    gxDrive(s, GX_GPIO_SDA, true);
+    IODelay(kBitUs);
+    gxDrive(s, GX_GPIO_SCL, false);
+    gxClockHigh(s);
+    IODelay(kBitUs);
+    gxDrive(s, GX_GPIO_SDA, false);
+    IODelay(kBitUs);
+}
+// 0 on ACK, -1 on NACK, -2 when the slave holds the clock, -3 when the bus cannot be taken.
+int gxWriteByte(Session &s, uint8_t byte, bool first) {
+    if (first) {
+        const int started = gxStart(s);
+        if (started) return started;
+    }
+    for (int bit = 7; bit >= 0; --bit) {
+        gxDrive(s, GX_GPIO_SDA, !((byte >> bit) & 1u));
+        IODelay(kBitUs);
+        gxDrive(s, GX_GPIO_SCL, false);
+        if (!gxClockHigh(s)) return -2;
+        IODelay(kBitUs);
+        gxDrive(s, GX_GPIO_SCL, true);
+    }
+    gxDrive(s, GX_GPIO_SDA, false);          // the ninth clock: the slave drives ACK
+    IODelay(kBitUs);
+    gxDrive(s, GX_GPIO_SCL, false);
+    if (!gxClockHigh(s)) return -2;
+    const bool ack = !gxLine(s, GX_GPIO_SDA);
+    IODelay(kBitUs);
+    gxDrive(s, GX_GPIO_SCL, true);
+    return ack ? 0 : -1;
+}
+int gxReadByte(Session &s, uint8_t *out, bool last) {
+    uint8_t value = 0;
+    gxDrive(s, GX_GPIO_SDA, false);          // the slave drives the data; the host acknowledges after it
+    for (int bit = 7; bit >= 0; --bit) {
+        IODelay(kBitUs);
+        gxDrive(s, GX_GPIO_SCL, false);
+        if (!gxClockHigh(s)) return -2;
+        value = (uint8_t)((value << 1) | (gxLine(s, GX_GPIO_SDA) ? 1 : 0));
+        gxDrive(s, GX_GPIO_SCL, true);
+    }
+    gxDrive(s, GX_GPIO_SDA, !last);          // ACK everything but the final byte
+    IODelay(kBitUs);
+    gxDrive(s, GX_GPIO_SCL, false);
+    if (!gxClockHigh(s)) return -2;
+    IODelay(kBitUs);
+    gxDrive(s, GX_GPIO_SCL, true);
+    gxDrive(s, GX_GPIO_SDA, false);
+    *out = value;
+    return 0;
+}
+// The Berlin register is a 32-bit address: write {address, data} or write the address, repeated START, read the data.
+int gxTransferRead(Session &s, uint32_t addr, uint8_t *data, uint32_t len) {
+    int result = gxWriteByte(s, (uint8_t)(GX_I2C_ADDRESS << 1), true);
+    for (unsigned i = 0; !result && i < 4; ++i) result = gxWriteByte(s, (uint8_t)(addr >> (24 - 8 * i)), false);
+    if (!result) result = gxWriteByte(s, (uint8_t)((GX_I2C_ADDRESS << 1) | 1u), true);
+    for (uint32_t i = 0; !result && i < len; ++i) result = gxReadByte(s, data + i, i + 1 == len);
+    gxStop(s);
+    return result;
+}
+int gxTransferWrite(Session &s, uint32_t addr, const uint8_t *data, uint32_t len) {
+    int result = gxWriteByte(s, (uint8_t)(GX_I2C_ADDRESS << 1), true);
+    for (unsigned i = 0; !result && i < 4; ++i) result = gxWriteByte(s, (uint8_t)(addr >> (24 - 8 * i)), false);
+    for (uint32_t i = 0; !result && i < len; ++i) result = gxWriteByte(s, data[i], false);
+    gxStop(s);
+    return result;
+}
+// Take the pins off the SE and put the bus in a known idle state. Nine clock pulses release a slave that a dead transfer
+// left part-way through a byte (the reference driver's recovery), then START/STOP leaves the bus idle.
+void gxEnterGpio(Session &s) {
+    gxDrive(s, GX_GPIO_SDA, false);
+    gxDrive(s, GX_GPIO_SCL, false);
+    for (unsigned pulse = 0; pulse < 9 && !gxLine(s, GX_GPIO_SDA); ++pulse) {
+        gxDrive(s, GX_GPIO_SCL, true);
+        IODelay(kBitUs);
+        gxDrive(s, GX_GPIO_SCL, false);
+        gxClockHigh(s);
+    }
+    if (!gxStart(s)) gxStop(s);
+    s.gpioBus = true;
+}
+
 int busRead(void *ctx, uint32_t addr, uint8_t *data, uint32_t len) {
     Session *s = static_cast<Session *>(ctx);
-    const uint8_t command[4] = {(uint8_t)(addr >> 24), (uint8_t)(addr >> 16), (uint8_t)(addr >> 8), (uint8_t)addr};
     ++s->reads;
     native_touch_bus_stats[0] = s->reads;
+    if (s->gpioBus) {
+        const int result = gxTransferRead(*s, addr, data, len);
+        if (result) native_touch_bus_stats[2] = native_touch_bus_stats[2] + 1;
+        return result;
+    }
+    const uint8_t command[4] = {(uint8_t)(addr >> 24), (uint8_t)(addr >> 16), (uint8_t)(addr >> 8), (uint8_t)addr};
     if (geni_i2c_start_read_buffer(&s->engine, command, sizeof command, data, len)) {
         ++s->lastError;
         native_touch_bus_stats[2] = native_touch_bus_stats[2] + 1;
@@ -164,6 +309,11 @@ int busWrite(void *ctx, uint32_t addr, const uint8_t *data, uint32_t len) {
     memcpy(buffer + 4, data, len);
     ++s->writes;
     native_touch_bus_stats[1] = s->writes;
+    if (s->gpioBus) {
+        const int result = gxTransferWrite(*s, addr, data, len);
+        if (result) native_touch_bus_stats[3] = native_touch_bus_stats[3] + 1;
+        return result;
+    }
     if (geni_i2c_start_write_buffer(&s->engine, buffer, 4 + len)) {
         native_touch_bus_stats[3] = native_touch_bus_stats[3] + 1;
         return -1;
@@ -174,6 +324,46 @@ int busWrite(void *ctx, uint32_t addr, const uint8_t *data, uint32_t len) {
 }
 
 void gxDelay(void *, unsigned microseconds) {IODelay(microseconds);}
+
+// The engine's own registers after a probe that produced no event: was the command latched (M_CMD0 readback), did the
+// address byte reach the FIFO (TX_FIFO_STATUS), is the engine still busy (GENI_STATUS bit 0)? That separates a FIFO the
+// boot firmware disabled from a sequence that never got as far as the command register.
+void engineState(Session &s) {
+    constexpr uint32_t kGeniStatus = 0x40;      // SE_GENI_STATUS: bit 0 = a command is in progress
+    s.engStatus = rd32(s.se.va, kGeniStatus);
+    s.engCommand = rd32(s.se.va, GENI_M_CMD0);
+    s.engTxFifo = rd32(s.se.va, GENI_TX_FIFO_STATUS);
+    s.engIrq = rd32(s.se.va, GENI_M_IRQ_STATUS);
+    snprintf(native_touch_rows[3], sizeof native_touch_rows[3],
+             "TCHE st=%08x cmd=%08x tx=%08x irq=%08x", s.engStatus, s.engCommand, s.engTxFifo, s.engIrq);
+}
+
+// One register read of address 0 with the rails as the boot left them, over whichever transport is active. The slave may
+// NACK (unpowered until stage 3 votes IOVDD/AVDD); what the result separates is the transport from the slave:
+//   ok    the slave answered                  -> bus and part both alive
+//   nack  the slave refused its address       -> bus works, part not powered/not out of reset yet
+//   to    no completion at all (engine) / stretched clock (GPIO) -> the transport itself is the problem
+//   busy  the pins could not be taken         -> something else owns the bus
+// Observational: the stage continues either way and the result rides on the page row under its tag.
+bool busProbe(Session &s, const char *tag) {
+    uint8_t byte = 0;
+    if (s.gpioBus) {
+        s.probeResult = gxTransferRead(s, 0x00, &byte, 1);
+        s.probeIrq = 0;
+    } else {
+        s.probeResult = geni_i2c_start_read(&s.engine, 0x00) ? -10 : waitEngine(&s);
+        s.probeIrq = s.engine.error_status;
+    }
+    const char *state = s.probeResult == 0 ? "ok"
+        : s.probeResult == -1 ? ((s.probeIrq & (1u << 9)) ? "nack" : "berr")
+        : s.probeResult == -2 ? "to"
+        : s.probeResult == -3 ? "busy" : "start";
+    char note[40];
+    if (s.probeIrq) snprintf(note, sizeof note, " %s=%s/%08x", tag, state, s.probeIrq);
+    else snprintf(note, sizeof note, " %s=%s", tag, state);
+    appendRow(0, note);
+    return s.probeResult == 0;
+}
 
 // ---- Stage 1: read-only snapshot ----------------------------------------------------------------------------------
 bool snapshot(Session &s) {
@@ -236,9 +426,13 @@ bool enable(Session &s) {
     wr32(s.tlmmBus.va, GX_GPIO_STRIDE, i2cPin);          // gpio45 SCL: one page up
     s.regs[7] = rd32(s.tlmmBus.va, 0);
     s.regs[8] = rd32(s.tlmmBus.va, GX_GPIO_STRIDE);
+    // The interface-disable bit is the one the stage-2 window could not show: prepare() used to stop on it before any row
+    // was written. It stays reported, and whether the engine still runs is settled by busProbe's first command.
+    s.ifd = rd32(s.se.va, GENI_IF_DISABLE);
     snprintf(native_touch_rows[1], sizeof native_touch_rows[1],
-             "TCH2 vote=%08x core=%08x s4=%08x rcg=%08x sda=%08x scl=%08x",
-             s.regs[10], s.regs[11], s.regs[12], rd32(s.gccS4.va, (GX_S4_RCG + GX_RCG_CFG) & 0xfff), s.regs[7], s.regs[8]);
+             "TCH2 vote=%08x core=%08x s4=%08x rcg=%08x sda=%08x scl=%08x ifd=%08x",
+             s.regs[10], s.regs[11], s.regs[12], rd32(s.gccS4.va, (GX_S4_RCG + GX_RCG_CFG) & 0xfff), s.regs[7], s.regs[8],
+             s.ifd);
     mark(3);
     return true;
 }
@@ -253,6 +447,10 @@ bool engineInit(Session &s) {
     s.regs[13] = fw;
     s.regs[14] = rd32(se, GENI_IF_DISABLE);
     s.regs[15] = s.wrapper.va ? rd32(s.wrapper.va, 0x4) : 0;
+    // Row first: the engine identity reaches the window even when the protocol check or the engine setup stops the stage.
+    // The stage-2 build wrote this row only on success, so a stopped stage left no engine evidence at all.
+    snprintf(native_touch_rows[2], sizeof native_touch_rows[2],
+             "TCH3a fw=%08x ifd=%08x whv=%08x", fw, s.regs[14], s.regs[15]);
     if (((fw >> 8) & 0xffu) != GENI_PROTO_I2C) {fail(4, -(int)(0x100 | ((fw >> 8) & 0xffu))); return false;}
     wr32(se, GENI_M_IRQ_CLEAR, 0xffffffffu);
     wr32(se, 0x648, 0xffffffffu);      // SE_GENI_S_IRQ_CLEAR
@@ -559,6 +757,15 @@ extern "C" void native_goodix_touch_probe(void) {
         native_touch_stage_done = 1;
         if (!enable(*s) || !engineInit(*s)) {native_touch_stage_done = 2; return;}
         native_touch_stage_done = 2;
+        const bool engineOk = busProbe(*s, "p");
+        engineState(*s);
+        // This board's SE4 runs the GSI/DMA firmware (no FIFO interface), so a silent engine means the same pins must carry
+        // the bus as open-drain GPIOs; every later transfer then goes through gxTransferRead/gxTransferWrite.
+        if (!engineOk) {
+            gxEnterGpio(*s);
+            appendRow(0, " bus=gpio");
+            busProbe(*s, "pg");
+        }
     }
     if (stage >= 3) {
         if (!identify(*s)) {native_touch_stage_done = 3; return;}

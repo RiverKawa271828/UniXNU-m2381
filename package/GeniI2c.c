@@ -18,7 +18,11 @@ int geni_i2c_prepare(GeniI2c *g, const GeniIo *io, uint8_t address, uint32_t *co
     g->address = address;
     const uint32_t proto = (rd(g, GENI_FW_REVISION) >> 8) & 0xffu, clock = rd(g, GENI_CLK_CFG);
     if (config) *config = (proto << 24) | (clock & 0xffffffu);
-    if (proto != GENI_PROTO_I2C || (rd(g, GENI_IF_DISABLE) & 1u) || !(clock & 1u) || !rd(g, GENI_SCL_COUNTERS)) return -1;
+    /* GENI_IF_DISABLE bit 0 (FIFO_IF_DISABLE) is reported, not required: it says the SE's boot firmware is the GSI/DMA
+     * variant, which is how Linux's I2C driver reads it (i2c-qcom-geni only switches to GPI DMA). This transport has no
+     * GPI path, so FIFO mode stays selected and the first transfer says whether the engine runs at all. */
+    g->if_disable = rd(g, GENI_IF_DISABLE);
+    if (proto != GENI_PROTO_I2C || !(clock & 1u) || !rd(g, GENI_SCL_COUNTERS)) return -1;
     wr(g, GENI_DMA_MODE, 0);
     /* 8-bit words, 4 per FIFO word, least significant byte first on the wire. */
     wr(g, GENI_TX_PACK0, 0x7f8fe); wr(g, GENI_TX_PACK1, 0xffefe);
