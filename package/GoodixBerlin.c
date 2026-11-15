@@ -49,7 +49,11 @@ typedef struct {
     uint16_t mutual_struct_len;
     uint16_t self_struct_len;
     uint16_t noise_struct_len;
-    uint32_t touch_data_addr;
+    uint32_t touch_data_addr;            // +44
+    uint16_t header_len;                 // +48
+    uint16_t point_len;                  // +50
+    uint16_t max_x;                      // +52
+    uint16_t max_y;                      // +54
 } __attribute__((packed)) GxIcInfoMisc;
 
 static uint16_t le16(const uint8_t *p) {return (uint16_t)(p[0] | ((uint16_t)p[1] << 8));}
@@ -112,15 +116,25 @@ int gx_parse_ic_info(const uint8_t *record, uint32_t length, GxIdentity *identit
         if (offset + count * 2u >= length) return -5;
         offset += count * 2u;
     }
-    if (offset + sizeof(GxIcInfoMisc) > length) return -5;
+    // The record must at least carry the misc block through the touch-data address; the report ABI and the real axes
+    // follow it and are read when the firmware includes them (Berlin-D does; a shorter record leaves them zero).
+    if (offset + offsetof(GxIcInfoMisc, touch_data_addr) + 4 > length) return -5;
     const GxIcInfoMisc *misc = (const GxIcInfoMisc *)(record + offset);
     const uint32_t touch_data_addr = le32((const uint8_t *)&misc->touch_data_addr);
     if (!touch_data_addr) return -6;
+    const int with_axes = offset + sizeof(GxIcInfoMisc) <= length;
     memset(identity, 0, sizeof *identity);
     memcpy(identity->rom_pid, record + 2 + offsetof(GxVersion, rom_pid), sizeof identity->rom_pid);
     memcpy(identity->patch_pid, record + 2 + offsetof(GxVersion, patch_pid), sizeof identity->patch_pid);
     identity->sensor_id = record[2 + offsetof(GxVersion, sensor_id)];
     identity->touch_data_addr = touch_data_addr;
+    identity->command_addr = le32((const uint8_t *)&misc->cmd_addr);
+    if (with_axes) {
+        identity->header_len = le16((const uint8_t *)&misc->header_len);
+        identity->point_len = le16((const uint8_t *)&misc->point_len);
+        identity->max_x = le16((const uint8_t *)&misc->max_x);
+        identity->max_y = le16((const uint8_t *)&misc->max_y);
+    }
     return 0;
 }
 

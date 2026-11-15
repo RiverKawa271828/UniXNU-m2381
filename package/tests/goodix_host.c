@@ -88,9 +88,13 @@ static uint32_t putIcInfo(struct fake *f, uint32_t touchDataAddr) {
         rec[offset++] = 1;                // one 16-bit value per list
         rec[offset++] = 0x34; rec[offset++] = 0x12;
     }
-    // The misc block: the touch-data address sits 44 bytes in.
+    // The misc block: touch-data address at +44, then the report ABI (+48/+50) and the real axes (+52/+54).
     put32(rec + offset + 44, touchDataAddr);
-    const uint32_t length = offset + 44 + 4 + 40;   // a little tail so the length is plausible
+    put16(rec + offset + 48, 8);
+    put16(rec + offset + 50, 8);
+    put16(rec + offset + 52, 10800);
+    put16(rec + offset + 54, 24000);
+    const uint32_t length = offset + 56 + 24;   // a little tail so the length is plausible
     put16(rec, (uint16_t)length);
     put16(rec + length - 2, gx_sum16(rec, length - 2));
     memcpy(f->mem + GX_IC_INFO_ADDR, rec, length);
@@ -163,11 +167,22 @@ static void testIcInfo(void) {
     memset(&identity, 0, sizeof identity);
     check(gx_read_identity(&t, GX_IC_INFO_ADDR, &identity) == 0, "IC info reads");
     check(identity.touch_data_addr == 0x10308, "touch-data address");
+    check(identity.header_len == 8 && identity.point_len == 8, "report ABI 8/8");
+    check(identity.max_x == 10800 && identity.max_y == 24000, "the panel's own axes");
+    check(identity.command_addr == 0, "command address (zero in this record)");
     check(!memcmp(identity.rom_pid, "BERLIN", 6), "identity ROM pid");
     check(identity.sensor_id == 0xff, "identity sensor id");
     f.mem[GX_IC_INFO_ADDR + 40] ^= 0x10;                      // breaks the record checksum
     check(gx_read_identity(&t, GX_IC_INFO_ADDR, &identity) == -4, "a bad IC info checksum is rejected");
     check(gx_parse_ic_info(f.mem + GX_IC_INFO_ADDR, 10, &identity) == -5, "a short record is rejected");
+    // A record that stops after the touch-data address still parses; the axes fields stay zero. The misc block starts
+    // at 2 + 16 (version) + 10 (features) + 4 (counts) + 5 lists of one 16-bit value (3 bytes each) = 47.
+    const uint32_t miscOffset = 2 + 16 + 10 + 4 + 5 * 3;
+    const uint32_t shortLen = miscOffset + 44 + 4 + 2;       // through the touch-data address and the block's checksum
+    put16(f.mem + GX_IC_INFO_ADDR, (uint16_t)shortLen);
+    put16(f.mem + GX_IC_INFO_ADDR + shortLen - 2, gx_sum16(f.mem + GX_IC_INFO_ADDR, shortLen - 2));
+    check(gx_read_identity(&t, GX_IC_INFO_ADDR, &identity) == 0, "a record without axes still reads");
+    check(identity.max_x == 0 && identity.max_y == 0, "the omitted axes stay zero");
 }
 
 static void testFrames(void) {
@@ -208,7 +223,7 @@ static void testFrames(void) {
     check(gx_points_valid(two, 2) == 1, "two points");
     check(gx_parse_points(two, 2, contacts, 1) == -1, "a contact array that is too small is refused");
     check(GX_FRAME_HEAD_LEN == 26, "the head read is 26 bytes");
-    check(gx_frame_extra_addr(0x10308, 3) == 0x10308 + 26, "the continuation starts at +26");
+    check(gx_frame_points_addr(0x10308) == 0x10308 + 8, "the point area starts after the header");
 }
 
 static void testPublish(void) {

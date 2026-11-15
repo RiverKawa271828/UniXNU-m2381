@@ -85,6 +85,9 @@ typedef struct {
     uint8_t patch_pid[8];
     uint8_t sensor_id;
     uint32_t touch_data_addr;
+    uint32_t command_addr;               // misc + 0: the controller's command buffer
+    uint16_t max_x, max_y;               // misc + 52/54: the real axes in report units (0 when the record omits them)
+    uint16_t header_len, point_len;      // misc + 48/50: the report ABI this firmware speaks (8/8 on Berlin-D)
 } GxIdentity;
 
 typedef struct {
@@ -118,12 +121,10 @@ int gx_parse_ic_info(const uint8_t *record, uint32_t length, GxIdentity *identit
 // Header checksum / frame classification. 0 = valid touch or request frame in *status, -1 = header checksum bad.
 int gx_header_status(const uint8_t *frame_head, uint8_t *status);
 static inline unsigned gx_frame_count(uint8_t request_type) {return request_type & GX_TOUCH_COUNT_MASK;}
-// The address the continuation of a frame with more than two fingers sits at (header + two points + the two checksum
-// bytes the head read takes as extra data when more points follow). extra = GX_FRAME_HEAD_LEN.
-static inline uint32_t gx_frame_extra_addr(uint32_t touch_addr, unsigned count) {
-    (void)count;
-    return touch_addr + GX_FRAME_HEAD_LEN;
-}
+// The points of a frame with more than two fingers are re-read in one go from the point area (touch address + 8):
+// count * 8 bytes plus the trailing checksum. (The reference Berlin drivers do the same; the two continuation bytes the
+// 26-byte head read already took are simply read again.)
+static inline uint32_t gx_frame_points_addr(uint32_t touch_addr) {return touch_addr + GX_HEADER_LEN;}
 
 // Point checksum over `count` points starting at points[0] and the trailing two bytes. 1 when it matches.
 int gx_points_valid(const uint8_t *points, unsigned count);

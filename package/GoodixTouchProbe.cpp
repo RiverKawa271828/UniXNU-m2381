@@ -26,6 +26,7 @@ extern "C" {
 #include "GeniI2c.h"
 #include "GoodixBerlin.h"
 #include "GoodixTouchBoard.h"
+#include "QcomRpmh.h"
 }
 extern "C" {
 char native_touch_rows[4][120];
@@ -74,7 +75,8 @@ uint32_t geniIoRead(void *ctx, uint32_t reg) {return rd32(reinterpret_cast<uintp
 void geniIoWrite(void *ctx, uint32_t reg, uint32_t value) {wr32(reinterpret_cast<uintptr_t>(ctx), reg, value);}
 
 struct Session {
-    Region gccLow, gccS4, gccHalt, gccVote, tlmmBus, tlmm, wrapper, se;
+    Region gccLow, gccS4, gccHalt, gccVote, tlmmBus, tlmm, wrapper, se, rsc, cmdDb;
+    QcomRscLayout rscLayout;
     GeniI2c engine;
     int lastError;
     uint32_t regs[16];
@@ -89,6 +91,11 @@ struct Session {
     uint8_t points[GX_MAX_TOUCH * GX_POINT_LEN + GX_CHECKSUM_LEN];
     GxContact contacts[GX_MAX_TOUCH];
     int mirrorX, mirrorY, swapXY;
+    // The panel's own report axes (IC info misc +52/+54) and the rails the identity stage found; 0 = the board's constants.
+    uint32_t maxX = GX_RAW_X, maxY = GX_RAW_Y;
+    char railIov[8], railAvdd[8];
+    uint32_t railMv;
+    int railResult;
     struct {int id, x0, y0, x1, y1, frames; uint32_t t0;} strokes[12];
     unsigned strokeCount;
 };
@@ -106,6 +113,11 @@ uint32_t touchMs() {
 // ---- I2C transport (GeniI2c) -------------------------------------------------------------------------------------
 // One transfer's deadline: 26 bytes at 400 kHz is ~0.7 ms; a 5 ms budget tells a slow part from a hung engine.
 constexpr unsigned kTransferBudgetUs = 5000;
+// The application processor's RSC (DRV 2) and the AOP command database: the same windows the ADSP lane votes lcx/lmx with
+// (AdspProbe.cpp). The rails a Goodix panel hangs on are PMIC LDOs whose RPMh resource names come from the command database.
+constexpr uint64_t kRscDrv = 0x17a20000, kRscSize = 0x10000, kRscTcs = 0xd00;
+constexpr uint64_t kCmdDbBase = 0x81c60000, kCmdDbSize = 0x20000;
+constexpr unsigned kRailTcs = 2;            // active TCS 0/1 belong to the WiFi/ADSP votes; the panel gets its own
 // The TLMM regions are mapped at the first pin's own page, so every access is relative to that page.
 constexpr uint32_t kResetCtl = 0, kResetIo = 4, kIrqCtl = GX_GPIO_STRIDE, kIrqIo = GX_GPIO_STRIDE + 4;
 
@@ -269,6 +281,52 @@ bool engineInit(Session &s) {
     return true;
 }
 
+// ---- Stage 3: rails, reset, confirm, identity -------------------------------------------------------------------------
+// One PMIC LDO through an active-only RPMh request: {address, mV}, {address+4, 1} (enable), {address+8, 7} (high-power mode).
+bool railVote(Session &s, uint32_t address, uint32_t millivolts) {
+    if (!address) return false;
+    const uint32_t addresses[3] = {address, address + 4, address + 8};
+    const uint32_t values[3] = {millivolts, 1, 7};
+    QcomRpmhWrite writes[16];
+    const unsigned n = qcom_rpmh_active_request(&s.rscLayout, kRailTcs, addresses, values, 3, writes, sizeof writes / sizeof writes[0]);
+    if (!n) return false;
+    const uint32_t bit = 1u << kRailTcs;
+    wr32(s.rsc.va, kRscTcs + s.rscLayout.irq_clear, bit);
+    wr32(s.rsc.va, kRscTcs + s.rscLayout.irq_status, 0);   // the status bit is write-one-to-clear on this layout
+    for (unsigned i = 0; i < n; ++i) wr32(s.rsc.va, kRscTcs + writes[i].offset, writes[i].value);
+    bool done = false;
+    for (unsigned i = 0; i < 2000 && !done; ++i) {
+        if (rd32(s.rsc.va, kRscTcs + s.rscLayout.irq_status) & bit) done = true;
+        else IODelay(50);
+    }
+    const unsigned m = qcom_rpmh_finish(&s.rscLayout, kRailTcs, writes, sizeof writes / sizeof writes[0]);
+    for (unsigned i = 0; i < m; ++i) wr32(s.rsc.va, kRscTcs + writes[i].offset, writes[i].value);
+    return true;                            // a request whose done bit is not seen still takes effect on this platform
+}
+
+// The panel's rails by their PMIC resource names, in the order the reference driver uses: IOVDD first, then AVDD.
+// The stock overlay names L14B (fragment@19) or L9B (fragment@87) for AVDD and L12B for IOVDD; the command database
+// decides which of those this boot actually has.
+bool railsOn(Session &s) {
+    const char *iovCandidates[] = {"ldob12", "ldol12"};
+    const char *avddCandidates[] = {"ldob14", "ldol14", "ldob9", "ldol9"};
+    if (!mapRegion(kRscDrv, kRscSize, s.rsc) || !mapRegion(kCmdDbBase, kCmdDbSize, s.cmdDb)) return false;
+    s.rscLayout = qcom_rsc_layout(rd32(s.rsc.va, 0));
+    QcomRpmhResource iov = {}, avdd = {};
+    for (const char *name : iovCandidates) if (!qcom_cmd_db_find(reinterpret_cast<const uint8_t *>(s.cmdDb.va), kCmdDbSize, name, &iov)) {strlcpy(s.railIov, name, sizeof s.railIov); break;}
+    for (const char *name : avddCandidates) if (!qcom_cmd_db_find(reinterpret_cast<const uint8_t *>(s.cmdDb.va), kCmdDbSize, name, &avdd)) {strlcpy(s.railAvdd, name, sizeof s.railAvdd); break;}
+    if (!s.railIov[0] || !s.railAvdd[0]) {s.railResult = -1; return false;}
+    // L14B is the DT's 3.2 V rail; the L9B variant is the stock overlay's ~2.96 V. Both are accepted by the part; the
+    // voltage follows the rail the database actually has.
+    s.railMv = s.railAvdd[4] == '9' ? 2960u : 3200u;
+    if (!railVote(s, iov.address, 1800u)) {s.railResult = -2; return false;}
+    IODelay(3000);
+    if (!railVote(s, avdd.address, s.railMv)) {s.railResult = -3; return false;}
+    IODelay(15000);
+    s.railResult = 1;
+    return true;
+}
+
 // ---- Stage 3: reset, confirm, identity ------------------------------------------------------------------------------
 bool identify(Session &s) {
     mark(7);
@@ -294,7 +352,19 @@ bool identify(Session &s) {
     s.regs[5] = rd32(tlmm.va, kIrqIo);
     GxTransport transport = {busRead, busWrite, &s};
     mark(8);
-    const int confirm = gx_dev_confirm(&transport, GX_DEV_CONFIRM_TRIES, 5000, gxDelay, nullptr);
+    int confirm = gx_dev_confirm(&transport, GX_DEV_CONFIRM_TRIES, 5000, gxDelay, nullptr);
+    if (confirm && railsOn(s)) {
+        // The part did not answer with the rails as the boot left them: power IOVDD/AVDD through RPMh, release reset
+        // again and re-confirm (the reference driver's order: probe, then supply, then reset, then probe).
+        mark(12);
+        io = rd32(s.tlmm.va, kResetIo);
+        wr32(s.tlmm.va, kResetIo, io & ~GX_IO_OUT_BIT);
+        IODelay(10000);
+        io = rd32(s.tlmm.va, kResetIo);
+        wr32(s.tlmm.va, kResetIo, io | GX_IO_OUT_BIT);
+        IODelay(100000);
+        confirm = gx_dev_confirm(&transport, GX_DEV_CONFIRM_TRIES, 5000, gxDelay, nullptr);
+    }
     if (confirm) {fail(8, -200 + confirm); return false;}
     mark(9);
     const int version = gx_read_version(&transport, &s.parsed);
@@ -303,14 +373,34 @@ bool identify(Session &s) {
     mark(10);
     const int identity = gx_read_identity(&transport, GX_IC_INFO_ADDR, &s.identity);
     if (identity) {fail(10, -220 + identity); return false;}
+    // The panel advertises its own report axes; they supersede the board constants when present.
+    if (s.identity.max_x && s.identity.max_y) {s.maxX = s.identity.max_x; s.maxY = s.identity.max_y;}
     snprintf(native_touch_rows[3], sizeof native_touch_rows[3],
-             "TCH4 rst=%08x iox=%08x irq=%08x conf=%d pid=%.6s/%d addr=%x",
-             s.regs[2], s.regs[3], s.regs[5], 0, (const char *)s.parsed.patch_pid, s.parsed.sensor_id, s.identity.touch_data_addr);
+             "TCH4 rst=%08x iox=%08x irq=%08x pid=%.6s/%d addr=%x axes=%ux%u rail=%s/%umV(%d)",
+             s.regs[2], s.regs[3], s.regs[5], (const char *)s.parsed.patch_pid, s.parsed.sensor_id, s.identity.touch_data_addr,
+             s.maxX, s.maxY, s.railAvdd[0] ? s.railAvdd : "-", s.railMv, s.railResult);
     mark(11);
     return true;
 }
 
 // ---- Stage 4: frames -----------------------------------------------------------------------------------------------
+// Published coordinates: raw report units scaled against the panel's own axes (IC info) onto the long/short maxima the
+// HID producer normalises by; the board constants are the fallback when the firmware does not advertise axes.
+int scaleLong(const Session *s, int raw, uint32_t maxRaw, int mirror) {
+    if (raw < 0) raw = 0;
+    if (!maxRaw) maxRaw = GX_RAW_X;
+    if ((uint32_t)raw >= maxRaw) raw = (int)(maxRaw - 1);
+    int value = (int)((long long)raw * GX_HID_LONG / maxRaw);
+    return mirror ? (int)(GX_HID_LONG - 1 - (uint32_t)value) : value;
+}
+int scaleShort(const Session *s, int raw, uint32_t maxRaw, int mirror) {
+    (void)s;
+    if (raw < 0) raw = 0;
+    if (!maxRaw) maxRaw = GX_RAW_Y;
+    if ((uint32_t)raw >= maxRaw) raw = (int)(maxRaw - 1);
+    int value = (int)((long long)raw * GX_HID_SHORT / maxRaw);
+    return mirror ? (int)(GX_HID_SHORT - 1 - (uint32_t)value) : value;
+}
 // The HID consumer registers here (NativeHidInput's start, touch-hid=1); it is called after a frame is published.
 void (*gTouchSink)(void *);
 void *gTouchSinkContext;
@@ -321,11 +411,11 @@ void publish(Session *s, unsigned count) {
         const GxContact &c = s->contacts[i];
         ids[i] = c.id;
         if (s->swapXY) {
-            xs[i] = gx_publish_x_from_y(c.y, s->mirrorX);
-            ys[i] = gx_publish_y_from_x(c.x, s->mirrorY);
+            xs[i] = scaleLong(s, c.y, s->maxY, s->mirrorX);
+            ys[i] = scaleShort(s, c.x, s->maxX, s->mirrorY);
         } else {
-            xs[i] = gx_publish_x(c.x, s->mirrorX);
-            ys[i] = gx_publish_y(c.y, s->mirrorY);
+            xs[i] = scaleLong(s, c.x, s->maxX, s->mirrorX);
+            ys[i] = scaleShort(s, c.y, s->maxY, s->mirrorY);
         }
     }
     // Stroke bookkeeping (BootLog's [touch] row): a contact's first and last published position and its frame count.
@@ -392,17 +482,15 @@ int serviceFrame(Session *s) {
     ++native_touch_frames;
     const unsigned count = gx_frame_count(s->head[2]);
     if ((status & GX_TOUCH_EVENT) && count <= GX_MAX_TOUCH) {
-        uint32_t points = 0;
         memcpy(s->points, s->head + GX_HEADER_LEN, 2 * GX_POINT_LEN);
-        points = 2 * GX_POINT_LEN;
         if (count > 2) {
-            const uint32_t extraLen = (count - 2) * GX_POINT_LEN;
+            // The head read only took the first two points; re-read the whole point area (count * 8 bytes) together
+            // with its trailing checksum in one transfer, as the reference Berlin drivers do.
+            const uint32_t pointsLen = count * GX_POINT_LEN + GX_CHECKSUM_LEN;
             const uint64_t extraAt = mach_absolute_time();
-            if (busRead(s, s->identity.touch_data_addr + GX_FRAME_HEAD_LEN, s->tail, extraLen)) return -1;
+            if (busRead(s, gx_frame_points_addr(s->identity.touch_data_addr), s->points, pointsLen)) return -1;
             absolutetime_to_nanoseconds(mach_absolute_time() - extraAt, &ns);
             native_touch_cost[5] = native_touch_cost[5] + (uint32_t)(ns / 1000);
-            memcpy(s->points + points, s->tail, extraLen);
-            points += extraLen;
         }
         if (count && !gx_points_valid(s->points, count)) {
             ++native_touch_cost[3];
