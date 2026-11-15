@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BSD-2-Clause-Patent
-// The battery as iOS reads it (boot argument sheng-battery=1, started by BatteryProbe.cpp; needs sheng-adsp=2): an IOPMPowerSource whose
+// The battery as iOS reads it (boot argument battery=1, started by BatteryProbe.cpp; needs adsp=2): an IOPMPowerSource whose
 // values come from the battery manager in the audio DSP over the PMIC GLINK channel (ShengBattmgr.c). powerd finds every IOPMPowerSource,
 // reads CurrentCapacity/MaxCapacity, IsCharging, ExternalConnected, voltage, amperage and AdapterDetails and listens for the status change
 // message updateStatus sends; the status bar, the lock screen's charging state and Settings > Battery follow from that.
@@ -7,8 +7,8 @@
 // Design: everything runs on the service's work loop. The DSP thread's callbacks only copy a message into a small ring and signal an
 // IOInterruptEventSource (no provider: a software event), so the DSP thread never waits for this driver. One request is in flight at a
 // time; a 2 s timer gives up on an unanswered one. Battery notifications start a refresh at once, and a 60 s timer refreshes in any case
-// (the fields that hardly change, every tenth time). Charging itself is the DSP firmware's; the one setting written is the input current
-// limit on a computer's USB port (ShengBattmgr.c; boot argument sheng-usb-sdp-ma, 0 leaves the firmware's limit).
+// (the fields that hardly change, every tenth time). Charging itself is the DSP firmware's; writes synchronize keyboard attachment and the input current
+// limit on a computer's USB port (ShengBattmgr.c; boot argument usb-sdp-ma, 0 leaves the firmware's limit).
 #include <IOKit/IOLib.h>
 #include <IOKit/IOWorkLoop.h>
 #include <IOKit/IOTimerEventSource.h>
@@ -26,6 +26,12 @@ extern "C" {
 #include "ShengBattmgr.h"
 }
 
+extern "C" void qcom_dwc3_vbus(int) __attribute__((weak_import));
+// The USB-C owner (32779) shares this channel: QcomDwc3 asks what is on the cable over UCSI.
+extern "C" uint32_t qcom_ucsi_start(uint8_t *) __attribute__((weak_import));
+extern "C" uint32_t qcom_ucsi_receive(const uint8_t *, uint32_t, uint8_t *) __attribute__((weak_import));
+extern "C" uint32_t qcom_ucsi_tick(uint8_t *) __attribute__((weak_import));
+extern "C" bool qcom_ucsi_polling(void) __attribute__((weak_import));
 extern "C" ShengAdspChannel *sheng_adsp_channel(const char *, uint32_t, uint32_t, int, const ShengAdspClient *, void *) __attribute__((weak_import));
 extern "C" int sheng_adsp_send(ShengAdspChannel *, const void *, uint32_t) __attribute__((weak_import));
 // [0] stage (1 class up, 2 channel registered, 3 channel up, 4 published; negative: the step that failed), [1] percent, [2] mV,
@@ -44,7 +50,10 @@ extern "C" {volatile int32_t native_battery_raw[10];}
 extern "C" {volatile int32_t native_charger_stats[16];}
 
 namespace {
-constexpr uint32_t kRequestMs = 2000, kRefreshMs = 60000, kSlowEvery = 10, kRing = 16, kMessage = 64;
+// The keyboard thread only writes atomics. This service and its event source live for the platform lifetime.
+volatile int gKeyboardAttached = -1;
+IOInterruptEventSource *volatile gKeyboardInbox;
+constexpr uint32_t kRequestMs = 2000, kRefreshMs = 60000, kSlowEvery = 10, kRing = 16, kMessage = 560;
 }
 
 class ShengBattery : public IOPMPowerSource {
@@ -55,15 +64,36 @@ class ShengBattery : public IOPMPowerSource {
     IOSimpleLock *ringLock = nullptr;
     struct {uint32_t length; uint8_t data[kMessage];} ring[kRing];
     uint32_t ringHead = 0, ringCount = 0;
-    volatile uint32_t channelUp = 0, channelChanged = 0;
+    volatile uint32_t channelUp = 0, channelChanged = 0, channelLost = 0;
     bool wasUp = false, published = false;
     uint32_t refreshes = 0;
     ShengBattmgr bm;
     uint32_t sdpLimit = 0;
     ShengAdspChannel *channel = nullptr;
+    IOTimerEventSource *ucsiTimer = nullptr;
+    uint8_t ucsiOut[kMessage];
+    // Diagnosis (boot argument ucsi-delay, seconds): the first UCSI command (PPM_RESET) waits this long after the channel came up, so the
+    // charger rows before it show what the port was doing without the reset.
+    uint32_t ucsiDelayMs = 0;
+    bool ucsiPending = false;
+
+    void ucsiSend(uint32_t n) {
+        if (n) sheng_adsp_send(channel, ucsiOut, n);
+        if (qcom_ucsi_polling && qcom_ucsi_polling()) ucsiTimer->setTimeoutMS(20);
+    }
+    static void ucsiTick(OSObject *owner, IOTimerEventSource *) {
+        ShengBattery *self = OSDynamicCast(ShengBattery, owner);
+        if (self && self->wasUp && self->ucsiPending) {
+            self->ucsiPending = false;
+            if (qcom_ucsi_start) self->ucsiSend(qcom_ucsi_start(self->ucsiOut));
+            return;
+        }
+        if (self && self->wasUp && qcom_ucsi_tick) self->ucsiSend(qcom_ucsi_tick(self->ucsiOut));
+    }
 
     static void dspState(void *context, int up) {
         ShengBattery *self = static_cast<ShengBattery *>(context);
+        if (!up) __atomic_store_n(&self->channelLost, 1u, __ATOMIC_RELEASE);
         __atomic_store_n(&self->channelUp, up ? 1u : 0u, __ATOMIC_RELEASE);
         __atomic_store_n(&self->channelChanged, 1u, __ATOMIC_RELEASE);
         self->inbox->interruptOccurred(nullptr, nullptr, 0);
@@ -84,6 +114,7 @@ class ShengBattery : public IOPMPowerSource {
     }
 
     void pump() {
+        if (!wasUp) return;
         uint8_t out[SHENG_BATTMGR_REQUEST_BYTES];
         const uint32_t n = sheng_battmgr_next(&bm, out);
         if (!n) return;
@@ -109,6 +140,7 @@ class ShengBattery : public IOPMPowerSource {
         static const int charger[13] = {BmUsbOnline, BmUsbType, BmUsbAdapter, BmRealType, BmUsbLimit, BmUsbMax, BmUsbVoltage, BmUsbCurrent,
                                         BmStatus, BmChargeType, BmThermalLevel, BmChargeCurrent, BmPowerMax};
         static const int milli[13] = {0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1, 0};
+        if (qcom_dwc3_vbus && (bm.valid >> BmUsbOnline) & 1) qcom_dwc3_vbus(bm.value[BmUsbOnline]);
         for (unsigned i = 0; i < 13; ++i)
             native_charger_stats[i] = (bm.valid >> charger[i]) & 1 ? (milli[i] ? bm.value[charger[i]] / 1000 : bm.value[charger[i]]) : -1;
         static const int bits[4] = {BmAuthentic, BmSlaveAuthentic, BmPdVerified, BmInputSuspend};
@@ -123,9 +155,11 @@ class ShengBattery : public IOPMPowerSource {
         ShengBatterySnapshot s;
         sheng_battmgr_snapshot(&bm, &s);
         setBatteryInstalled(s.present);
-        setExternalConnected(s.external);
-        setExternalChargeCapable(s.external);
-        setIsCharging(s.charging);
+        if (s.external_known) {
+            setExternalConnected(s.external);
+            setExternalChargeCapable(s.external);
+        }
+        if (s.external_known && s.status_known) setIsCharging(s.charging);
         setAtCriticalLevel(s.critical);
         setCurrentCapacity((unsigned)s.percent);
         setMaxCapacity(100);
@@ -134,7 +168,7 @@ class ShengBattery : public IOPMPowerSource {
         if (s.cycles > 0) setCycleCount((unsigned)s.cycles);
         setTimeRemaining(s.charging ? (s.time_to_full_min >= 0 ? s.time_to_full_min : 0xffff)
                                     : (s.time_to_empty_min >= 0 ? s.time_to_empty_min : 0xffff));
-        flag("FullyCharged", s.fully_charged);
+        if (s.external_known && s.status_known) flag("FullyCharged", s.fully_charged);
         number("InstantAmperage", s.current_ma);
         if (s.temperature_valid) number("Temperature", s.temperature);
         if (s.raw_mah > 0) number("AppleRawCurrentCapacity", s.raw_mah);
@@ -186,19 +220,36 @@ class ShengBattery : public IOPMPowerSource {
 
     static void inboxAction(OSObject *owner, IOInterruptEventSource *, int) {
         ShengBattery *self = OSDynamicCast(ShengBattery, owner);
-        if (!self) return;
+        if (!self || !self->channel) return;
         if (__atomic_exchange_n(&self->channelChanged, 0u, __ATOMIC_ACQ_REL)) {
             const bool up = __atomic_load_n(&self->channelUp, __ATOMIC_ACQUIRE) != 0;
-            if (up && !self->wasUp) {
+            // A down/up pair may coalesce into one event. Remember the loss so the latest cover state is always replayed.
+            if (__atomic_exchange_n(&self->channelLost, 0u, __ATOMIC_ACQ_REL)) {
+                self->request->cancelTimeout();
+                sheng_battmgr_init(&self->bm);
+                self->bm.sdp_limit_ua = self->sdpLimit;
+                self->wasUp = false;
+            }
+            const bool before = self->wasUp;
+            self->wasUp = up;
+            if (up && !before) {
+                const int attached = __atomic_load_n(&gKeyboardAttached, __ATOMIC_ACQUIRE);
+                if (attached >= 0) sheng_battmgr_keyboard(&self->bm, attached);
                 native_battery_stats[0] = self->published ? 4 : 3;
                 uint8_t enable[SHENG_BATTMGR_ENABLE_BYTES];
                 sheng_adsp_send(self->channel, enable, sheng_battmgr_enable_request(enable));
+                if (qcom_ucsi_start && self->ucsiDelayMs) {self->ucsiPending = true; self->ucsiTimer->setTimeoutMS(self->ucsiDelayMs);}
+                else if (qcom_ucsi_start) self->ucsiSend(qcom_ucsi_start(self->ucsiOut));
                 sheng_battmgr_refresh(&self->bm, 1);
                 self->pump();
                 self->refresh->setTimeoutMS(kRefreshMs);
             }
-            if (!up && self->wasUp) {self->request->cancelTimeout(); sheng_battmgr_init(&self->bm); self->bm.sdp_limit_ua = self->sdpLimit;}
-            self->wasUp = up;
+            if (!up && before) {self->request->cancelTimeout(); sheng_battmgr_init(&self->bm); self->bm.sdp_limit_ua = self->sdpLimit;}
+        }
+        const int attached = __atomic_load_n(&gKeyboardAttached, __ATOMIC_ACQUIRE);
+        if (self->wasUp && attached >= 0) {
+            sheng_battmgr_keyboard(&self->bm, attached);
+            self->pump();
         }
         for (;;) {
             uint8_t data[kMessage];
@@ -213,6 +264,10 @@ class ShengBattery : public IOPMPowerSource {
             }
             IOSimpleLockUnlock(self->ringLock);
             if (!length) break;
+            if (qcom_ucsi_receive && length >= 4 && (data[0] | data[1] << 8 | data[2] << 16 | (uint32_t)data[3] << 24) == 32779u) {
+                self->ucsiSend(qcom_ucsi_receive(data, length, self->ucsiOut));
+                continue;
+            }
             const int result = sheng_battmgr_receive(&self->bm, data, length);
             if (result == BmAnswer || result == BmCycleDone) self->request->cancelTimeout();
             self->handle(result);
@@ -237,21 +292,27 @@ public:
     bool startBattery() {
         sheng_battmgr_init(&bm);
         uint32_t ma = 0;
-        if (PE_parse_boot_argn("sheng-usb-sdp-ma", &ma, sizeof ma)) bm.sdp_limit_ua = ma > 3000 ? 3000000u : ma * 1000u;
+        if (PE_parse_boot_argn("usb-sdp-ma", &ma, sizeof ma)) bm.sdp_limit_ua = ma > 3000 ? 3000000u : ma * 1000u;
         sdpLimit = bm.sdp_limit_ua;
+        uint32_t delay = 0;
+        if (PE_parse_boot_argn("ucsi-delay", &delay, sizeof delay)) ucsiDelayMs = delay > 600 ? 600000u : delay * 1000u;
         loop = IOWorkLoop::workLoop();
         ringLock = IOSimpleLockAlloc();
         inbox = IOInterruptEventSource::interruptEventSource(this, &ShengBattery::inboxAction);
         request = IOTimerEventSource::timerEventSource(this, &ShengBattery::requestAction);
         refresh = IOTimerEventSource::timerEventSource(this, &ShengBattery::refreshAction);
-        if (!loop || !ringLock || !inbox || !request || !refresh || loop->addEventSource(inbox) != kIOReturnSuccess ||
-            loop->addEventSource(request) != kIOReturnSuccess || loop->addEventSource(refresh) != kIOReturnSuccess)
+        ucsiTimer = IOTimerEventSource::timerEventSource(this, &ShengBattery::ucsiTick);
+        if (!loop || !ringLock || !inbox || !request || !refresh || !ucsiTimer || loop->addEventSource(inbox) != kIOReturnSuccess ||
+            loop->addEventSource(request) != kIOReturnSuccess || loop->addEventSource(refresh) != kIOReturnSuccess ||
+            loop->addEventSource(ucsiTimer) != kIOReturnSuccess)
             return false;
         native_battery_stats[0] = 1;
         const ShengAdspClient client = {&ShengBattery::dspState, &ShengBattery::dspReceive};
         channel = sheng_adsp_channel ? sheng_adsp_channel("PMIC_RTR_ADSP_APPS", 1024, 4, 0, &client, this) : nullptr;
         if (!channel) return false;
         native_battery_stats[0] = 2;
+        __atomic_store_n(&gKeyboardInbox, inbox, __ATOMIC_RELEASE);
+        inbox->interruptOccurred(nullptr, nullptr, 0);  // replay a cover state received before this service started
         return true;
     }
 };
@@ -272,4 +333,11 @@ extern "C" void sheng_battery_start(void) {
         return;
     }
     battery->release();  // the platform's attachment keeps it
+}
+
+// Nonblocking handoff; PMIC requests stay on the battery work loop and share its one-request queue.
+extern "C" void sheng_battery_keyboard_attached(int attached) {
+    __atomic_store_n(&gKeyboardAttached, attached ? 1 : 0, __ATOMIC_RELEASE);
+    IOInterruptEventSource *event = __atomic_load_n(&gKeyboardInbox, __ATOMIC_ACQUIRE);
+    if (event) event->interruptOccurred(nullptr, nullptr, 0);
 }

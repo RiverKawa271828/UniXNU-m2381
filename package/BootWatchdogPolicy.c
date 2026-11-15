@@ -31,7 +31,14 @@ static const char lite_jobs[]=
  // the icons missing (seen on hardware), so it stays enabled. coreduetd keeps one thread above 50 % of a core for the whole boot
  // (the kernel's "burning CPU" report in i480 to i556), holding a big core and the P domain at its top clock.
  // (r126, s115: the tail job restored from upstream d76556b — our 16e592a-era vendor predates it.)
- "com.apple.fairplayd.A2,com.apple.passd,com.apple.mobile.obliteration,com.apple.coreduetd";
+ // (r128, s119: dasd and gamed join the same crash-or-respawn-loop face: the r127 desktop
+ // boot ran them as a CoreData respawn loop — "Cannot load NSManagedObjectModel. nil is an
+ // illegal URL parameter", ~20 consecutive pids, exits=1011 for the boot = the churn
+ // powerhouse. Labels verified against the donor OS volume: com.apple.dasd.plist x5 /
+ // com.apple.gamed.plist x3 in the SystemOS image. Containing the churn is also the power
+ // round's theme; the CoreData root-fix RE stays ledged.)
+ "com.apple.fairplayd.A2,com.apple.passd,com.apple.mobile.obliteration,com.apple.coreduetd,"
+ "com.apple.dasd,com.apple.gamed";
 static char policy[2048],jobs[200];
 volatile int sheng_watchdog_policy_status=-1;
 

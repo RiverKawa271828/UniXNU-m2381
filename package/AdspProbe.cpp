@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: BSD-2-Clause-Patent
-// The audio DSP (ADSP, LPASS) of the sheng board: boot argument sheng-adsp=1 surveys what the boot stages left (SMEM partition and items,
-// the DSP's SMP2P state, the AOSS mailbox, the RSC, the command database) and writes nothing; sheng-adsp=2 starts the DSP and brings up
+// The audio DSP (ADSP, LPASS) of the sheng board: boot argument adsp=1 surveys what the boot stages left (SMEM partition and items,
+// the DSP's SMP2P state, the AOSS mailbox, the RSC, the command database) and writes nothing; adsp=2 starts the DSP and brings up
 // GLINK so the battery manager (PMIC GLINK) and the audio services (GPR) can talk to it.
 //
 // Devicetree facts: remoteproc@6800000 (qcom,sm8550-adsp-pas), PAS id 1 for adsp.mbn in adspslpi 0x9ea00000 + 0x4680000 and id 36 for
@@ -39,7 +39,8 @@ void sheng_fw_close(void *handle);
 int sheng_fw_ufs_read(void *handle, uint64_t offset, void *to, size_t length);
 void sheng_fw_ufs_close(void *handle);
 // m2381: the device's own ADSP images ride in the kernel (scripts/make-adsp-firmware.py squashes the stock split
-// images and the boot-progress archive stages AdspFirmwareBlob.c; the vendor firmware never enters git). The
+// images and the kernel archive stages AdspFirmwareBlob.c (the zero-size placeholder on the 24A446
+// lane rides the display archive, scripts/build-gop-legacy-display-27.py); the vendor firmware never enters git). The
 // zero-size default keeps the build working without the staged files, and the probe then falls back to VFS.
 int sheng_fw_mem_open(const void *data, uint64_t size, void **handle, uint64_t *out_size);
 int sheng_fw_mem_read(void *handle, uint64_t offset, void *to, size_t length);
@@ -206,7 +207,7 @@ void readCrashReason() {
     if (n) note("crash: ", text);
 }
 
-// ---- the survey (sheng-adsp=1 and the first step of 2): reads only ----
+// ---- the survey (adsp=1 and the first step of 2): reads only ----
 void survey() {
     int32_t bits = 0;
     if (!qcom_smem_partition(&gSmem, QCOM_SMEM_HOST_APPS, kRemotePid, &gPart)) {
@@ -525,7 +526,7 @@ bool attachIrqs() {
 
 // The firmware comes from the device's own firmware partition ("modem:", read in place), from the
 // m2381 boot_b segment ("boot_b:", the squashed images package-m2381-boot.py appended inside the
-// boot image's partition, read in place through ShengUfs) or, with sheng-adsp-fw=DIR, from
+// boot image's partition, read in place through ShengUfs) or, with adsp-fw=DIR, from
 // DIR/adsp.mbn and DIR/adsp_dtb.mbn on a mounted volume. Without the argument the sources are
 // tried in order, boot_b first. The UFS driver and the Data volume may not be up when this thread
 // starts: a few tries with growing pauses (about two minutes in all), not a poll. source gets the
@@ -577,7 +578,7 @@ void shutdownDsp(bool dtb, bool adsp) {
 
 bool start() {
     char dir[80] = "";
-    const bool chosen = PE_parse_boot_argn("sheng-adsp-fw", dir, sizeof dir) && dir[0];
+    const bool chosen = PE_parse_boot_argn("adsp-fw", dir, sizeof dir) && dir[0];
     char path[112];
     Image &dtb = gDtbImage, &adsp = gAdspImage;
     int rc = openFirmware(dtb, adsp, path, sizeof path, chosen ? dir : nullptr);
@@ -607,9 +608,11 @@ bool start() {
     }
     stage(StLoadState);
 
-    static uint8_t db[kCmdDbSize];
+    // A copy of the command database, held only while the levels are looked up (a static copy would sit in the kernel's __DATA).
+    struct CmdDbCopy {uint8_t *bytes = static_cast<uint8_t *>(IOMallocData(kCmdDbSize)); ~CmdDbCopy() {if (bytes) IOFreeData(bytes, kCmdDbSize);}} copy;
+    uint8_t *const db = copy.bytes;
     uint32_t lcx = 0, lmx = 0;
-    if (!readCmdDb(db) || qcom_cmd_db_find(db, sizeof db, "lcx.lvl", &gLcx) || qcom_cmd_db_find(db, sizeof db, "lmx.lvl", &gLmx) ||
+    if (!db || !readCmdDb(db) || qcom_cmd_db_find(db, kCmdDbSize, "lcx.lvl", &gLcx) || qcom_cmd_db_find(db, kCmdDbSize, "lmx.lvl", &gLmx) ||
         qcom_rpmh_level_index(&gLcx, 0xffffffffu, &lcx) || qcom_rpmh_level_index(&gLmx, 0xffffffffu, &lmx)) {
         fail(StRails, -2); release(dtb); release(adsp); return false;
     }
@@ -665,9 +668,9 @@ bool startGlink() {
 }
 
 void adspThread(void *, wait_result_t) {
-    thread_set_thread_name(current_thread(), "sheng-adsp");
+    thread_set_thread_name(current_thread(), "adsp");
     unsigned mode = 0;
-    PE_parse_boot_argn("sheng-adsp", &mode, sizeof mode);
+    PE_parse_boot_argn("adsp", &mode, sizeof mode);
     if (!mapWindow(gSmemW, kSmem, kSmemSize) || !mapWindow(gMutex, kMutex, 0x1000) || !mapWindow(gIpcc, kIpcc, 0x1000) ||
         !mapWindow(gAoss, kAoss, 0x1000) || !mapWindow(gRsc, kRscDrv, 0x10000)) {
         fail(StMapped, -12);
@@ -729,7 +732,7 @@ extern "C" int sheng_adsp_send(ShengAdspChannel *c, const void *data, uint32_t l
 
 extern "C" void sheng_adsp_probe(void) {
     unsigned mode = 0;
-    if (!PE_parse_boot_argn("sheng-adsp", &mode, sizeof mode) || !mode || native_adsp_stats[0]) return;
+    if (!PE_parse_boot_argn("adsp", &mode, sizeof mode) || !mode || native_adsp_stats[0]) return;
     gClientLock = IOLockAlloc();
     if (gClientLock && mode >= 2) sheng_qrtr_start();  // the router link registers before the DSP can open it
     thread_t thread = nullptr;

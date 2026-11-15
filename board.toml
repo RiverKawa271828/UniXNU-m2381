@@ -462,9 +462,11 @@ kernel_args = [
   # LegacyDisplayProbe recorder; this arg arms it. It answers "which selector
   # exchange does backboardd stall in" — the r123b window pinned the render
   # server's display creation to open-then-park (CLIENT calls=1 pid=64 status=0
-  # at t=98 s, then mach_msg2 forever). Remove with the round that fixes the
-  # stall selector; the hot path is one volatile load.
-  "iomfb-uc-probe=1",
+  # at t=98 s, then mach_msg2 forever). REMOVED in r128 (s119): the question is
+  # answered (r127: UC i=185->193 climbing = the IOMFB UC channel is alive and
+  # thawed; swap bursts validated) and the arm arg goes with the round. The
+  # patch stays in the tree; inert without the arg (the hot path is one
+  # volatile load).
   # r123b (s112, one-shot): the BLSH-suppression round re-injected the Data
   # seed (add mobile/Library/Preferences/com.apple.BacklightServices.plist via
   # inject-prefs-into-data-seed.py), which CHANGES the seed identity — and the
@@ -569,6 +571,35 @@ kernel_args = [
   # the sheng_exc_ring[4] rows also land in the [spawn] log section, which
   # survives the msg-ring's ~60 s wrap.
   "sheng-exc-name=SpringBoard,backboardd,chronod,liveactivitiesd",
+  # r128 (s119, power round): the ADSP charging family rides the kernel again —
+  # the r81 charging stack was wired on the 21H461 lane (build-native-legacy-
+  # display.py) but the 24A446 lane's display archive (build-gop-legacy-
+  # display-27.py, "display core only") never carried it, so the r119 work
+  # order's premise "the probe is already in the kernel, self-gated" was false
+  # (kernel.map had zero adsp/battery symbols). r128 wires it: family synced to
+  # upstream 70251d8 (70186fe dropped the sheng- prefix, so the arg names are
+  # the upstream ones; AdspProbe.cpp carries the m2381 firmware-source fork),
+  # compiled into libNativeLegacyDisplay.late.a, called from the late probe.
+  #   adsp=2     AdspProbe.cpp sheng_adsp_probe: bring the audio DSP up (PAS
+  #              load + auth + reset via SCM, SMP2P/GLINK/QMP/RPMh) so its
+  #              firmware can serve PMIC GLINK — this board's battery manager
+  #              (battmgr) runs ON the ADSP (nura's mainline port proves the
+  #              firmware: qcom_battmgr/charging work over the same channel).
+  #              adsp=1 is the read-only survey. Firmware source order: the
+  #              boot_b segment first (package-m2381-boot.py --adsp-mbn appends
+  #              the squashed stock images; ABL tail tolerance proven r83),
+  #              then modem:, then VFS dirs. Firmware staged: adsp.mbn
+  #              30,499,631 B (sha256 acf95fd5) + adsp_dtb.mbn 12,420 B
+  #              (db6a6478) from the vendor-fw-harvest squash.
+  #   battery=1  BatteryProbe.cpp sheng_battery_probe: publish the
+  #              IOPMPowerSource (ShengBattery.cpp) powerd reads for the status
+  #              bar/lock screen/Settings. Optional: with battery absent,
+  #              adsp=2 alone auto-enables it (BatteryProbe.cpp:19) — carried
+  #              explicitly for legibility.
+  # Judgment gates B0-B2 (R128-CARD): [battery] row st/pct/mv/ma/fl nonzero +
+  # [adsp] st=ready; B1 charging bits visible; B2 regression sentinels.
+  "adsp=2",
+  "battery=1",
 ]
 
 [payload.adt]
