@@ -763,6 +763,12 @@ extern "C" void native_goodix_touch_probe(void) {
         // the bus as open-drain GPIOs; every later transfer then goes through gxTransferRead/gxTransferWrite.
         if (!engineOk) {
             gxEnterGpio(*s);
+            // The abandoned GENI engine must not hold its interrupt line asserted: this board's SE4 has no FIFO face, so the
+            // M IRQ that engineInit enabled for the polled FIFO stays pending after the failed probe and the level line storms
+            // (~12k IRQ/s in the r131d window, and every display swap then times out at the family's 5 s watchdog). The GPIO
+            // path needs no engine interrupt at all.
+            wr32(s->se.va, 0xe1c, 0);
+            wr32(s->se.va, GENI_M_IRQ_CLEAR, 0xffffffffu);
             appendRow(0, " bus=gpio");
             busProbe(*s, "pg");
         }
