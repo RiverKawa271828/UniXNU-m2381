@@ -29,7 +29,7 @@ extern "C" {
 #include "QcomRpmh.h"
 }
 extern "C" {
-char native_touch_rows[4][120];
+char native_touch_rows[5][120];
 volatile uint32_t native_touch_loop_step;
 volatile uint32_t native_touch_stage_req, native_touch_stage_done, native_touch_step, native_touch_frames,
     native_touch_valid, native_touch_contacts, native_touch_hid_reports;
@@ -88,6 +88,8 @@ struct Session {
     uint32_t engStatus, engCommand, engTxFifo, engIrq;
     bool gpioBus = false;
     uint32_t regs[16];
+    // The reset/IRQ pins' pin-interrupt words as the boot left them (INTR_CFG, INTR_STATUS), read just before disarming.
+    uint32_t intr[4];
     uint8_t version[GX_VERSION_LEN];
     uint8_t icInfo[GX_IC_INFO_MAX];
     GxIdentity identity;
@@ -141,6 +143,9 @@ constexpr uint64_t kCmdDbBase = 0x81c60000, kCmdDbSize = 0x20000;
 constexpr unsigned kRailTcs = 2;            // active TCS 0/1 belong to the WiFi/ADSP votes; the panel gets its own
 // The TLMM regions are mapped at the first pin's own page, so every access is relative to that page.
 constexpr uint32_t kResetCtl = 0, kResetIo = 4, kIrqCtl = GX_GPIO_STRIDE, kIrqIo = GX_GPIO_STRIDE + 4;
+// The pin-interrupt words are the next two of the pin's own page (+0x8 INTR_CFG, +0xc INTR_STATUS; pinctrl-msm sm8550).
+constexpr uint32_t kResetIntrCfg = 8, kResetIntrStatus = 12;
+constexpr uint32_t kIrqIntrCfg = GX_GPIO_STRIDE + 8, kIrqIntrStatus = GX_GPIO_STRIDE + 12;
 
 int waitEngine(Session *s) {
     for (unsigned elapsed = 0; elapsed < kTransferBudgetUs; ++elapsed) {
@@ -548,6 +553,15 @@ bool identify(Session &s) {
     s.regs[3] = rd32(tlmm.va, kResetIo);
     s.regs[4] = rd32(tlmm.va, kIrqCtl);
     s.regs[5] = rd32(tlmm.va, kIrqIo);
+    // The bootloader may leave the pin interrupts armed: the stock node's goodix,irq-gpio flags 0x2008 arm gpio25's
+    // falling-edge detection (target 3 = the AP). Nothing in this kernel serves a TLMM pin interrupt, and every pin shares
+    // the tlmm summary line into the GIC, so a latched status stays asserted and storms the CPU while the frame thread only
+    // polls the level. Snapshot both pins' words for the window, then disarm: INTR_CFG 0 stops detection and INTR_STATUS
+    // takes 0 to acknowledge (the sm8550 groups have no intr_ack_high; pinctrl-msm writes 0).
+    s.intr[0] = rd32(tlmm.va, kResetIntrCfg); s.intr[1] = rd32(tlmm.va, kResetIntrStatus);
+    s.intr[2] = rd32(tlmm.va, kIrqIntrCfg);   s.intr[3] = rd32(tlmm.va, kIrqIntrStatus);
+    wr32(tlmm.va, kResetIntrCfg, 0); wr32(tlmm.va, kResetIntrStatus, 0);
+    wr32(tlmm.va, kIrqIntrCfg, 0);   wr32(tlmm.va, kIrqIntrStatus, 0);
     GxTransport transport = {busRead, busWrite, &s};
     mark(8);
     int confirm = gx_dev_confirm(&transport, GX_DEV_CONFIRM_TRIES, 5000, gxDelay, nullptr);
@@ -577,6 +591,9 @@ bool identify(Session &s) {
              "TCH4 rst=%08x iox=%08x irq=%08x pid=%.6s/%d addr=%x axes=%ux%u rail=%s/%umV(%d)",
              s.regs[2], s.regs[3], s.regs[5], (const char *)s.parsed.patch_pid, s.parsed.sensor_id, s.identity.touch_data_addr,
              s.maxX, s.maxY, s.railAvdd[0] ? s.railAvdd : "-", s.railMv, s.railResult);
+    snprintf(native_touch_rows[4], sizeof native_touch_rows[4],
+             "TCH5 pinint rst=%08x/%08x irq=%08x/%08x (cfg/status before disarm)",
+             s.intr[0], s.intr[1], s.intr[2], s.intr[3]);
     mark(11);
     return true;
 }

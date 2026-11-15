@@ -166,7 +166,7 @@ extern volatile uint32_t boot_log_state,boot_log_rounds,boot_log_errors;
 extern void sheng_cpufreq_poll(void) __attribute__((weak_import));
 extern char boot_process_rows[10][120] __attribute__((weak_import));
 extern unsigned boot_ui_trace_role_rows(unsigned,char [][120],unsigned,unsigned) __attribute__((weak_import));
-extern char native_touch_rows[4][120] __attribute__((weak_import));
+extern char native_touch_rows[5][120] __attribute__((weak_import));
 extern char native_cpufreq_row[120] __attribute__((weak_import));
 extern volatile uint32_t native_hid_input_events[8] __attribute__((weak_import));
 extern volatile int native_hid_input_results[8] __attribute__((weak_import));
@@ -191,6 +191,13 @@ extern volatile uint32_t __attribute__((weak_import)) armcpu_smp_requested,armcp
 extern volatile uint32_t __attribute__((weak_import)) armcpu_smp_step[8],armcpu_smp_seen_mpidr[8],armcpu_smp_fail[8],armcpu_smp_sys[8][5],armcpu_boot_sys[5],armcpu_gic_stride,armcpu_gic_typer_probe[2];
 extern volatile int32_t __attribute__((weak_import)) armcpu_smp_psci_rc[8];
 extern volatile uint32_t __attribute__((weak_import)) armcpu_irq_phase,armcpu_irq_id,armcpu_quiesce_calls,armcpu_halt_calls;
+extern volatile uint32_t __attribute__((weak_import)) armcpu_irq_ring[32],armcpu_irq_ring_at;
+extern volatile uint64_t __attribute__((weak_import)) armcpu_irq_long_drains,armcpu_spi_unhandled;
+extern volatile uint32_t __attribute__((weak_import)) armcpu_irq_drain_most,armcpu_spi_unhandled_id;
+// GopFramebuffer opens the swap lifecycle counters (swapstat[16], see NativeLegacyDisplay.cpp) and the family's 5 s cancels.
+extern volatile uint32_t __attribute__((weak_import)) native_legacy_swapstat[16];
+extern volatile uint32_t __attribute__((weak_import)) native_legacy_swap_pending;
+extern volatile uint64_t __attribute__((weak_import)) native_legacy_swap_timeouts;
 extern int nprocs;
 extern volatile int native_owner_root_accepted;
 
@@ -398,6 +405,26 @@ static void draw(unsigned now) {
     if(!(&native_touch_stage_req && native_touch_stage_req))line(42,b,0xffaaaaaa);
     snprintf(b,sizeof(b),"CPU IRQ phase=%u id=%u quiesce=%u halt=%u; phase 0=exit 2=clock 4=IPI 6=EOI; sleep-disabled=1",
       armcpu_irq_phase,armcpu_irq_id,armcpu_quiesce_calls,armcpu_halt_calls);line(37,b,0xffffff00);
+    if(&armcpu_irq_ring && &armcpu_irq_ring_at){
+      // The last 8 INTIDs the GIC handed out (id only; the core is the ring word's top byte) and the most frequent id of
+      // the last 32: a storm is one INTID repeating, so this row names it without a window guess. Spurious 1020-1023 reads
+      // are not recorded. long/most = IRQ drains over 128 and the longest (a level line nobody clears); unh = SPIs taken
+      // without a handler and the last such id (the dispatcher disables those instead of acknowledging them forever).
+      const uint32_t total=__atomic_load_n(&armcpu_irq_ring_at,__ATOMIC_RELAXED);
+      uint32_t ids[32],topId=0,topN=0;unsigned have=total>32?32:total;
+      for(unsigned i=0;i<32;++i)ids[i]=__atomic_load_n(&armcpu_irq_ring[i],__ATOMIC_RELAXED)&0xffffffu;
+      for(unsigned i=0;i<have;++i){unsigned n=1;for(unsigned j=i+1;j<have;++j)if(ids[j]==ids[i])++n;if(n>topN){topN=n;topId=ids[i];}}
+      unsigned n=(unsigned)snprintf(b,sizeof(b),"IRQ RING n=%u last:",total);
+      if(n>=sizeof(b))n=(unsigned)sizeof(b)-1;
+      for(unsigned k=have>8?have-8:0;k<have&&n<sizeof(b)-8;++k){n+=(unsigned)snprintf(b+n,sizeof(b)-n," %u",ids[k]);if(n>=sizeof(b))n=(unsigned)sizeof(b)-1;}
+      if(have&&n<sizeof(b)-24){n+=(unsigned)snprintf(b+n,sizeof(b)-n," | top=%u x%u",topId,topN);if(n>=sizeof(b))n=(unsigned)sizeof(b)-1;}
+      if(&armcpu_irq_long_drains&&n<sizeof(b)-30){n+=(unsigned)snprintf(b+n,sizeof(b)-n," long=%llu/%u",
+        (unsigned long long)armcpu_irq_long_drains,armcpu_irq_drain_most);if(n>=sizeof(b))n=(unsigned)sizeof(b)-1;}
+      if(&armcpu_spi_unhandled&&n<sizeof(b)-30){n+=(unsigned)snprintf(b+n,sizeof(b)-n," unh=%llu/%u",
+        (unsigned long long)armcpu_spi_unhandled,armcpu_spi_unhandled_id);}
+      (void)n;
+      line(22,b,0xffffff00);
+    }
     if(&armcpu_smp_requested){
       unsigned n=(unsigned)snprintf(b,sizeof(b),"SMP req=%u run=%u cond=%u boot=%x |",
         armcpu_smp_requested,armcpu_smp_running,armcpu_smp_conduit,armcpu_boot_mpidr&0xffffff);
@@ -447,6 +474,19 @@ static void draw(unsigned now) {
       native_legacy_swap_validation_calls,native_legacy_swap_validation_result,native_legacy_swap_validation_reason,
       native_legacy_transfer_calls,(unsigned)native_legacy_transfer_status,native_legacy_transfer_bytes,
       native_legacy_retirement_calls);line(32,b,0xffffff00);
+    if(&native_legacy_swapstat){
+      // The swap lifecycle counters (NativeLegacyDisplay.cpp: [0] validated, [1] kicks, [2] refused in flight, [5] latch holds,
+      // [6] fence waits begun, [7] CPU copies, [11] retires, [15] deepest validated queue) plus the family's 5 s cancels and
+      // the live queue depth: a validated swap the family cancels leaves the queue at depth>=1 while retires stop.
+      snprintf(b,sizeof(b),"SWAPQ val=%llu kick=%llu xfer=%llu nohead=%llu fwait=%llu copy=%llu ret=%llu depth=%u/%u to=%llu max=%uus",
+        (unsigned long long)native_legacy_swapstat[0],(unsigned long long)native_legacy_swapstat[1],
+        (unsigned long long)native_legacy_swapstat[2],(unsigned long long)native_legacy_swapstat[4],
+        (unsigned long long)native_legacy_swapstat[6],(unsigned long long)native_legacy_swapstat[7],
+        (unsigned long long)native_legacy_swapstat[11],
+        &native_legacy_swap_pending?native_legacy_swap_pending:0,native_legacy_swapstat[15],
+        &native_legacy_swap_timeouts?(unsigned long long)native_legacy_swap_timeouts:0ull,
+        (unsigned)native_legacy_swapstat[13]);line(23,b,0xffff6600);
+    }
     if(&native_legacy_swap_rejected_count && native_legacy_swap_rejected_count) {
       snprintf(b,sizeof(b),"REJ acc=%u rej=%u r=%u s0=%llx cls=%.24s s1=%llx s2=%llx s3=%llx",
         native_legacy_swap_accepted_count,native_legacy_swap_rejected_count,native_legacy_rej_reason,

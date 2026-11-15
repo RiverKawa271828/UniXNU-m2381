@@ -174,7 +174,7 @@ volatile int native_legacy_transfer_status = 0;
 #ifndef XNU_NATIVE_TOUCH_QUALIFIED
 volatile uint32_t native_touch_seq = 0;
 volatile uint32_t native_touch_count = 0;
-char native_touch_rows[4][120] = {{0}};
+char native_touch_rows[5][120] = {{0}};
 volatile unsigned native_touch_stage_req = 0;
 volatile int native_touch_xs[12] = {0};
 volatile int native_touch_ys[12] = {0};
