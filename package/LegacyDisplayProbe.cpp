@@ -593,6 +593,15 @@ void busyReport(void *, wait_result_t) {
 
 void native_legacy_display_late_probe(void) {
     {thread_t thread = nullptr; if (kernel_thread_start(busyReport, nullptr, &thread) == KERN_SUCCESS) thread_deallocate(thread);}
+    // r130 (s123): the input lane. HidInputProbe (offline-hid-input=1) registers the owned IOHIDDevice once
+    // IOHIDFamily is loaded; the Goodix probe (touch=1..4) then reads the panel and publishes into that device
+    // (touch-hid=1 subscribes the sink). Both are weak: a kernel built without the Goodix archive skips them.
+    {
+        extern void native_hid_input_probe(void) __attribute__((weak_import));
+        extern void native_goodix_touch_probe(void) __attribute__((weak_import));
+        if (&native_hid_input_probe) native_hid_input_probe();
+        if (&native_goodix_touch_probe) native_goodix_touch_probe();
+    }
     // m2381 fork: the strong board-probe calls (keystore, cpufreq, GPU power, touch, WiFi,
     // ADSP, battery, audio, buttons, backlight, DPU, HID) are removed -- none of those
     // probes is compiled on this board and the keystore face keeps its own trigger

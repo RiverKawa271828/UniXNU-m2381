@@ -165,6 +165,12 @@ archives = [
   # libNativeLegacyDisplay.late.a against its build-report.json sha) and the
   # hook sites the arm64e series' offline-legacy-start.patch already patches.
   "build-gop-legacy-display-27.py",
+  # r130 (s123) touch: Goodix GT9916 on GENI I2C SE4 (a90000) + the Berlin protocol + ShengHidInput's
+  # NativeHidInput compiled through the public IOHIDFamily source against the pinned 2238.120.5 slots. Needs the
+  # kernel step env XNU_NATIVE_GOODIX_TOUCH=1 for the force_load; the probes are cmdline-gated (touch=,
+  # offline-hid-input=, touch-hid=), so a kernel with the archive and no args stays inert. Sources live in this
+  # repository's package/ (GoodixTouchProbe.cpp, GoodixBerlin.c, GeniI2c.c, HidInputProbe.cpp) — the canonical fork.
+  "build-goodix-touch.py",
 ]
 # [kernel.prelink] is inherited from the OS profile (ipados-27.0.1-24A446):
 # tool kits/XnuPrelink/emit_prelink.py (the kits/XnuPrelink vendored copy of
@@ -337,6 +343,15 @@ kernel_args = [
   # 2 s into the 32 MiB window at the userdata tail — the forensic reader's
   # cargo (scripts/read-m2381-ufs-log.py parses it; ~17 min to wrap).
   "sheng-log=1",
+  # r130 (s123) touch: Goodix GT9916 on GENI I2C SE4. Staged (the work order's touch=1..4): 1 = read-only snapshot of
+  # GCC/RCG/engine/TLMM, 2 = clocks+pins+engine up, 3 = reset + device-confirm + ROM/IC identity, 4 = frame thread.
+  # The HID publisher starts with offline-hid-input=1 (HidInputProbe registers the owned IOHIDDevice after
+  # IOHIDFamily loads) and touch-hid=1 subscribes it to the finger set. Coordinates publish in the producer
+  # convention NativeHidInput normalises against; touch-mirror-x / touch-mirror-y / touch-swap-xy tune an axis
+  # without a rebuild. The first flash of the round carries touch=1 only (single variable); raise it per stage.
+  "touch=1",
+  "offline-hid-input=0",
+  "touch-hid=0",
   # r102 (s90): the r101 32-frame launchd stack pinned the r94 wall to
   # AccessoryInteraction.handleMeDeviceUpdate aborting pid 1 at the first
   # MKBGetDeviceLockState failure — this no-SEP board has nothing answering
