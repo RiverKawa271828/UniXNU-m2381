@@ -9,8 +9,13 @@
 // also the semantics sheng's lane gets from the zero binding.
 #include <stdint.h>
 
+// r131: when the Adreno740 archive is linked (CONFIG_XNU_NATIVE_ADRENO=y) the
+// driver's NativeAdrenoPublish.cpp defines the real mapping; this stand-in must
+// not also exist (duplicate symbol at force_load).
+#ifndef XNU_NATIVE_ADRENO_QUALIFIED
 uint64_t
 native_gpu_role_thread(uint32_t pid __unused, uint32_t role __unused)
 {
 	return 0;
 }
+#endif

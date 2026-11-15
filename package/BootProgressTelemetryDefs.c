@@ -82,7 +82,9 @@ unsigned boot_ui_trace_ready = 0;
 char boot_ui_trace_rows[14][120] = {{0}};
 #endif
 
-// Adreno (NATIVE_ADRENO=n)
+// Adreno (NATIVE_ADRENO=n; r131: the Adreno740 archive defines these when
+// CONFIG_XNU_NATIVE_ADRENO=y)
+#ifndef XNU_NATIVE_ADRENO_QUALIFIED
 volatile uint32_t native_adreno_audit_attr = 0;
 volatile uint64_t native_adreno_audit_ticks = 0;
 volatile uint64_t native_adreno_cache_stats[5] = {0};
@@ -90,6 +92,7 @@ volatile uint32_t native_adreno_coherence[8] = {0};
 volatile uint64_t native_adreno_reassert_ticks = 0;
 volatile uint32_t native_adreno_wc_audit[6] = {0};
 volatile uint32_t native_adreno_wc_distrusted = 0;
+#endif
 
 // cpufreq (sheng-cpufreq off)
 char native_cpufreq_row[120] = {0};
@@ -250,7 +253,9 @@ volatile uint32_t native_touch_hid_multi[3] = {0};
 volatile uint32_t native_touch_jitter[3] = {0};
 volatile uint32_t native_touch_hold[14] = {0};
 
-// Adreno GPU diagnostics (NATIVE_ADRENO=n; the GPU chain's topic returns these)
+// Adreno GPU diagnostics (NATIVE_ADRENO=n; r131: the GPU chain's topic returns
+// these -- the Adreno740 archive defines them when CONFIG_XNU_NATIVE_ADRENO=y)
+#ifndef XNU_NATIVE_ADRENO_QUALIFIED
 volatile uint32_t native_adreno_fence_wait[8] = {0};
 volatile uint32_t native_adreno_stall[24] = {0};
 volatile uint32_t native_adreno_stall_mem[59] = {0};
@@ -294,6 +299,7 @@ volatile uint64_t native_adreno_import_fail_pa = 0;
 volatile uint64_t native_adreno_import_fail_offset = 0;
 int (*native_adreno_dram_read32)(uint64_t, uint32_t *) = 0;
 int (*native_adreno_cached_read32)(uint64_t, uint32_t *) = 0;
+#endif
 
 // Scanout-copy wait statistics (no GOP presenter lane; NativeGOPPresenter.cpp
 // defines this when the display topic lands)

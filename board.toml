@@ -82,6 +82,11 @@ include = [
   "ShengUfs",
   "VirtioMmioBlock",
   "RamBlock",
+  # r131 (2026-11-16): the Adreno 740 kernel backend. Its catalog dependencies
+  # (Sm8550Platform, AdrenoPM4, AdrenoFirmware, ArmSmmu4K) expand through the
+  # component graph; AdrenoMetal is the payload-side Metal frontend (the addon).
+  "Adreno740",
+  "AdrenoMetal",
   # The display lane (CONFIG_XNU_NATIVE_LEGACY_DISPLAY=y): the component's
   # NativeLegacyDisplay.cpp/NativeGOPPresenter.cpp compile through
   # build-arm-driver.py inside build-native-legacy-display.py — no component:
@@ -133,6 +138,21 @@ archives = [
   "build-software-aes-bindings.py",
   "component:ShengUfs",
   "component:RamBlock",
+  # r131 (2026-11-16): the Adreno 740 chain, in sheng's order (the component
+  # recipe produces build/adreno740/libAdreno740.a from NativeAdrenoService.cpp;
+  # the prepare-* recipes generate this board's GMU windows/OPP/ACD/bandwidth/
+  # command-DB/SMMU headers from device:dts/m2381.dts + the pinned mainline
+  # sources; build-adreno740-kits.py compiles the GMU/firmware/SMMU/PM4 kits
+  # plus the NativeAdreno* objects into that archive; the accelerator recipe
+  # stages the AGXAccelerator class and appends it). The board probe that drives
+  # them (package/GpuPowerProbe.cpp) is compiled by the display archive recipe;
+  # CONFIG_XNU_NATIVE_ADRENO=y force-loads libAdreno740.a.
+  "component:Adreno740",
+  "prepare-m2381-gmu.py",
+  "prepare-m2381-gpu-smmu.py",
+  "prepare-m2381-gmu-votes.py",
+  "build-adreno740-kits.py",
+  "build-adreno740-accelerator.py",
   # The real BootProgress diagnostic (XNU_BOOT_PROGRESS=1: BootWatchdogPolicy
   # answers launchd's watchdogd panic-on-crash) reads the sheng monitor
   # surfaces this board leaves off (legacy display, touch, Adreno, cpufreq,
@@ -146,12 +166,11 @@ archives = [
   # staging; the baseline link has no direct keystore gate.
   "component:AppleKeyStoreState",
   "build-libpthread-kernel.py",
-  # Adreno740 (component + build-adreno740-kits.py) is deferred: the kit
-  # embeds the board-local GPU inputs that upstream keeps out of git
-  # (ShengGmu*Source.h OPP/bandwidth policy per docs/porting/gpu.md, plus the
-  # .cache/firmware/sheng-gpu pinned blobs) and CONFIG_XNU_NATIVE_ADRENO=n
-  # skips the libAdreno740.a link requirement. Bring-up to launchd needs no
-  # GPU; the chain returns with its own topic once those inputs are ported.
+  # r131: Adreno740 is no longer deferred. The board-local inputs it needs are
+  # generated above from device:dts/m2381.dts and the pinned mainline sources;
+  # the board's own signed ZAP/SQE and the shared gmu_gen70200.bin live in
+  # .cache/firmware/m2381-gpu and are pinned in scripts/data/adreno-board-
+  # m2381.json. The link gate is the defconfig switch: CONFIG_XNU_NATIVE_ADRENO=y.
   # 2026-11-14 (r116, s105): the 10-29 retirement of build-native-legacy-display.py
   # was correct for the 23F84 lane and wrong to stay for 24A446 -- the r115 sealed
   # kernel carried zero display components (offline-legacy-*/NativeLegacyDisplay
@@ -587,6 +606,28 @@ kernel_args = [
   "offline-mobile-graphics-load=1",
   "fb-gpu=1",
   "vsync=120",
+  # r131 (2026-11-16, user decision: GPU+addon before buttons): the staged
+  # Adreno 740 bring-up (package/GpuPowerProbe.cpp, this round's device repo).
+  # Ladder, one variable per flash (args-only payloads once the GPU kernel is in):
+  #   1  read-only snapshot: GCC GPU branches, GPUCC gdscr/branches, GPU SMMU
+  #      global space 0 and RBBM_STATUS (each only when its prerequisite shows on)
+  #   2  + the one write Linux's gcc-sm8550 probe makes (gcc_gpu_cfg_ahb_clk)
+  #   3  + the gpu_cc_cx_gdsc / ahb / smmu-vote enable sequence (CX on)
+  #   4  + the GMU SMMU context (bank 1/ASID 1/SMR 2, stream 5; GMU not booted)
+  #   5  + read-only GMU cold-start prerequisites (clock tree, AOP command DB
+  #      parse, HFI vote table; no writes)
+  #   6  + the GMU clock bring-up (GPLL0 votes, GPUCC PLL0/PLL1, hub/gmu RCGR)
+  #   7  + the GMU cold start with the embedded gmu_gen70200.bin (hash-checked)
+  #   8  + the first GPU steps (HFI GX_BW_PERF_VOTE + OOB GPU_SET)
+  #   9  + the rest of hw_init to CP init (SQE/ring/memptrs/pwrup/scratch, CP
+  #      init + fences; UBWC, then the m2381 signed ZAP via PAS and the GPU IRQ)
+  # This first flash carries gpu-power=1 only (single variable). gpu-zap=4 is
+  # the probe's own default (all ZAP steps); gpu-pause-us=1000 its fence pause.
+  # The Metal/addon half lands in the same round's second flash:
+  #   gpu-metal=1   publishes the AGXAccelerator class for the original Metal
+  #                 discovery (loads com.apple.iokit.IOGPUFamily from the donor)
+  #   gpu-addon=1   arms the boot-time addon mount (kernel.macho.gpuaddon)
+  "gpu-power=1",
   # r116 forensics: SpringBoard crash-looped twice this boot (p118/p126 corpses
   # @157s/176s) with zero sheng-exc output because the exception dumper's default
   # name list is "backboardd,chronod,liveactivitiesd". PE_parse_boot_argn

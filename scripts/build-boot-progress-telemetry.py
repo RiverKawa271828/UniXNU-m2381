@@ -42,10 +42,16 @@ if source_storage:
 # owned IOHIDDevice; the touch zeros and the buttons-sink no-op must not also link.
 if os.environ.get('XNU_NATIVE_GOODIX_TOUCH') == '1':
     flags.append('-DXNU_NATIVE_TOUCH_QUALIFIED')
+# r131: the Adreno740 archive (CONFIG_XNU_NATIVE_ADRENO=y) defines the native_adreno_* /
+# native_gpu_* diagnostics and counters the board log reads; the Adreno zeros must not
+# also link (45 duplicate symbols on the first r131 link).
+if os.environ.get('XNU_NATIVE_ADRENO') == '1':
+    flags.append('-DXNU_NATIVE_ADRENO_QUALIFIED')
 subprocess.run(['xcrun', 'clang', '-target', TRIPLE, '-isysroot', sdk, '-ffreestanding',
                 '-fno-common', '-Wall', '-Werror', *flags, '-c', str(source), '-o', str(obj)], check=True)
 archive = OUT / 'libBootProgressTelemetry.a'
 archive.unlink(missing_ok=True)
 subprocess.run(['xcrun', 'ar', 'rcs', str(archive), str(obj)], check=True)
-print('PASS: boot-progress telemetry zero-defs (legacy-display %s) -> %s'
-      % ('excluded: the display lane provides them' if qualified else 'zeros linked', archive.name))
+print('PASS: boot-progress telemetry zero-defs (legacy-display %s, adreno %s) -> %s'
+      % ('excluded: the display lane provides them' if qualified else 'zeros linked',
+         'excluded: the GPU lane provides them' if os.environ.get('XNU_NATIVE_ADRENO') == '1' else 'zeros linked', archive.name))

@@ -24,7 +24,14 @@ struct RootLayout {
   uint32_t ext4Blocks;                    // s_blocks_count_lo at byte 1028
 };
 
-static uint8_t gScratch[kDataMax];
+// r131: the scratch holds one 4 KiB block (the root manifest) and the primary GPT's
+// entries, whose count this parser already bounds to 128 (16 KiB). kDataMax (128 KiB)
+// was sized for the UFS DMA window, not for this parser: the fileset emitter pins the
+// native kernel's __DATA at the start of the collection's __DATA root, where only
+// 0x1e8000 bytes precede com.apple.kec.Libm, and the Adreno740 archive's diagnostics
+// pushed the segment over it. 32 KiB keeps the parser (with 16 KiB of margin) and
+// returns 96 KiB of the window to the rest of the kernel.
+static uint8_t gScratch[32768];
 
 static uint32_t le32 (const uint8_t *at)
 {

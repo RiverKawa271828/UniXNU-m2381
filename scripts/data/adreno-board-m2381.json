@@ -1,0 +1,57 @@
+{
+  "comment": [
+    "Board-local GPU inputs for the m2381 Adreno 740 lane (r131, 2026-11-16).",
+    "Everything here is either measured on this phone or read from its stock FDT; the",
+    "mainline sources (Linux a6xx driver/catalog, Mesa) stay pinned in",
+    "ios-m2381-unixnu/scripts/data/adreno-inputs.json. Firmware bytes never enter git",
+    "(.cache/firmware is ignored); these hashes and sizes are the pins the build refuses",
+    "to deviate from."
+  ],
+  "board": {
+    "name": "m2381",
+    "dts": "dts/m2381.dts",
+    "dts_sha256": "2d97e9c2393e94af6199fa9dbd7a519e64067b8b88527059a6da94431fe31898",
+    "dtsi": "soc/sm8550/dts/sm8550.dtsi",
+    "dtsi_sha256": "3e6d53ad38c5d9d00c09c9bf76d8a4764af5efc45f67533a4aea1aeb8e4fb84f",
+    "zap_firmware_name": "qcom/sm8550/m2381/a740_zap.mbn",
+    "command_db": {
+      "node": "/reserved-memory/aop_cmd_db_region@81c60000",
+      "compatible": "qcom,cmd-db",
+      "base": "0x81c60000",
+      "bytes": "0x20000"
+    },
+    "gpu_micro_code": {
+      "node": "/reserved-memory/gpu_micro_code_region@9b09a000",
+      "base": "0x9b09a000",
+      "bytes": "0x2000"
+    }
+  },
+  "provenance": {
+    "dt": "stock FDT of this phone (docs/hardware/stock-fdt.dts, /soc/qcom,kgsl-3d0@3d00000 qcom,gpu-pwrlevels-0 and qcom,gmu@3d69000 qcom,gmu-freq-table), translated to the upstream operating-points-v2 form; the upstream register windows come from the sm8550.dtsi of the pinned mainline tree (gpu 0x3d00000/0x40000, gmu 0x3d6a000/0x35000 + rscc 0x3d50000 + gmu_pdc 0xb280000, gpu SMMU 0x3da0000/0x40000; streams 0/1 GPU, 5 GMU)",
+    "firmware": "nura vendor harvest 2026-10-30 (meizu20 vendor-root firmware, also meizu20_linux vendor-fw-harvest): a740_sqe.fw 2b49a172 and a740_zap.mbn 3cc594a0 differ from sheng's signed blobs; gmu_gen70200.bin 1a2a419c is byte-identical to sheng/the mainline pin"
+  },
+  "gpu_opps": [
+    {"hz": 220000000, "level": 52, "acd": "0xc02f5ffd", "kbps": 2136718},
+    {"hz": 295000000, "level": 56, "acd": "0xe02d5ffd", "kbps": 6074218},
+    {"hz": 348000000, "level": 60, "acd": "0xe02b5ffd", "kbps": 6074218},
+    {"hz": 401000000, "level": 64, "acd": "0xc02a5ffd", "kbps": 6074218},
+    {"hz": 475000000, "level": 80, "acd": "0xe0285ffd", "kbps": 6074218},
+    {"hz": 550000000, "level": 128, "acd": "0xe0285ffd", "kbps": 6074218},
+    {"hz": 615000000, "level": 144, "acd": "0xa82f5ffd", "kbps": 10687500},
+    {"hz": 680000000, "level": 192, "acd": "0x882e5ffd", "kbps": 12449218},
+    {"hz": 719000000, "level": 224, "acd": "0x882e5ffd", "kbps": 16500000}
+  ],
+  "gmu_opps": [
+    {"hz": 220000000, "level": 64},
+    {"hz": 550000000, "level": 128}
+  ],
+  "bus_table_ddr_kbps": [0, 2136718, 3000000, 6074218, 6671875, 8171875, 10687500, 12449218, 14398437, 16500000],
+  "firmware": {
+    "directory": ".cache/firmware/m2381-gpu",
+    "files": {
+      "qcom/a740_sqe.fw": {"bytes": 74804, "sha256": "2b49a17244c0527a2d9728af2e255d4b26d18111bb595f010f167823ce5c5c1f"},
+      "qcom/gmu_gen70200.bin": {"bytes": 66844, "sha256": "1a2a419c39046d3141fc5fed5aa7f971de2db40cc7a1d89693c3e26fad64dd98"},
+      "qcom/sm8550/a740_zap.mbn": {"bytes": 12088, "sha256": "3cc594a0651edaad5b27124ececc3b71960dcb4eafbd20553534115a0136574a"}
+    }
+  }
+}

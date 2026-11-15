@@ -126,18 +126,18 @@ evidence = [
 
 [[area]]
 id = "gpu"
-status = "planned"
-components = []
-paths = ["configs/**"]
-inputs = ["Adreno 740; upstream Adreno740/AdrenoMetal components (removed from this board's build: needs board-local ShengGmu*Source.h plus a pinned, hash-checked GMU firmware that must not enter git per upstream gpu.md)", "Precedents: tb128fu renders Metal frames with Adreno 610; negroni/pong reach SpringBoard with partial GPU"]
-configuration = ["ADRENO=n (deliberate) for the bring-up lane; sheng-gpu-power=9 sheng-gpu-metal=1 sheng-gpu-perf=8 sheng-gpu-addon=1 args reserved"]
-procedure = ["After the SpringBoard wall: stage the GMU firmware + board-local source headers, flip ADRENO=y, run the sheng GPU bring-up checklist"]
-findings = ["r55e slot lines show the GPU bookkeeping scaffolding alive at zero ([gpu methods]/[bo pool]/[gpu clients]/[gpu ibs]) — the instrumentation lane is ready", "mfb clients section already records IOMFB client calls (C1 pid=85 calls=32 fails=19) so partial GPU failure will be visible"]
+status = "implemented"
+components = ["Adreno740", "AdrenoMetal"]
+paths = ["configs/m2381_defconfig", "dts/m2381.dts", "scripts/audit-adreno-platform-m2381.py", "scripts/prepare-m2381-gmu.py", "scripts/prepare-m2381-gmu-votes.py", "scripts/prepare-m2381-gpu-smmu.py", "scripts/build-adreno740-kits.py", "scripts/build-boot-progress-telemetry.py", "scripts/data/adreno-board-m2381.json", "package/GpuPowerProbe.cpp", "package/GpuPowerBoard.h", "drivers/ShengUfs/RootLayout.h"]
+inputs = ["Adreno 740; upstream Adreno740 at 653e11c (native_adreno_gpu_interrupt for the board probe) + GMU/SMMU/PM4/AdrenoFirmware kits; board-local inputs generated from device:dts/m2381.dts (stock FDT OPP/ACD/bandwidth translation, command DB 0x81c60000, ZAP 0x9b09a000) and pinned in scripts/data/adreno-board-m2381.json", "Firmware: m2381 signed a740_zap.mbn 3cc594a0 + a740_sqe.fw 2b49a172 (sheng's ZAP would be refused by PIL), gmu_gen70200.bin 1a2a419c identical to upstream", "Userspace: Mesa Turnip ios27 + NativeAdrenoMetal bundle packed by make-gpu-addon.py; owner trust carries the three CDHashes"]
+configuration = ["CONFIG_XNU_NATIVE_ADRENO=y; gpu-power=1..9 staged (1 read-only .. 9 CP init + ZAP + IRQ); gpu-metal=1 publishes the AGXAccelerator; gpu-addon=1 mounts the addon written by the kernel into Data (seed unchanged)"]
+procedure = ["Run audit-adreno-platform-m2381.py and prepare-m2381-gmu{,-votes}.py / prepare-m2381-gpu-smmu.py before build-adreno740-kits.py; the display archive compiles GpuPowerProbe.cpp only with XNU_NATIVE_ADRENO=1", "Build Turnip (build-turnip-darwin.py --target ios27 with the 17 recorded Mesa patches), the plugin (build-adreno-metal-plugin.py --target ios27), pack with make-gpu-addon.py --publish --no-daemon, and append the CDHashes with trust-append-module.py"]
+findings = ["r55e slot lines show the GPU bookkeeping scaffolding alive at zero ([gpu methods]/[bo pool]/[gpu clients]/[gpu ibs])", "r131: the Adreno740 diagnostics pushed the native __DATA past the donor's 0x1e8000 window (before com.apple.kec.Libm); the UFS root parser's gScratch only needs 16 KiB for the GPT entries (count<=128) and was 128 KiB, so it now holds 32 KiB and returns 96 KiB of the window", "r131 link also cleared 45 duplicate Adreno telemetry zeros (BootProgressTelemetryDefs.c, guarded by XNU_NATIVE_ADRENO_QUALIFIED), the display archive's GPU trace/fence stubs, and ShengLatencyHooks.c's native_gpu_role_thread stand-in"]
 completion = ["GPU submissions complete, mapping/fence handling is correct, a known image renders, and the selected Metal client presents it"]
-limits = ["No GPU work started; CPU rendering only until ADRENO=y"]
-next_action = ["Queue the ADRENO=y staging (GMU firmware pin + ShengGmu source headers) behind the SpringBoard fixup iteration"]
+limits = ["r131 artifacts built (payload-r131-gpu9addon-8bdb2265 / payload-r131-gpu1-19675c26); the on-device GPU/Metal/desktop gates are pending the user's flash and the reader window"]
+next_action = ["Flash the r131 A artifact, judge G2 (desktop) and the window's GPU1-8/M/[gpu clients]/SWAP rows; fall back to the gpu-power=1 read-only artifact to localize a stopped stage"]
 evidence = [
-  { kind = "source", reference = "configs/m2381_defconfig", result = "ADRENO disabled with the reserved sheng GPU arg set documented" },
+  { kind = "source", reference = "configs/m2381_defconfig", result = "CONFIG_XNU_NATIVE_ADRENO=y (r131)" },
 ]
 
 [[area]]

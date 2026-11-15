@@ -32,11 +32,94 @@
         device_type = "memory";
         reg = <0 0x80000000 0x4 0x0>;
     };
+
+    // r131 GPU round (2026-11-16): the two no-map carve-outs the Adreno field
+    // consumes. Both are the stock FDT values (docs/hardware/stock-fdt.dts
+    // /reserved-memory; the same addresses sheng's sm8550.dtsi carries):
+    //   * aop_cmd_db_region: the AOP command DB the GMU vote table is parsed
+    //     from (ShengGmuCommandDbInputs). Our UEFI memory map already reserves
+    //     0x81C00000..0x81CA0000 as "AOP", so this page survives the payload.
+    //   * gpu_micro_code_region: the ZAP shader's PAS memory (0x9b09a000,
+    //     8 KiB), inside the "PIL Reserved" 0x8A800000..0xA2A80000 reservation.
+    reserved-memory {
+        #address-cells = <2>;
+        #size-cells = <2>;
+        ranges;
+
+        aop_cmd_db_mem: aop_cmd_db_region@81c60000 {
+            compatible = "qcom,cmd-db";
+            no-map;
+            reg = <0 0x81c60000 0 0x20000>;
+        };
+
+        gpu_micro_code_mem: gpu_micro_code_region@9b09a000 {
+            no-map;
+            reg = <0 0x9b09a000 0 0x2000>;
+        };
+    };
 };
 
 // UFS root is this port's core function: enable the DTSI's ufshc and PHY
-// exports (sheng does the same). The GPU nodes stay disabled — the v1 ADT
-// carried no GPU exports either, and the Adreno740 archive links without
-// them, taking its windows from its own SM8550 constants.
+// exports (sheng does the same).
 &ufs { status = "okay"; };
 &ufsphy { status = "okay"; };
+
+// r131 (2026-11-16, user decision: GPU+addon before buttons): the Adreno 740
+// lane. The upstream DTSI nodes (gpu@3d00000, gmu@3d6a000, iommu@3da0000)
+// already carry the upstream register layout the A740 driver and the GMU kits
+// expect (gmu/rscc/gmu_pdc names; the stock downstream KGSL tree splits the
+// same blocks differently and is NOT what the mainline-derived driver reads).
+// Enabling them is what sheng does.
+//
+// The OPP tables below are the stock FDT's qcom,gpu-pwrlevels-0 translated to
+// the upstream operating-points-v2 form:
+//   gpu  freq -> (opp-level, qcom,opp-acd-level, opp-peak-kBps)
+//        719M (0xe0, 0x882e5ffd, bus9=16500000)   680M (0xc0, 0x882e5ffd, bus7=12449218)
+//        615M (0x90, 0xa82f5ffd, bus6=10687500)   550M (0x80, 0xe0285ffd, bus3=6074218)
+//        475M (0x50, 0xe0285ffd, bus3)            401M (0x40, 0xc02a5ffd, bus3)
+//        348M (0x3c, 0xe02b5ffd, bus3)            295M (0x38, 0xe02d5ffd, bus3)
+//        220M (0x34, 0xc02f5ffd, bus1=2136718)
+//   gmu  qcom,gmu-freq-table = <220 MHz 0x40>, <550 MHz 0x80>
+// The bandwidth is the stock qcom,bus-table-ddr entry at the level's
+// qcom,bus-freq index (table: 0, 2136718, 3000000, 6074218, 6671875,
+// 8171875, 10687500, 12449218, 14398437, 16500000).
+// scripts/audit-adreno-platform-m2381.py re-reads these from the compiled DTB
+// and refuses drift against the pinned stock values.
+&gpu {
+    status = "okay";
+    operating-points-v2 = <&gpu_opp_table>;
+
+    gpu_opp_table: opp-table {
+        compatible = "operating-points-v2";
+        opp-220000000 { opp-hz = /bits/ 64 <220000000>; opp-level = <52>; opp-peak-kBps = <2136718>; qcom,opp-acd-level = <0xc02f5ffd>; };
+        opp-295000000 { opp-hz = /bits/ 64 <295000000>; opp-level = <56>; opp-peak-kBps = <6074218>; qcom,opp-acd-level = <0xe02d5ffd>; };
+        opp-348000000 { opp-hz = /bits/ 64 <348000000>; opp-level = <60>; opp-peak-kBps = <6074218>; qcom,opp-acd-level = <0xe02b5ffd>; };
+        opp-401000000 { opp-hz = /bits/ 64 <401000000>; opp-level = <64>; opp-peak-kBps = <6074218>; qcom,opp-acd-level = <0xc02a5ffd>; };
+        opp-475000000 { opp-hz = /bits/ 64 <475000000>; opp-level = <80>; opp-peak-kBps = <6074218>; qcom,opp-acd-level = <0xe0285ffd>; };
+        opp-550000000 { opp-hz = /bits/ 64 <550000000>; opp-level = <128>; opp-peak-kBps = <6074218>; qcom,opp-acd-level = <0xe0285ffd>; };
+        opp-615000000 { opp-hz = /bits/ 64 <615000000>; opp-level = <144>; opp-peak-kBps = <10687500>; qcom,opp-acd-level = <0xa82f5ffd>; };
+        opp-680000000 { opp-hz = /bits/ 64 <680000000>; opp-level = <192>; opp-peak-kBps = <12449218>; qcom,opp-acd-level = <0x882e5ffd>; };
+        opp-719000000 { opp-hz = /bits/ 64 <719000000>; opp-level = <224>; opp-peak-kBps = <16500000>; qcom,opp-acd-level = <0x882e5ffd>; };
+    };
+
+    // The board's own signed ZAP image (nura vendor harvest, sha 3cc594a0):
+    // the sheng a740_zap.mbn (4fd56fef) is a different signed blob and PIL
+    // authentication would refuse it.
+    zap-shader {
+        memory-region = <&gpu_micro_code_mem>;
+        firmware-name = "qcom/sm8550/m2381/a740_zap.mbn";
+    };
+};
+
+&gmu {
+    status = "okay";
+    operating-points-v2 = <&gmu_opp_table>;
+
+    gmu_opp_table: opp-table {
+        compatible = "operating-points-v2";
+        opp-220000000 { opp-hz = /bits/ 64 <220000000>; opp-level = <64>; };
+        opp-550000000 { opp-hz = /bits/ 64 <550000000>; opp-level = <128>; };
+    };
+};
+
+&gpu_smmu { status = "okay"; };

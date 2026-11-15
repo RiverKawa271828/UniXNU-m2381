@@ -60,11 +60,13 @@ CONFIG_XNU_NATIVE_PAN=y
 # baseline cannot weak-resolve are linked as explicit zeros by
 # build-boot-progress-telemetry.py — force_loaded below).
 CONFIG_XNU_BOOT_PROGRESS=y
-# n until the board-local GPU inputs exist: libAdreno740.a needs the
-# ShengGmu*Source.h OPP/bandwidth policy (docs/porting/gpu.md; kept out of
-# git upstream too) plus the .cache/firmware/sheng-gpu pinned blobs. Flip
-# with the Adreno740 component/archive entries in one GPU topic.
-CONFIG_XNU_NATIVE_ADRENO=n
+# r131 (2026-11-16, user decision: GPU+addon before buttons): the Adreno 740
+# kernel backend. The board-local inputs upstream keeps out of git are now
+# generated from device:dts/m2381.dts (prepare-m2381-gmu*.py) and the phone's
+# own signed firmware set (.cache/firmware/m2381-gpu). This switch force-loads
+# build/adreno740/libAdreno740.a and makes the display archive compile
+# package/GpuPowerProbe.cpp instead of the neutral GPU stubs.
+CONFIG_XNU_NATIVE_ADRENO=y
 
 # arm64e lane shape (sheng_ipados26/27_defconfig): corecrypto from source (the
 # seal step in payload.py is arm64e-required) and chained fixups. The root
