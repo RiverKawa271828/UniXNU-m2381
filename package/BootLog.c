@@ -115,6 +115,7 @@ extern volatile uint32_t native_adreno_pool_stats[8] __attribute__((weak_import)
 extern volatile uint32_t native_adreno_wc_audit[6] __attribute__((weak_import));
 extern volatile uint32_t native_adreno_submit_ibs[4] __attribute__((weak_import));
 extern volatile uint32_t native_touch_edge_stats[4] __attribute__((weak_import));
+extern char native_touch_rows[4][120] __attribute__((weak_import));
 extern volatile uint32_t native_touch_hid_multi[3] __attribute__((weak_import));
 extern volatile int32_t native_backlight_request[6] __attribute__((weak_import));
 extern volatile uint64_t native_adreno_reassert_ticks __attribute__((weak_import));
@@ -589,6 +590,17 @@ static size_t compose(char *out, size_t cap, uint32_t slot, unsigned now) {
              &native_adreno_coherent_skips ? native_adreno_coherent_skips[3] : 0,
              (unsigned long long)(&native_gpu_idle_sleeps ? native_gpu_idle_sleeps : 0), (unsigned long long)(&native_gpu_idle_spins ? native_gpu_idle_spins : 0));
     at = put(out, at, cap, row, sizeof row);
+  }
+  // The touch probe's stage rows (r130, GoodixTouchProbe.cpp): row 0 is the page's summary, rows 1..3 carry the
+  // read-only register snapshot, the clock/pin/engine bring-up and the identity block, so a reader window shows them
+  // even when the probe stops at that stage.
+  if (&native_touch_rows) {
+    for (unsigned r = 1; r < 4; ++r) {
+      if (!native_touch_rows[r][0]) continue;
+      char row[128];
+      snprintf(row, sizeof row, "[touch %u] %s", r, native_touch_rows[r]);
+      at = put(out, at, cap, row, sizeof row);
+    }
   }
   // Edge contacts (drivers/ShengHidInput edge::): wrapper installed, contacts begun, of them from an edge, events skipped.
   if (&native_touch_edge_stats) {

@@ -106,6 +106,8 @@ uint32_t touchMs() {
 // ---- I2C transport (GeniI2c) -------------------------------------------------------------------------------------
 // One transfer's deadline: 26 bytes at 400 kHz is ~0.7 ms; a 5 ms budget tells a slow part from a hung engine.
 constexpr unsigned kTransferBudgetUs = 5000;
+// The TLMM regions are mapped at the first pin's own page, so every access is relative to that page.
+constexpr uint32_t kResetCtl = 0, kResetIo = 4, kIrqCtl = GX_GPIO_STRIDE, kIrqIo = GX_GPIO_STRIDE + 4;
 
 int waitEngine(Session *s) {
     for (unsigned elapsed = 0; elapsed < kTransferBudgetUs; ++elapsed) {
@@ -179,8 +181,16 @@ bool snapshot(Session &s) {
     v[4] = rd32(s.gccHalt.va, GX_HALT_S_AHB & 0xfff);
     v[5] = rd32(s.gccS4.va, GX_HALT_S4 & 0xfff);
     v[6] = rd32(s.gccS4.va, (GX_S4_RCG + GX_RCG_CFG) & 0xfff);
-    v[7] = rd32(s.tlmmBus.va, gx_tlmm_ctl(GX_GPIO_SDA));
-    v[8] = rd32(s.tlmmBus.va, gx_tlmm_ctl(GX_GPIO_SCL));
+    // The bus page is mapped at gpio44's own page (GX_TLMM_BASE + 44 * stride); offsets are relative to that base.
+    v[7] = rd32(s.tlmmBus.va, 0);
+    v[8] = rd32(s.tlmmBus.va, GX_GPIO_STRIDE);
+    // Row 0 is the page's summary row (BootProgress.c line 42) and the first row a reader window carries; rows 1..3 are
+    // BootLog's [touch 1..3]. Every stage refreshes its row before the next one can fail.
+    snprintf(native_touch_rows[0], sizeof native_touch_rows[0],
+             "TCH1 gcc=%08x c2x=%08x core=%08x mahb=%08x sahb=%08x s4=%08x rcg=%08x",
+             v[0], v[1], v[2], v[3], v[4], v[5], v[6]);
+    snprintf(native_touch_rows[1], sizeof native_touch_rows[1],
+             "TCH1p sda=%08x scl=%08x (TLMM CTL; qup1_se4 func = 1, OE bit 9)", v[7], v[8]);
     mark(2);
     return true;
 }
@@ -210,10 +220,13 @@ bool enable(Session &s) {
     if (!ok) {fail(2, -110); return false;}      // never touch the engine without running clocks
     // gpio44 SDA / gpio45 SCL as qup1_se4, drive 2, pull-up (the stock overlay's 2200 ohm pull); no output enable.
     const uint32_t i2cPin = gx_pin_ctl(GX_FUNC_QUP1_SE4, GX_DRIVE_2MA, GX_PULL_UP, 0);
-    wr32(s.tlmmBus.va, gx_tlmm_ctl(GX_GPIO_SDA), i2cPin);
-    wr32(s.tlmmBus.va, gx_tlmm_ctl(GX_GPIO_SCL), i2cPin);
-    s.regs[7] = rd32(s.tlmmBus.va, gx_tlmm_ctl(GX_GPIO_SDA));
-    s.regs[8] = rd32(s.tlmmBus.va, gx_tlmm_ctl(GX_GPIO_SCL));
+    wr32(s.tlmmBus.va, 0, i2cPin);                       // gpio44 SDA: the mapping's own base
+    wr32(s.tlmmBus.va, GX_GPIO_STRIDE, i2cPin);          // gpio45 SCL: one page up
+    s.regs[7] = rd32(s.tlmmBus.va, 0);
+    s.regs[8] = rd32(s.tlmmBus.va, GX_GPIO_STRIDE);
+    snprintf(native_touch_rows[1], sizeof native_touch_rows[1],
+             "TCH2 vote=%08x core=%08x s4=%08x rcg=%08x sda=%08x scl=%08x",
+             s.regs[10], s.regs[11], s.regs[12], rd32(s.gccS4.va, (GX_S4_RCG + GX_RCG_CFG) & 0xfff), s.regs[7], s.regs[8]);
     mark(3);
     return true;
 }
@@ -245,10 +258,13 @@ bool engineInit(Session &s) {
     wr32(se, GENI_CLK_CFG, ((GX_I2C_CLK_DIV & 0xfffu) << 4) | 1u);   // GENI_SER_M_CLK_CFG / SER_CLK_EN
     wr32(se, GENI_SCL_COUNTERS, (GX_I2C_T_HIGH << 20) | (GX_I2C_T_LOW << 10) | GX_I2C_T_CYCLE);
     wr32(se, 0xe1c, GENI_SE_M_IRQ_EN);   // SE_IRQ_EN: the M (master) interrupt line
-    const struct GeniIo io = {geniIoRead, geniIoWrite, reinterpret_cast<void *>(se)};
+    const GeniIo io = {geniIoRead, geniIoWrite, reinterpret_cast<void *>(se)};
     uint32_t config = 0;
     if (geni_i2c_prepare(&s.engine, &io, GX_I2C_ADDRESS, &config)) {fail(5, -1); return false;}
     s.regs[9] = config;
+    snprintf(native_touch_rows[2], sizeof native_touch_rows[2],
+             "TCH3 fw=%08x ifd=%08x whv=%08x cfg=%08x clk=%08x scl=%08x addr=%02x",
+             s.regs[13], s.regs[14], s.regs[15], config, rd32(se, GENI_CLK_CFG), rd32(se, GENI_SCL_COUNTERS), GX_I2C_ADDRESS);
     mark(6);
     return true;
 }
@@ -256,25 +272,26 @@ bool engineInit(Session &s) {
 // ---- Stage 3: reset, confirm, identity ------------------------------------------------------------------------------
 bool identify(Session &s) {
     mark(7);
-    // Two pages cover reset (24) and IRQ (25): pins are 0x1000 apart, gpio25's registers sit one page above gpio24's.
+    // Two pages cover reset (24) and IRQ (25): the mapping starts at gpio24's own page (GX_TLMM_BASE + 24 * stride).
     if (!mapRegion(GX_TLMM_BASE + gx_tlmm_ctl(GX_GPIO_RESET), 2 * GX_GPIO_STRIDE, s.tlmm)) {fail(7, -12); return false;}
     Region &tlmm = s.tlmm;
     // reset gpio24: function gpio (0), drive 8, pull-up, output enable. Physical low asserts the part's reset (the node's
     // GPIO_ACTIVE_LOW), physical high releases it; the pin is read back after every write.
+    // The page is mapped at gpio24's own base: reset is +0 (ctl) / +4 (io), irq is one page up.
     const uint32_t resetCtl = gx_pin_ctl(GX_FUNC_GPIO, GX_DRIVE_8MA, GX_PULL_UP, 1);
-    wr32(tlmm.va, gx_tlmm_ctl(GX_GPIO_RESET), resetCtl);
-    uint32_t io = rd32(tlmm.va, gx_tlmm_io(GX_GPIO_RESET));
-    wr32(tlmm.va, gx_tlmm_io(GX_GPIO_RESET), (io & ~GX_IO_OUT_BIT));          // low = asserted
+    wr32(tlmm.va, kResetCtl, resetCtl);
+    uint32_t io = rd32(tlmm.va, kResetIo);
+    wr32(tlmm.va, kResetIo, (io & ~GX_IO_OUT_BIT));          // low = asserted
     IODelay(10000);
-    io = rd32(tlmm.va, gx_tlmm_io(GX_GPIO_RESET));
-    wr32(tlmm.va, gx_tlmm_io(GX_GPIO_RESET), io | GX_IO_OUT_BIT);             // high = released
+    io = rd32(tlmm.va, kResetIo);
+    wr32(tlmm.va, kResetIo, io | GX_IO_OUT_BIT);             // high = released
     IODelay(100000);
     // irq gpio25: function gpio, pull-up, input; the level (io bit 0) is polled by the frame thread, no pin interrupt.
-    wr32(tlmm.va, gx_tlmm_ctl(GX_GPIO_IRQ), gx_pin_ctl(GX_FUNC_GPIO, GX_DRIVE_8MA, GX_PULL_UP, 0));
-    s.regs[2] = rd32(tlmm.va, gx_tlmm_ctl(GX_GPIO_RESET));
-    s.regs[3] = rd32(tlmm.va, gx_tlmm_io(GX_GPIO_RESET));
-    s.regs[4] = rd32(tlmm.va, gx_tlmm_ctl(GX_GPIO_IRQ));
-    s.regs[5] = rd32(tlmm.va, gx_tlmm_io(GX_GPIO_IRQ));
+    wr32(tlmm.va, kIrqCtl, gx_pin_ctl(GX_FUNC_GPIO, GX_DRIVE_8MA, GX_PULL_UP, 0));
+    s.regs[2] = rd32(tlmm.va, kResetCtl);
+    s.regs[3] = rd32(tlmm.va, kResetIo);
+    s.regs[4] = rd32(tlmm.va, kIrqCtl);
+    s.regs[5] = rd32(tlmm.va, kIrqIo);
     GxTransport transport = {busRead, busWrite, &s};
     mark(8);
     const int confirm = gx_dev_confirm(&transport, GX_DEV_CONFIRM_TRIES, 5000, gxDelay, nullptr);
@@ -286,6 +303,9 @@ bool identify(Session &s) {
     mark(10);
     const int identity = gx_read_identity(&transport, GX_IC_INFO_ADDR, &s.identity);
     if (identity) {fail(10, -220 + identity); return false;}
+    snprintf(native_touch_rows[3], sizeof native_touch_rows[3],
+             "TCH4 rst=%08x iox=%08x irq=%08x conf=%d pid=%.6s/%d addr=%x",
+             s.regs[2], s.regs[3], s.regs[5], 0, (const char *)s.parsed.patch_pid, s.parsed.sensor_id, s.identity.touch_data_addr);
     mark(11);
     return true;
 }
@@ -416,7 +436,7 @@ void frameThread(void *, wait_result_t) {
         ++native_touch_cost[0];
         // The interrupt pin is active low while the controller has a frame (the stock node's IRQ_TYPE_EDGE_FALLING, level
         // polled here: no pin interrupt is configured for the bring-up). A quiet pin sleeps 1 ms.
-        if (rd32(s->tlmm.va, gx_tlmm_io(GX_GPIO_IRQ)) & 1u) {
+        if (rd32(s->tlmm.va, kIrqIo) & 1u) {
             ++native_touch_cost[1];
             IOSleep(1);
             continue;
@@ -424,7 +444,7 @@ void frameThread(void *, wait_result_t) {
         native_touch_loop_step = 2;
         for (unsigned burst = 0; burst < 8; ++burst) {
             if (serviceFrame(s)) {fail(12, -300); goto done;}
-            if (rd32(s->tlmm.va, gx_tlmm_io(GX_GPIO_IRQ)) & 1u) break;
+            if (rd32(s->tlmm.va, kIrqIo) & 1u) break;
         }
     }
 done:
@@ -435,7 +455,7 @@ done:
 
 extern "C" void native_touch_set_sink(void (*sink)(void *), void *context) {
     gTouchSinkContext = context;
-    __atomic_store_n(&gTouchSink, sink, __ATOMIC_ACQUIRE);
+    __atomic_store_n(&gTouchSink, sink, __ATOMIC_RELEASE);
 }
 
 extern "C" void native_goodix_touch_probe(void) {

@@ -38,6 +38,10 @@ flags = ['-DXNU_NATIVE_LEGACY_DISPLAY_QUALIFIED'] if qualified else []
 source_storage = os.environ.get('XNU_SOURCE_STORAGE') == '1'
 if source_storage:
     flags.append('-DXNU_SOURCE_STORAGE')
+# r130: the Goodix touch archive (XNU_NATIVE_GOODIX_TOUCH=1) provides the real native_touch_* providers and the
+# owned IOHIDDevice; the touch zeros and the buttons-sink no-op must not also link.
+if os.environ.get('XNU_NATIVE_GOODIX_TOUCH') == '1':
+    flags.append('-DXNU_NATIVE_TOUCH_QUALIFIED')
 subprocess.run(['xcrun', 'clang', '-target', TRIPLE, '-isysroot', sdk, '-ffreestanding',
                 '-fno-common', '-Wall', '-Werror', *flags, '-c', str(source), '-o', str(obj)], check=True)
 archive = OUT / 'libBootProgressTelemetry.a'

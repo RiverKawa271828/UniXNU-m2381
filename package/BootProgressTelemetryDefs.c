@@ -105,9 +105,12 @@ volatile uint64_t native_gop_gpu_abandoned = 0;
 volatile uint64_t native_gop_virtual = 0;
 #endif
 
-// HID input (offline-hid off)
+// HID input: the r130 touch archive links HidInputProbe.cpp's real counters (XNU_NATIVE_TOUCH_QUALIFIED); these
+// zeros serve a kernel without it.
+#ifndef XNU_NATIVE_TOUCH_QUALIFIED
 volatile uint32_t native_hid_input_events[8] = {0};
 volatile int native_hid_input_results[8] = {0};
+#endif
 
 // Legacy display client (NATIVE_LEGACY_DISPLAY=n; the qualified lane's
 // NativeLegacyDisplay.cpp / NativeGOPPresenter.cpp / LegacyDisplayProbe.cpp
@@ -163,13 +166,19 @@ volatile uint32_t native_legacy_transfer_calls = 0;
 volatile int native_legacy_transfer_status = 0;
 #endif
 
-// Touch (sheng-touch off; the touch lane provides these when it lands)
+// Touch: the r130 Goodix lane (XNU_NATIVE_GOODIX_TOUCH=1) links the real providers (GoodixTouchProbe.cpp); these
+// zeros only serve a kernel without it.
+#ifndef XNU_NATIVE_TOUCH_QUALIFIED
 volatile uint32_t native_touch_seq = 0;
 volatile uint32_t native_touch_count = 0;
 char native_touch_rows[4][120] = {{0}};
 volatile unsigned native_touch_stage_req = 0;
 volatile int native_touch_xs[12] = {0};
 volatile int native_touch_ys[12] = {0};
+#endif
+// The owned IOHIDDevice (NativeHidInput.cpp) registers a buttons sink; its declaration there is weak and this ld64
+// errors on the unresolved weak import, so the no-op is linked unconditionally until the button driver's round.
+void native_buttons_set_sink(void (*sink)(void *, uint32_t), void *context) { (void)sink; (void)context; }
 
 // --- BootLog.c's families (the sheng-log=1 writer joined libBootProgress.a on
 // 2026-10-26; everything below is the rest of its dangling weak set against
@@ -228,14 +237,18 @@ volatile int32_t native_audio_stats[16] = {0};
 // slot 16 (the "heavy" gesture second) — the fork's extern under-declared it.
 volatile uint32_t native_swipe_stats[17] = {0};
 
-// Touch (the rest of BootLog.c's touch sections)
+// Touch (the rest of BootLog.c's touch sections). The stroke bookkeeping and the edge/multi counters come from the
+// r130 touch archive (GoodixTouchProbe.cpp, NativeHidInput.cpp); the jitter/hold counters are the Novatek core's and
+// stay zero on this board.
+#ifndef XNU_NATIVE_TOUCH_QUALIFIED
 volatile int32_t native_touch_strokes[16][7] = {{0}};
 volatile uint32_t native_touch_stroke_count = 0;
 volatile int32_t native_touch_extent[4] = {0};
-volatile uint32_t native_touch_jitter[3] = {0};
-volatile uint32_t native_touch_hold[14] = {0};
 volatile uint32_t native_touch_edge_stats[4] = {0};
 volatile uint32_t native_touch_hid_multi[3] = {0};
+#endif
+volatile uint32_t native_touch_jitter[3] = {0};
+volatile uint32_t native_touch_hold[14] = {0};
 
 // Adreno GPU diagnostics (NATIVE_ADRENO=n; the GPU chain's topic returns these)
 volatile uint32_t native_adreno_fence_wait[8] = {0};
