@@ -425,6 +425,37 @@ kernel_args = [
   # native_ufs_store_write_cached is absent, so direct runs write-through
   # (forced unit access per write; fsync = doSynchronizeCache success).
   "sheng-data-persist=2",
+  # s118 (2026-11-15): the whole 24A446 lane has been running single-core on
+  # the boot A510 — every slot printed "SMP req=0 run=0 cond=0 boot=0" (the
+  # ArmCpu tracker armcpu_smp_requested stayed 0 = no secondary-start request
+  # was ever issued) and the profiler's per-cpu tick counters (recorded in the
+  # timer-IRQ path from getCpuDatap()->cpu_number) show c0-only for every
+  # process. The device stayed cool all boot while sys burned 80%+ on one
+ #  little core; the v1 board ran these and booted hot with every core up
+ #  (dts/m2381.dts:9 note). The args were swept out at 73de03e (10-30 "args
+ #  全换案甲 … sheng-* 诊断队整体退役") along with the diagnostic flags, though
+ #  their consumers were live the whole time. Upstream sheng d76556b
+ #  board.toml carries all three (sheng- prefix retired upstream: smp=1).
+ #  All three must travel together:
+ #    smp=1              ArmCpu.cpp:249 — secondary startup is opt-in; without
+ #                       it ArmCpu::probe returns nullptr for every non-boot
+ #                       cpu node, so the SM8550's 8 cores collapse to 1.
+ #    armcpu-spi-ipi=1   ICC_SGI1R_EL1 generates nothing on this board
+ #                       (ArmCpu.cpp:34) — cross-core IPIs must go as
+ #                       software-pended SPIs 1008+core.
+ #    armcpu-self-ipi=1  every core self-signals SGI 0 at initCPU to clear
+ #                       the startup SIGPdisabled flag; without it a started
+ #                       core spins its idle thread at full speed (the
+ #                       zzye-sheng-cpu-idle.patch recovery only papers it).
+ #  cpufreq=4 (upstream also carries it) is NOT carried here: the cpufreq
+ #  component is not vendored in this tree (native_cpufreq_stage has no
+ #  definer), so the arg would have no consumer.
+ #  Red line for the round: args-only, kernel binary unchanged, and NEVER
+ #  data-reset — the 5-boot Data lineage is the asset this change
+ #  accelerates.
+  "smp=1",
+  "armcpu-spi-ipi=1",
+  "armcpu-self-ipi=1",
   # r124 (s113): the IOMFB user-client selector probe. The
   # iomfb-uc-selector-probe.patch hooks IOUserClient::callExternalMethod (the
   # non-virtual funnel every is_io_connect_method branch uses) into the
