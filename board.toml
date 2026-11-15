@@ -245,6 +245,14 @@ title = "m2381 first boot: source 4K XNU to console"
 dram_size = "0x400000000"            # [DEVICE] 16 GiB LPDDR5X
 skip_setup_tool = "scripts/seed-data-skip-setup.py"   # used by --skip-setup
 panic_screen = true
+# r129 capacity round (2026-11-15): the 91.4 MiB fileset kernel left 5.4 MiB on
+# this volume and the recovery_a partition itself is 100 MiB, so growth
+# (GPU/audio/addon) had nowhere to go. kernel_compression = "lzma" stores the
+# LZMA-alone stream in the kernel.macho member (props byte 0x5D + known size in
+# the header, dict 16 MiB; measured 91 -> 17.5 MiB); DarwinBoot expands it
+# before ParseKernel and the sidecar names stay identical. Plain members are
+# still accepted, so an uncompressed kernel boots the same volume unchanged.
+kernel_compression = "lzma"
 # r74 wiring (2026-11-07, first SourceStorage boot r73 payload f38d11cc t=31s:
 # "SourceStorage: root policy handoff or authentication failed" @SourceStorage.cpp:102 —
 # the kernel step builds the VROOTB01 envelope (build/sheng-source-storage/root-policies.bin)
