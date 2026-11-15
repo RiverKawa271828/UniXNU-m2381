@@ -1686,9 +1686,15 @@ static bool readPolicyObject (const char *window, uint8_t *out, uint64_t objectB
     if (!strcmp (gRootObject[i].name, name)) object = &gRootObject[i];
   if (!object || object->size != objectBytes) return false;
   uint64_t lba = (gRootObjectBase + object->offset) / 4096, done = 0;
+  // r131: chunk by the scratch's own size, not kDataMax (the UFS DMA window). The
+  // scratch shrank to 32 KiB to keep the native __DATA inside the donor's 0x1e8000
+  // window; reading a kDataMax-sized chunk here overflowed it into gHost and
+  // corrupted the transport lock (2 s data abort in lck_mtx_unlock).
+  static_assert (sizeof (gScratch) % 4096 == 0, "scratch must be whole blocks");
+  constexpr uint64_t kScratchBytes = sizeof (gScratch);
   while (done < objectBytes) {
     uint64_t left = objectBytes - done;
-    uint32_t blocks = static_cast<uint32_t> (left >= kDataMax ? kDataMax / 4096 : (left + 4095) / 4096);
+    uint32_t blocks = static_cast<uint32_t> (left >= kScratchBytes ? kScratchBytes / 4096 : (left + 4095) / 4096);
     if (hostRead4k (0, lba, blocks, gScratch) != kIOReturnSuccess) return false;
     uint64_t take = left < blocks * 4096ULL ? left : blocks * 4096ULL;
     memcpy (out + done, gScratch, take);
