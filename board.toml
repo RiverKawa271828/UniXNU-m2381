@@ -385,6 +385,23 @@ kernel_args = [
   # the database file itself) behind this arg. Path evidence = the 24A446 dyld cache RE
   # (scratch-r112 REPORT-cache-symbolication.md §6/§7).
   "sheng-container-db=1",
+  # r126 (s115 verdict, upstream recon): the r125 window pinned the render
+  # stall to SpringBoard parking on launchservicesd from t=81 s — the fresh-
+  # seed Data lineage's first-boot churn (lsd grinding 7 threads at r=3-4,
+  # system sys=61%) never lets SB's LaunchServices registration complete, so
+  # SB never activates, the compositor caps at 4 swaps (queue depth) and
+  # chronod keeps aborting at CASGetDisplays -308. The r122 flood boot (SB
+  # free-running the whole window) ran on the pre-reset accumulated Data
+  # lineage; sheng's upstream answer for exactly this face is sheng-lite=1
+  # (BootWatchdogPolicy.c lite_jobs): a launchd disabled-jobs policy for the
+  # ~22 daemons that "start at the first boot of a fresh Data and compete
+  # with SpringBoard for the CPU and for memory", whose first four are "the
+  # cycle of synchronous XPC waits the isolation work found". The machinery
+  # is already vendored (lite_jobs table + PE parse + the disabled.plist /
+  # disabled.migrated write, every boot after Data mounts, before the
+  # unchanged launchd exec) — only the arg was never passed. Upstream
+  # d76556b reference: reference/unixnu-sheng/board.toml line 74.
+  "sheng-lite=1",
   # r114 (s103): the r112/r113 "policy panicked EBUSY(16) on its first Data
   # write" root cause. The Data disk is the 16 GiB packed RamBlock (r111 window
   # "RAMDISK sparse=1 capacityMiB=16384 residentKiB=1008"; seed d04a0153 is the
