@@ -114,6 +114,12 @@ extern volatile uint32_t native_touch_hold[14] __attribute__((weak_import));
 extern char native_lookup_log[160][112] __attribute__((weak_import));
 extern volatile unsigned native_lookup_count __attribute__((weak_import));
 extern volatile uint32_t native_dpu_pipes[54] __attribute__((weak_import));
+// r138 (s129 dpu-scanout experiment): the display bank's SMMU survey/enable state (NativeUfs.cpp, armed by sheng-dpu-scanout=1) and
+// the direct-scanout counters (NativeLegacyDisplay.cpp startDirect, armed by dpu-scanout=2).
+extern volatile uint32_t native_ufs_dpu_smmu[24] __attribute__((weak_import));
+extern volatile uint32_t native_ufs_dpu_state __attribute__((weak_import));
+extern volatile uint32_t native_ufs_dpu_check[8] __attribute__((weak_import));
+extern volatile uint32_t native_legacy_direct[14] __attribute__((weak_import));
 extern volatile int32_t native_adsp_stats[16] __attribute__((weak_import));
 extern volatile int32_t native_audio_stats[16] __attribute__((weak_import));
 extern char native_adsp_text[96] __attribute__((weak_import));
@@ -818,6 +824,35 @@ static size_t compose(char *out, size_t cap, uint32_t slot, unsigned now) {
     }
     snprintf(row, sizeof row, "[dpu ctl] fb=%x%08x %x/%x/%x %x/%x/%x %x/%x/%x %x/%x/%x", p[41], p[40], p[42], p[43], p[44], p[45], p[46], p[47],
              p[48], p[49], p[50], p[51], p[52], p[53]);
+    at = put(out, at, cap, row, sizeof row);
+  }
+  // r138 (s129): the display bank's SMMU survey and stage-1 enable (NativeUfs.cpp dpuEnable, armed by sheng-dpu-scanout=1). w0 =
+  // 0x80000000|groups|valid<<8|banks<<16 once the survey ran; found = i|bank<<16 for the display's stream (0x1c00); s2cr/sctlr/ttbr/tcr
+  // are the values the bank carried before dpuEnable touched it. st = the enable result (0x80000000|bank on success; 0xdead0001..5 the
+  // documented refusals: no group/bank found, tables/lock, writes ignored, TLB flush, fetch fault in the 50 ms watch); fsr = the two
+  // display-stream context banks' fault status; chk = dpuEnable's read-back checks and us = the fault watch's elapsed microseconds.
+  if (&native_ufs_dpu_smmu && &native_ufs_dpu_state && native_ufs_dpu_smmu[0]) {
+    char row[220];
+    snprintf(row, sizeof row, "[dpu smmu] w0=%x found=%x s2cr=%x sctlr=%x ttbr=%x tcr=%x", native_ufs_dpu_smmu[0], native_ufs_dpu_smmu[4],
+             native_ufs_dpu_smmu[6], native_ufs_dpu_smmu[9], native_ufs_dpu_smmu[10], native_ufs_dpu_smmu[12]);
+    at = put(out, at, cap, row, sizeof row);
+    if (&native_ufs_dpu_check)
+      snprintf(row, sizeof row, "[dpu state] st=%x fsr=%x,%x chk=%x,%x,%x,%x us=%u", native_ufs_dpu_state, native_ufs_dpu_smmu[22],
+               native_ufs_dpu_smmu[23], native_ufs_dpu_check[0], native_ufs_dpu_check[1], native_ufs_dpu_check[2], native_ufs_dpu_check[3],
+               native_ufs_dpu_check[7]);
+    else
+      snprintf(row, sizeof row, "[dpu state] st=%x fsr=%x,%x", native_ufs_dpu_state, native_ufs_dpu_smmu[22], native_ufs_dpu_smmu[23]);
+    at = put(out, at, cap, row, sizeof row);
+  }
+  // r138 (s129): the direct-scanout counters (NativeLegacyDisplay startDirect, armed by dpu-scanout=2): flips, surfaces mapped, map
+  // failures, latches over 50 ms (count / longest us / total us), surfaces let go, copy-path fallbacks, flips back to the boot memory,
+  // swaps held back until the GPU had written the frame (total us / longest us / waits over 250 ms / waits of 8 ms or more).
+  if (&native_legacy_direct) {
+    char row[220];
+    snprintf(row, sizeof row, "[dpu direct] fl=%u sf=%u mf=%u l50=%u lmax=%u lsum=%u go=%u fb=%u bf=%u hd=%u wt=%u wmax=%u w250=%u w8=%u",
+             native_legacy_direct[0], native_legacy_direct[1], native_legacy_direct[2], native_legacy_direct[3], native_legacy_direct[4],
+             native_legacy_direct[5], native_legacy_direct[6], native_legacy_direct[7], native_legacy_direct[8], native_legacy_direct[9],
+             native_legacy_direct[10], native_legacy_direct[11], native_legacy_direct[12], native_legacy_direct[13]);
     at = put(out, at, cap, row, sizeof row);
   }
   // Touch noise before the fuzz filter: resting or slow frames, mean step (x + y) and largest single-axis step, in 0.1 px.

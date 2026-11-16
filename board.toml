@@ -606,6 +606,53 @@ kernel_args = [
   "offline-mobile-graphics-load=1",
   "fb-gpu=1",
   "vsync=120",
+  # r138 (s129, lag round, first cut = the args experiment from the sheng delta
+  # mined at UniXNU-sheng bc05635a, same SoC Pad 6S Pro, same 24A446 donor, its
+  # lane smooth where ours stutters). The r136 window verdict (s128/s129): the
+  # GPU and the render engine are clean (offer/done milliseconds, fences
+  # 1588/1590, zero wptr drops, zero freezes) while the display path runs the
+  # CPU copy (SWAPQ copy=39/40, nohead=40) on an input-independent 5.0 s
+  # metronome, and touch only turns into frames 2 times in 8. The head suspect:
+  # the compositor's surfaces never reach the DPU pipes — the display keeps
+  # copying into the boot scanout buffer.
+  #   dpu-scanout=2          NativeLegacyDisplay.cpp:301 startDirect: mode>=2
+  #                          + the UFS display bank armed (native_ufs_dpu_state
+  #                          bit 31, set by NativeUfs dpuEnable) + a primary
+  #                          display. Arms the two-pipe direct scanout: the
+  #                          display maps the compositor's surfaces into the
+  #                          UFS bank's kDpuSlots window (native_ufs_dpu_map)
+  #                          and flips the DPU VIG pipes at them instead of
+  #                          copying.
+  #   sheng-dpu-scanout=1    NativeUfs.cpp:1123-1124: the SMMU survey for the
+  #                          display's streams (0x1c00/0x1c02) and dpuEnable —
+  #                          stage 1 for the display bank (bank 3, the boot
+  #                          scanout's two 1 GiB identity blocks preserved, so
+  #                          the splash carries on; window at 0x10000000 for
+  #                          the surfaces; translation reverts on the first
+  #                          fetch fault within 50 ms). REQUIRED alongside
+  #                          dpu-scanout=2 on this kernel: the s128 recon
+  #                          listed only dpu-scanout=2 from the sheng board
+  #                          args, but the consumers are two forks — our
+  #                          NativeLegacyDisplay parses dpu-scanout while our
+  #                          NativeUfs (this device repo) parses the sheng-
+  #                          prefixed names; without the survey/enable the
+  #                          state bit never sets and startDirect returns
+  #                          before arming anything (the r115 recon miss,
+  #                          offline-mobile-graphics-load, again).
+  #   vsync-fixed=1          NativeLegacyDisplay.cpp:575: report the refresh
+  #                          intervals as one fixed rate (max == min) — sheng
+  #                          rides it on the same display face.
+  # Judgment gates (R138-CARD): [dpu smmu]/[dpu state] rows show the bank
+  # enabled (st=0x80000000|bank, never 0xdead000X); [dpu direct] flips grow;
+  # the SWAPQ copy count collapses (direct scanout stops the copy path); the
+  # 5.0 s metronome changes face; touch-to-frame response rate rises.
+  # All three are display-face args on one experiment: kernel rebuild needed
+  # anyway this round (BootLog [dpu] rows), so they travel together; the copy
+  # fallback counters ([dpu direct] fb=) keep the r137 kernel's behavior as
+  # the in-boot rollback face if the bank refuses.
+  "dpu-scanout=2",
+  "sheng-dpu-scanout=1",
+  "vsync-fixed=1",
   # r131 (2026-11-16, user decision: GPU+addon before buttons): the staged
   # Adreno 740 bring-up (package/GpuPowerProbe.cpp, this round's device repo).
   # Ladder, one variable per flash (args-only payloads once the GPU kernel is in):
