@@ -747,3 +747,9 @@ unique_chip_id = "required"          # the platform seed is not stored in any re
 # [FW] The boot image carries no appended DTB at all (nura-proven on this
 # ABL: BootShim header + gzip kernel member only; the stock vendor_boot DTB
 # supplies the splash region and passes BoardDtMatch). Nothing to patch.
+
+# The phone identity lane (iPhone17,4/D48 via [adt.*] overrides, r139) is
+# SHELVED: it made the compositor offer 2-plane "b3a8" surfaces the display
+# family's validator refuses (90/91 swaps rejected, reason 4, black screen -
+# R139-CARD verdict; the same leftover also painted r140's run). The way back
+# is the validator's format face, not the identity.
