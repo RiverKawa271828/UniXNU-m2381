@@ -82,7 +82,7 @@ extern volatile uint32_t native_adreno_recover_trace[4] __attribute__((weak_impo
 extern volatile uint32_t native_adreno_recover_log[8][8] __attribute__((weak_import));
 extern volatile uint32_t native_adreno_recover_log_count __attribute__((weak_import));
 extern volatile uint32_t native_adreno_recovery_fault[5] __attribute__((weak_import));
-extern volatile uint64_t native_boot_memory[24] __attribute__((weak_import));
+extern volatile uint64_t native_boot_memory[32] __attribute__((weak_import));
 extern volatile uint64_t arm_vm_outside_base __attribute__((weak_import));
 extern volatile uint64_t arm_vm_outside_end __attribute__((weak_import));
 extern volatile uint32_t ml_outside_memory_pages __attribute__((weak_import));
@@ -994,6 +994,14 @@ static size_t compose(char *out, size_t cap, uint32_t slot, unsigned now) {
              &ml_outside_memory_pages ? ml_outside_memory_pages : 0,
              &ml_outside_memory_refused ? ml_outside_memory_refused : 0);
     at = put(out, at, cap, row, sizeof row);
+    // The init decision face (r138: raw pairs alive while adopted and refused both stayed zero - the filter,
+    // the aperture cap or the adopt loop itself is the suspect): init entry and cap mark, the filter's
+    // kept/killed ledger, the table count it left, and the adopt loop's entry mark and run count.
+    char mrow[150];
+    snprintf(mrow, sizeof mrow, "[boot mem+] init=%llx kept=%llu killed=%llu table=%llu adopt=%llx runs=%llu",
+             native_boot_memory[4], native_boot_memory[5], native_boot_memory[6], native_boot_memory[7],
+             native_boot_memory[24], native_boot_memory[25]);
+    at = put(out, at, cap, mrow, sizeof mrow);
     for (unsigned pair = 0; pair < 8; pair += 4) {
       int n = snprintf(row, sizeof row, "[boot mem+] runs");
       for (unsigned k = pair; k < pair + 4 && n > 0 && (size_t)n < sizeof row; ++k) {
