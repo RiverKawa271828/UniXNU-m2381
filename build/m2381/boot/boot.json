@@ -1,13 +1,13 @@
 {
-  "kernel_sha256": "80f0c8280596eedecb618f8f69d665099083224f37a0e695931cf1410a0d09dd",
-  "fd_sha256": "dee93e8444165840c93ec044400d30696d50b49cc917c69c6d82381247a3bb4a",
-  "image_sha256": "b48496545f5dcbe8eeba5aed61a28275e15dcef7b1528239041e30e472672e14",
-  "image_bytes": 31903744,
-  "boot_image_sha256": "25da7faa501ab67eedffb923ad24bd07d236e4c07c624183df936c1e551e9b2e",
-  "boot_image_bytes": 1273856,
+  "kernel_sha256": "83ee17f542affac9754b697dd56aca969cedaacb037ff6ed82ba53a481d6828f",
+  "fd_sha256": "b7bd804e790de903513d6f7ed8b782297731abfa1602ca12adc88e6749d6bd4f",
+  "image_sha256": "e9085e5ac1e3c5169ef7030a877a0c70b0a0ce813f2654f3274e602fe3f4807c",
+  "image_bytes": 31907840,
+  "boot_image_sha256": "b7da8f86ee554aa9f9d7704db1f4f60237a1fe9c04addb9e23eefe9b04d6deb6",
+  "boot_image_bytes": 1277952,
   "segment": {
     "bytes": 30629888,
-    "boot_image_bytes": 1273856,
+    "boot_image_bytes": 1277952,
     "entries": [
       {
         "name": "adsp",
