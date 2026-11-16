@@ -354,10 +354,11 @@ static void dpuEnable (uintptr_t smmu, uintptr_t cb, uint32_t bank, uint32_t old
   __asm__ volatile ("dsb sy" ::: "memory");
   volatile uint32_t *c = native_ufs_dpu_check;
   c[0] = read32 (cb, 0x20); c[1] = read32 (cb, 0x30); c[2] = read32 (cb, 0x58);
-  // r140 (s129): the latch can carry stale bits from the loader era before the enable (r138/r139 read
-  // 0x400 here on both display banks), and the 50 ms watch treats every kDpuFaults bit as fatal: clear
-  // them first so the watch judges only faults the translated fetches raise.
-  write32 (cb, 0x58, c[2]);
+  // r142 (s129): the r140 entry clear (write32 0x58) is withdrawn for the bisect - it is the only
+  // display-bank-mutating delta against the r138 kernel whose boot showed a working screen, and the
+  // r141 black face (no rejections, the swap pipeline stalling with a hung fence) needs it ruled out.
+  // c[8] now just records the latch the read-only way; the r140/r141 windows proved the 0x400 bit
+  // re-latches live in bypass mode either way, so the watch's dead0005 face returns unchanged.
   c[8] = read32 (cb, 0x58);
   const auto undo = [&] (uint32_t why) {
     write32 (cb, 0x0, oldSctlr);
@@ -386,10 +387,13 @@ static void dpuEnable (uintptr_t smmu, uintptr_t cb, uint32_t bank, uint32_t old
     c[4] = read32 (cb, 0x60); c[5] = read32 (cb, 0x64); c[6] = read32 (cb, 0x68);
     undo (0xdead0005U);
     // r140: the syndromes (FSYNR0/1) name the walk level and fault type; then watch the latch with
-    // translation off again - a re-latching bit means the display faults in bypass mode too, a clean
-    // one means the stale bits were the loader's and the translated fetch was the only real fault.
+    // translation off again - a re-latching bit means the display faults in bypass mode too. r142:
+    // the 50 ms busy-wait here is the only r138-behavior delta left besides the entry clear below,
+    // and the r141 black screen (no rejections, the swap pipeline stalling after three swaps with a
+    // hung fence) needs it gone for the bisect - 5 ms still catches the instant re-latch the r140
+    // window showed.
     c[9] = read32 (cb, 0x58);
-    IODelay (50000);
+    IODelay (5000);
     c[10] = read32 (cb, 0x58);
     return;
   }
