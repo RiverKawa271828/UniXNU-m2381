@@ -75,6 +75,13 @@ extern volatile uint32_t native_adreno_stall[24] __attribute__((weak_import));
 extern volatile uint32_t native_adreno_stall_mem[59] __attribute__((weak_import));
 extern volatile uint32_t native_adreno_unstick[15] __attribute__((weak_import));
 extern volatile uint64_t native_adreno_wait_outer[4] __attribute__((weak_import));
+extern volatile uint32_t native_adreno_ring_face[8] __attribute__((weak_import));
+extern volatile uint32_t native_adreno_wptr_fence[4] __attribute__((weak_import));
+extern volatile uint32_t native_adreno_recovery[8] __attribute__((weak_import));
+extern volatile uint32_t native_adreno_recover_trace[4] __attribute__((weak_import));
+extern volatile uint32_t native_adreno_recover_log[8][8] __attribute__((weak_import));
+extern volatile uint32_t native_adreno_recover_log_count __attribute__((weak_import));
+extern volatile uint32_t native_adreno_recovery_fault[5] __attribute__((weak_import));
 extern volatile uint32_t native_adreno_export_stats[4] __attribute__((weak_import));
 extern volatile int32_t native_touch_strokes[16][7] __attribute__((weak_import));
 extern volatile uint32_t native_touch_stroke_count __attribute__((weak_import));
@@ -926,6 +933,49 @@ static size_t compose(char *out, size_t cap, uint32_t slot, unsigned now) {
       snprintf(row, sizeof row, "[fence wait] outer waits=%llu us=%llu pauses outside the lock=%llu longest=%lluus",
                (unsigned long long)native_adreno_wait_outer[0], (unsigned long long)native_adreno_wait_outer[1],
                (unsigned long long)native_adreno_wait_outer[2], (unsigned long long)native_adreno_wait_outer[3]);
+      at = put(out, at, cap, row, sizeof row);
+    }
+  }
+  // The ring's own face as the fence readers see it (r135: the wedge face and the truth parted ways — completed only moved on held
+  // waits and the page the readers poll was not the page printed): last submitted, completed, submissions, the fence word and the
+  // rptr shadow the readers see, outstanding, and the stale-acquire/resets-racing-a-poller rewinds.
+  if (&native_adreno_ring_face && native_adreno_ring_face[2]) {
+    char row[140];
+    snprintf(row, sizeof row, "[gpu ring] seq=%u done=%u subs=%u page=%x rptr=%x out=%u rewind=%u last=(%u,%u)",
+             native_adreno_ring_face[0], native_adreno_ring_face[1], native_adreno_ring_face[2], native_adreno_ring_face[3],
+             native_adreno_ring_face[4], native_adreno_ring_face[5], native_adreno_ring_face[6],
+             native_adreno_ring_face[7] >> 16, native_adreno_ring_face[7] & 0xffff);
+    at = put(out, at, cap, row, sizeof row);
+  }
+  // WPTR as a fenced register write: the GMU drops writes that arrive while the GPU domain is not ready and flags them in its AHB
+  // fence status; the writer then gives the write again, at most 200 times. A freeze with writes/dropped climbing is a power race.
+  if (&native_adreno_wptr_fence && native_adreno_wptr_fence[0]) {
+    char row[120];
+    snprintf(row, sizeof row, "[gpu wptr] writes=%u dropped=%u repeated=%u stuck=%u",
+             native_adreno_wptr_fence[0], native_adreno_wptr_fence[1], native_adreno_wptr_fence[2], native_adreno_wptr_fence[3]);
+    at = put(out, at, cap, row, sizeof row);
+  }
+  // The hangcheck's own account (500 ms cadence, three checks without progress is a hang): hangs, restarts, failed restarts, the
+  // last hung fence, the last restart's status, submissions replayed, guilty-job and kernel-VM hangs; then where the last recover()
+  // stopped and the latest restart log row (i, time, fence, status, replayed, stranded/guilty flags, dead reason).
+  if (&native_adreno_recovery && (native_adreno_recovery[0] || native_adreno_recovery[1])) {
+    char row[170];
+    snprintf(row, sizeof row, "[gpu recover] hangs=%u restarts=%u failed=%u hung=%u status=%x replayed=%u guilty=%u own=%u | step=%u val=%u fence=%u last=%u",
+             native_adreno_recovery[0], native_adreno_recovery[1], native_adreno_recovery[2], native_adreno_recovery[3],
+             native_adreno_recovery[4], native_adreno_recovery[5], native_adreno_recovery[6], native_adreno_recovery[7],
+             &native_adreno_recover_trace ? native_adreno_recover_trace[0] : 0, &native_adreno_recover_trace ? native_adreno_recover_trace[1] : 0,
+             &native_adreno_recover_trace ? native_adreno_recover_trace[2] : 0, &native_adreno_recover_trace ? native_adreno_recover_trace[3] : 0);
+    at = put(out, at, cap, row, sizeof row);
+    if (&native_adreno_recover_log && &native_adreno_recover_log_count && native_adreno_recover_log_count) {
+      const volatile uint32_t *r = native_adreno_recover_log[(native_adreno_recover_log_count - 1) & 7];
+      snprintf(row, sizeof row, "[gpu recover+] i=%u t=%us fence=%u status=%x replayed=%u flags=%x dead=%x",
+               r[0], r[1] / 1000000u, r[3], r[4], r[5], r[6], r[7]);
+      at = put(out, at, cap, row, sizeof row);
+    }
+    if (&native_adreno_recovery_fault && native_adreno_recovery_fault[0]) {
+      snprintf(row, sizeof row, "[gpu fault] n=%u fsr=%x far=%x%08x synr=%x",
+               native_adreno_recovery_fault[0], native_adreno_recovery_fault[1], native_adreno_recovery_fault[2],
+               native_adreno_recovery_fault[3], native_adreno_recovery_fault[4]);
       at = put(out, at, cap, row, sizeof row);
     }
   }

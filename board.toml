@@ -669,6 +669,22 @@ kernel_args = [
 [payload.adt]
 chip_id = "207"                     # [DTB] qcom,msm-id 0x207 (SM8550-AB) — same value sheng/nx729j use
 owned_memory_size = "0x130000000"
+# r136 (s128) 16 GiB round: the single contiguous window tops out at 4.75 GiB
+# (0xA2A80000 past the PIL reservation; SM8550's second bank sits beyond it),
+# but the board has 16 GiB and dts/m2381.dts already declares the full span.
+# DarwinBoot (5243c68) lists the free runs outside the window in
+# /chosen/darwinboot-memory-outside and the kernel (window-outside-memory-
+# adoption.patch) adopts them as VM memory one probed page at a time;
+# memory-outside=0 turns it off without a rebuild. loader_inputs lets the
+# loader count the verified payload inputs inside the window as usable memory.
+owned_memory_outside_ranges = "8"
+loader_inputs = true
+# Fixed-address board memory the firmware's map calls free: the AOP command
+# DB (GMU vote table input, dts aop_cmd_db_region; UEFI reserves
+# 0x81C00000..0x81CA0000 as "AOP") and the ZAP shader's PAS page
+# (dts gpu_micro_code_region, inside the UEFI "PIL Reserved" span). Both are
+# belt-and-suspenders: the firmware map should already keep them.
+owned_memory_outside_reserved = ["0x81C00000:0x100000", "0x9B09A000:0x2000"]
 # root_match_volume_uuid of the donor OS image's root volume: the 27.0.1
 # (24A446) profile carries it (os volume 2F8E6EED…, donor iPad17,3/j820ap);
 # the 23F84 value (546DFF4A…) retired with that lane (git history,
