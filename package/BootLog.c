@@ -118,7 +118,7 @@ extern volatile uint32_t native_dpu_pipes[54] __attribute__((weak_import));
 // the direct-scanout counters (NativeLegacyDisplay.cpp startDirect, armed by dpu-scanout=2).
 extern volatile uint32_t native_ufs_dpu_smmu[24] __attribute__((weak_import));
 extern volatile uint32_t native_ufs_dpu_state __attribute__((weak_import));
-extern volatile uint32_t native_ufs_dpu_check[8] __attribute__((weak_import));
+extern volatile uint32_t native_ufs_dpu_check[12] __attribute__((weak_import));
 extern volatile uint32_t native_legacy_direct[14] __attribute__((weak_import));
 extern volatile int32_t native_adsp_stats[16] __attribute__((weak_import));
 extern volatile int32_t native_audio_stats[16] __attribute__((weak_import));
@@ -830,16 +830,20 @@ static size_t compose(char *out, size_t cap, uint32_t slot, unsigned now) {
   // 0x80000000|groups|valid<<8|banks<<16 once the survey ran; found = i|bank<<16 for the display's stream (0x1c00); s2cr/sctlr/ttbr/tcr
   // are the values the bank carried before dpuEnable touched it. st = the enable result (0x80000000|bank on success; 0xdead0001..5 the
   // documented refusals: no group/bank found, tables/lock, writes ignored, TLB flush, fetch fault in the 50 ms watch); fsr = the two
-  // display-stream context banks' fault status; chk = dpuEnable's read-back checks and us = the fault watch's elapsed microseconds.
+  // display-stream context banks' fault status at survey time; chk = dpuEnable's read-back checks ([2] the FSR before the r140 entry
+  // clear, [3] the FSR at watch exit) and us = the fault watch's elapsed microseconds. r140: syn = the fault syndromes (FSYNR0/1 at
+  // cb 0x60/0x64 and cb 0x68) from the watch exit, rel = the FSR right after the entry clear, right after the undo's clear (a re-latch
+  // = the display faults with translation off too), and 50 ms after that (a persistent bit = live bypass-mode faulting).
   if (&native_ufs_dpu_smmu && &native_ufs_dpu_state && native_ufs_dpu_smmu[0]) {
     char row[220];
     snprintf(row, sizeof row, "[dpu smmu] w0=%x found=%x s2cr=%x sctlr=%x ttbr=%x tcr=%x", native_ufs_dpu_smmu[0], native_ufs_dpu_smmu[4],
              native_ufs_dpu_smmu[6], native_ufs_dpu_smmu[9], native_ufs_dpu_smmu[10], native_ufs_dpu_smmu[12]);
     at = put(out, at, cap, row, sizeof row);
     if (&native_ufs_dpu_check)
-      snprintf(row, sizeof row, "[dpu state] st=%x fsr=%x,%x chk=%x,%x,%x,%x us=%u", native_ufs_dpu_state, native_ufs_dpu_smmu[22],
+      snprintf(row, sizeof row, "[dpu state] st=%x fsr=%x,%x chk=%x,%x,%x,%x us=%u syn=%x,%x,%x rel=%x,%x,%x", native_ufs_dpu_state, native_ufs_dpu_smmu[22],
                native_ufs_dpu_smmu[23], native_ufs_dpu_check[0], native_ufs_dpu_check[1], native_ufs_dpu_check[2], native_ufs_dpu_check[3],
-               native_ufs_dpu_check[7]);
+               native_ufs_dpu_check[7], native_ufs_dpu_check[4], native_ufs_dpu_check[5], native_ufs_dpu_check[6], native_ufs_dpu_check[8],
+               native_ufs_dpu_check[9], native_ufs_dpu_check[10]);
     else
       snprintf(row, sizeof row, "[dpu state] st=%x fsr=%x,%x", native_ufs_dpu_state, native_ufs_dpu_smmu[22], native_ufs_dpu_smmu[23]);
     at = put(out, at, cap, row, sizeof row);

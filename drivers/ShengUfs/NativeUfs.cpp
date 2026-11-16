@@ -300,7 +300,7 @@ extern "C" volatile uint32_t native_ufs_extra_iova, native_ufs_extra_bytes;
 extern "C" volatile uint32_t native_ufs_extra_atos[8];
 extern "C" volatile uint32_t native_ufs_dpu_smmu[24];
 extern "C" volatile uint32_t native_ufs_dpu_state;
-extern "C" volatile uint32_t native_ufs_dpu_check[8];
+extern "C" volatile uint32_t native_ufs_dpu_check[12];
 // The display bank's stage 1 table: L1, then L2 for the first GiB, then kDpuSlots * kDpuSlotTables L3 tables (one per 2 MiB of a slot).
 constexpr uint32_t kDpuWindow = 0x10000000U, kDpuSlots = 4, kDpuSlotBytes = 32U << 20, kDpuSlotTables = kDpuSlotBytes >> 21;
 static uint64_t *gDpuTables;
@@ -354,6 +354,11 @@ static void dpuEnable (uintptr_t smmu, uintptr_t cb, uint32_t bank, uint32_t old
   __asm__ volatile ("dsb sy" ::: "memory");
   volatile uint32_t *c = native_ufs_dpu_check;
   c[0] = read32 (cb, 0x20); c[1] = read32 (cb, 0x30); c[2] = read32 (cb, 0x58);
+  // r140 (s129): the latch can carry stale bits from the loader era before the enable (r138/r139 read
+  // 0x400 here on both display banks), and the 50 ms watch treats every kDpuFaults bit as fatal: clear
+  // them first so the watch judges only faults the translated fetches raise.
+  write32 (cb, 0x58, c[2]);
+  c[8] = read32 (cb, 0x58);
   const auto undo = [&] (uint32_t why) {
     write32 (cb, 0x0, oldSctlr);
     __asm__ volatile ("dsb sy; isb" ::: "memory");
@@ -379,7 +384,14 @@ static void dpuEnable (uintptr_t smmu, uintptr_t cb, uint32_t bank, uint32_t old
   c[3] = fsr; c[7] = us;
   if (fsr & kDpuFaults) {
     c[4] = read32 (cb, 0x60); c[5] = read32 (cb, 0x64); c[6] = read32 (cb, 0x68);
-    undo (0xdead0005U); return;
+    undo (0xdead0005U);
+    // r140: the syndromes (FSYNR0/1) name the walk level and fault type; then watch the latch with
+    // translation off again - a re-latching bit means the display faults in bypass mode too, a clean
+    // one means the stale bits were the loader's and the translated fetch was the only real fault.
+    c[9] = read32 (cb, 0x58);
+    IODelay (50000);
+    c[10] = read32 (cb, 0x58);
+    return;
   }
   gDpuTables = l1; gDpuCb = cb;
   native_ufs_dpu_state = 0x80000000U | bank;
@@ -1358,7 +1370,10 @@ extern "C" volatile uint32_t native_ufs_dpu_smmu[24] = {};
 // 2 no memory, 3 the bank ignored the table registers, 4 TLB sync timeout, 5 the display's fetches faulted with translation on).
 extern "C" volatile uint32_t native_ufs_dpu_state = 0;
 // TTBR0 low and TCR read back, FSR before and after the 50 ms watch, FAR low and high and FSYNR0 of the first fault, us watched.
-extern "C" volatile uint32_t native_ufs_dpu_check[8] = {};
+// r140: [8] the FSR right after the entry clear (what the latch holds once the stale bits are gone),
+// [9] the FSR right after the undo's clear (does the fault re-latch with translation off again),
+// [10] the FSR 50 ms after that (a persistent bit = the display keeps faulting in bypass).
+extern "C" volatile uint32_t native_ufs_dpu_check[12] = {};
 // The display bank's SCTLR (reg 0) or FSR (reg 1) now, for the log; all ones before the bank was touched.
 extern "C" uint32_t native_ufs_dpu_live (unsigned reg)
 {
