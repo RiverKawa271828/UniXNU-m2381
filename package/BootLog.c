@@ -82,6 +82,11 @@ extern volatile uint32_t native_adreno_recover_trace[4] __attribute__((weak_impo
 extern volatile uint32_t native_adreno_recover_log[8][8] __attribute__((weak_import));
 extern volatile uint32_t native_adreno_recover_log_count __attribute__((weak_import));
 extern volatile uint32_t native_adreno_recovery_fault[5] __attribute__((weak_import));
+extern volatile uint64_t native_boot_memory[24] __attribute__((weak_import));
+extern volatile uint64_t arm_vm_outside_base __attribute__((weak_import));
+extern volatile uint64_t arm_vm_outside_end __attribute__((weak_import));
+extern volatile uint32_t ml_outside_memory_pages __attribute__((weak_import));
+extern volatile uint32_t ml_outside_memory_refused __attribute__((weak_import));
 extern volatile uint32_t native_adreno_export_stats[4] __attribute__((weak_import));
 extern volatile int32_t native_touch_strokes[16][7] __attribute__((weak_import));
 extern volatile uint32_t native_touch_stroke_count __attribute__((weak_import));
@@ -939,6 +944,26 @@ static size_t compose(char *out, size_t cap, uint32_t slot, unsigned now) {
   // The ring's own face as the fence readers see it (r135: the wedge face and the truth parted ways — completed only moved on held
   // waits and the page the readers poll was not the page printed): last submitted, completed, submissions, the fence word and the
   // rptr shadow the readers see, outstanding, and the stale-acquire/resets-racing-a-poller rewinds.
+  if (&native_boot_memory && native_boot_memory[0]) {
+    char row[150];
+    // The hand-off geometry (window base, the DRAM base the kernel knows) and the outside-memory machinery's
+    // account: the loader's raw pairs (up to eight, as listed, before the below-span filter), their bytes,
+    // and the adopted/refused pages the adoption pass counted.
+    snprintf(row, sizeof row, "[boot mem] phys=%llx dram=%llx span=%llx-%llx raw=%llu/%lluMiB adopted=%u refused=%u",
+             native_boot_memory[0], native_boot_memory[1], arm_vm_outside_base, arm_vm_outside_end,
+             native_boot_memory[2], native_boot_memory[3] >> 20,
+             &ml_outside_memory_pages ? ml_outside_memory_pages : 0,
+             &ml_outside_memory_refused ? ml_outside_memory_refused : 0);
+    at = put(out, at, cap, row, sizeof row);
+    for (unsigned pair = 0; pair < 8; pair += 4) {
+      int n = snprintf(row, sizeof row, "[boot mem+] runs");
+      for (unsigned k = pair; k < pair + 4 && n > 0 && (size_t)n < sizeof row; ++k) {
+        if (native_boot_memory[2] <= k) break;
+        n += snprintf(row + n, sizeof row - n, " %llx+%llx", native_boot_memory[8 + 2 * k], native_boot_memory[8 + 2 * k + 1]);
+      }
+      if (n > 15) { at = put(out, at, cap, row, sizeof row); }
+    }
+  }
   if (&native_adreno_ring_face && native_adreno_ring_face[2]) {
     char row[140];
     snprintf(row, sizeof row, "[gpu ring] seq=%u done=%u subs=%u page=%x rptr=%x out=%u rewind=%u last=(%u,%u)",
