@@ -201,6 +201,8 @@ class Layout:
             if begin % PAGE:
                 raise ValueError('Unaligned native segment')
             if any(begin < e and b < end for b, e in self.occupied + placed):
+                print(f'diag: native {segment["name"]} placement {begin:#x}-{end:#x}', flush=True)
+                print(f'diag: occupied {[(hex(b), hex(e)) for b, e in self.occupied + placed]}', flush=True)
                 raise ValueError(f'Native {segment["name"]} overlaps a retained segment')
             if not any(s['va'] <= begin and end <= s['va'] + s['size'] for s in self.roots.values()):
                 raise ValueError(f'Native {segment["name"]} is outside collection mappings')
